@@ -8,6 +8,7 @@ import (
 	"io"
 	"strings"
 	"log"
+	"io/ioutil"
 )
 
 func main() {
@@ -22,7 +23,14 @@ func main() {
 		fmt.Println("Product location is a zip")
 		unzipLocation = strings.TrimSuffix(prodLocation, ".zip")
 		fmt.Println("Unzip Location: " + unzipLocation)
-		unzip(prodLocation)
+		unzipSuccessful := true
+		//unzip(prodLocation)
+		if unzipSuccessful {
+			fmt.Println("Zip file successfully unzipped")
+			compare(patchLoc, unzipLocation)
+		} else {
+			fmt.Println("Error occurred while unzipping")
+		}
 	} else {
 		fmt.Println("Product location is not a zip")
 	}
@@ -31,16 +39,87 @@ func main() {
 	//text, _ := reader.ReadString('\n')
 	//fmt.Println(text)
 }
-///home/shan/work/test/wso2carbon-kernel-5.1.0.zip
+//  	/home/shan/work/test/wso2carbon-kernel-5.1.0.zip
 
-func unzip(zipLocation string) {
+func compare(patchLocation, distLocation string) {
+	log.Println("Comparing folders")
+	log.Println("Patch Loc: " + patchLocation)
+	log.Println("Dist  Loc: " + distLocation)
+
+	patchLocationInfo, err := os.Stat(patchLocation)
+	fmt.Println(patchLocationInfo)
+
+	if err != nil {
+		if os.IsNotExist(err) {
+			log.Fatal("Patch file does not exist")
+		}
+	}
+	log.Println("Patch location does exist")
+
+	if !patchLocationInfo.IsDir() {
+		log.Fatal("Patch location is not a directory")
+	}
+
+	distLocationInfo, err := os.Stat(distLocation)
+	if err != nil {
+		if os.IsNotExist(err) {
+			log.Fatal("Dist file does not exist")
+		}
+	}
+	log.Println("Dist location does exist")
+	if !distLocationInfo.IsDir() {
+		log.Fatal("Distribution location is not a directory")
+	}
+
+	distFile, err := os.Open(distLocation)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(distFile.Name())
+
+	defer distFile.Close()
+	log.Println("---------------------------------------")
+	traverse(distFile.Name(), 0)
+}
+func traverse(path string, indent int) {
+	//log.Println("Root: " + path)
+	files, _ := ioutil.ReadDir(path)
+	for _, f := range files {
+		for i := 0; i < indent; i++ {
+			fmt.Print("-")
+		}
+		fmt.Println(f.Name())
+		if f.IsDir() {
+			//log.Println("Is a dir: " + path + string(os.PathSeparator) + f.Name())
+			traverse(path + string(os.PathSeparator) + f.Name(), indent + 1)
+		}
+	}
+
+	//patchStat, err := os.Stat(path)
+	//
+	//if err != nil {
+	//	if os.IsNotExist(err) {
+	//		log.Fatal("Patch file does not exist")
+	//	}
+	//}
+	//
+	//if patchStat.IsDir() {
+	//	log.Println("Is a directory")
+	//}else{
+	//	log.Println("Is a file")
+	//}
+}
+
+func unzip(zipLocation string) bool {
+
+	unzipSuccessful := false
 	// Create a reader out of the zip archive
 	zipReader, err := zip.OpenReader(zipLocation)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer zipReader.Close()
-	
+
 	targetDir := "./"
 	if lastIndex := strings.LastIndex(zipLocation, string(os.PathSeparator)); lastIndex > -1 {
 		targetDir = zipLocation[:lastIndex]
@@ -51,6 +130,7 @@ func unzip(zipLocation string) {
 		// like a normal file
 		zippedFile, err := file.Open()
 		if err != nil {
+			unzipSuccessful = false
 			log.Fatal(err)
 		}
 		defer zippedFile.Close()
@@ -66,6 +146,8 @@ func unzip(zipLocation string) {
 			file.Name,
 		)
 
+		unzipSuccessful = true
+
 		// Extract the item (or create directory)
 		if file.FileInfo().IsDir() {
 			// Create directories to recreate directory
@@ -74,6 +156,7 @@ func unzip(zipLocation string) {
 			log.Println("Creating directory:", extractionPath)
 			os.MkdirAll(extractionPath, file.Mode())
 		} else {
+
 			// Extract regular file since not a directory
 			log.Println("Extracting file:", file.Name)
 			// Open an output file for writing
@@ -83,18 +166,23 @@ func unzip(zipLocation string) {
 				file.Mode(),
 			)
 			if err != nil {
-				log.Fatal(err)
+				unzipSuccessful = false
+				//log.Fatal(err)
 			}
+			if outputFile != nil {
+				// "Extract" the file by copying zipped file
+				// contents to the output file
+				_, err = io.Copy(outputFile, zippedFile)
+				outputFile.Close()
 
-			// "Extract" the file by copying zipped file
-			// contents to the output file
-			_, err = io.Copy(outputFile, zippedFile)
-			outputFile.Close()
-			if err != nil {
-				log.Fatal(err)
+				if err != nil {
+					unzipSuccessful = false
+					//log.Fatal(err)
+				}
 			}
 		}
 	}
+	return unzipSuccessful
 }
 
 //func unzip(src, dest string) error {

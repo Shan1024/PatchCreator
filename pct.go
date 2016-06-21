@@ -3,7 +3,6 @@ package main
 //pct /home/shan/work/test/patch /home/shan/work/test/product-dss-3.5.0.zip
 
 import (
-	"fmt"
 	"os"
 	"archive/zip"
 	"path/filepath"
@@ -13,11 +12,29 @@ import (
 	"io/ioutil"
 )
 
-type Entry struct{
-
+type Entry struct {
+	//locations []string
+	locationMap map[string]bool
 }
+
+var patchEntries map[string]Entry
+var distEntries map[string]Entry
+
+func (entry *Entry) add(path string) {
+	//entry.locations = append(entry.locations, path)
+	entry.locationMap[path] = true
+}
+
+//func (entry *Entry) String() string {
+//	str := ""
+//	for _, path := range entry.locations {
+//		str += str + path + "\n"
+//	}
+//	return fmt.Sprintf(str)
+//}
+
 func main() {
-	fmt.Println("Welcome to Patch Creation Tool")
+	log.Println("Welcome to Patch Creation Tool")
 	args := os.Args
 	if len(args) < 3 {
 		log.Fatal("Missing arguments. Requires 2 arguments")
@@ -26,6 +43,9 @@ func main() {
 	log.Println("Patch   Loc: " + patchLocation)
 	distLocation := args[2]
 	log.Println("Product Loc: " + distLocation)
+
+	patchEntries = make(map[string]Entry)
+	distEntries = make(map[string]Entry)
 
 	var unzipLocation string
 	if strings.HasSuffix(distLocation, ".zip") {
@@ -39,7 +59,12 @@ func main() {
 			patchLocationExists := locationExists(patchLocation)
 			if patchLocationExists {
 				log.Println("Patch location exists. Reading files")
-				traverse(patchLocation, 0)
+				traverse(patchLocation, patchEntries)
+				for key, value := range patchEntries {
+					log.Print("Key:", key, " Value:")
+					log.Println(value)
+				}
+				log.Println("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++###")
 			} else {
 				log.Println("Patch location does not exist")
 			}
@@ -47,6 +72,14 @@ func main() {
 			distLocationExists := locationExists(unzipLocation)
 			if distLocationExists {
 				log.Println("Distribution location exists. Reading files")
+				//traverse(unzipLocation, &distEntries)
+				traverse(unzipLocation, distEntries)
+				for key, value := range distEntries {
+					if len(value.locationMap) > 1 {
+						log.Print("Key:", key, " Value:")
+						log.Println(value)
+					}
+				}
 			} else {
 				log.Println("Distribution location does not exist")
 			}
@@ -58,6 +91,10 @@ func main() {
 		log.Println("Distribution location is not a zip file")
 		//compare(patchLocation, distLocation)
 	}
+
+
+
+
 	//reader := bufio.NewReader(os.Stdin)
 	//fmt.Print("Enter text: ")
 	//text, _ := reader.ReadString('\n')
@@ -80,17 +117,30 @@ func locationExists(location string) bool {
 	return true
 }
 
-func traverse(path string, indent int) {
+func traverse(path string, entryMap map[string]Entry) {
 	//log.Println("Root: " + path)
 	files, _ := ioutil.ReadDir(path)
 	for _, f := range files {
-		for i := 0; i < indent; i++ {
-			fmt.Print("-")
+		//for i := 0; i < indent; i++ {
+		//	fmt.Print("-")
+		//}
+		//log.Println(path + string(os.PathSeparator) + f.Name())
+		_, ok := entryMap[f.Name()]
+		if (ok) {
+			entry := entryMap[f.Name()]
+			//log.Println("ENTRY: ", &entry.locations[0])
+			entry.add(path)
+			//entryMap[f.Name()] = entry
+		} else {
+			entryMap[f.Name()] = Entry{
+				map[string]bool{
+					path: true,
+				},
+			}
 		}
-		fmt.Println(path + string(os.PathSeparator) + f.Name())
 		if f.IsDir() {
 			//log.Println("Is a dir: " + path + string(os.PathSeparator) + f.Name())
-			traverse(path + string(os.PathSeparator) + f.Name(), indent + 1)
+			traverse(path + string(os.PathSeparator) + f.Name(), entryMap)
 		}
 	}
 	//patchStat, err := os.Stat(path)

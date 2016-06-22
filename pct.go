@@ -10,6 +10,9 @@ import (
 	"strings"
 	"log"
 	"io/ioutil"
+	"github.com/gosuri/uilive"
+	"fmt"
+	"time"
 )
 
 type Entry struct {
@@ -52,41 +55,45 @@ func main() {
 		log.Println("Distribution location is a zip file. Extracting zip file")
 		unzipLocation = strings.TrimSuffix(distLocation, ".zip")
 		log.Println("Unzip Location: " + unzipLocation)
+
 		unzipSuccessful := unzip(distLocation)
 		if unzipSuccessful {
 			log.Println("Zip file successfully unzipped")
 
-			patchLocationExists := locationExists(patchLocation)
+			patchLocationExists := checkLocation(patchLocation)
 			if patchLocationExists {
 				log.Println("Patch location exists. Reading files")
 				traverse(patchLocation, patchEntries)
-				for key, value := range patchEntries {
-					log.Print("Key:", key, " Value:")
-					log.Println(value)
-				}
-				log.Println("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++###")
+				//for key, value := range patchEntries {
+				//	log.Print("Key:", key, " Value:")
+				//	log.Println(value)
+				//}
+				//log.Println("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++###")
 			} else {
 				log.Println("Patch location does not exist")
 			}
 
-			distLocationExists := locationExists(unzipLocation)
+			distLocationExists := checkLocation(unzipLocation)
 			if distLocationExists {
 				log.Println("Distribution location exists. Reading files")
 				//traverse(unzipLocation, &distEntries)
 				traverse(unzipLocation, distEntries)
-				for key, value := range distEntries {
-					if len(value.locationMap) > 1 {
-						log.Print("Key:", key, " Value:")
-						log.Println(value)
-					}
-				}
+				//for key, value := range distEntries {
+				//	if len(value.locationMap) > 1 {
+				//		log.Print("Key:", key, " Value:")
+				//		log.Println(value)
+				//	}
+				//}
 			} else {
 				log.Println("Distribution location does not exist")
 			}
 			//compare(patchLocation, unzipLocation)
+
+			findMatches()
 		} else {
 			log.Println("Error occurred while unzipping")
 		}
+
 	} else {
 		log.Println("Distribution location is not a zip file")
 		//compare(patchLocation, distLocation)
@@ -102,8 +109,22 @@ func main() {
 }
 //  	/home/shan/work/test/wso2carbon-kernel-5.1.0.zip
 
+func findMatches() {
+	log.Println("\n\n\nMatching files -----------------------------------------------------------------")
+	for patchEntryString, patchEntry := range patchEntries {
+		distEntry, ok := distEntries[patchEntryString]
+		if ok {
+			log.Println("Match found for ", patchEntryString)
+			log.Println("Location(s) in Dist: ", distEntry)
+		} else {
+			log.Println("No match found for ", patchEntryString)
+			log.Println("Location(s) in Patch: ", patchEntry)
+		}
+	}
 
-func locationExists(location string) bool {
+}
+
+func checkLocation(location string) bool {
 	log.Println("Checking Location: " + location)
 	locationInfo, err := os.Stat(location)
 	if err != nil {
@@ -132,9 +153,13 @@ func traverse(path string, entryMap map[string]Entry) {
 			entry.add(path)
 			//entryMap[f.Name()] = entry
 		} else {
+			isDir := false
+			if f.IsDir() {
+				isDir = true
+			}
 			entryMap[f.Name()] = Entry{
 				map[string]bool{
-					path: true,
+					path: isDir,
 				},
 			}
 		}
@@ -163,19 +188,36 @@ func unzip(zipLocation string) bool {
 	unzipSuccessful := true
 	// Create a reader out of the zip archive
 	zipReader, err := zip.OpenReader(zipLocation)
+
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer zipReader.Close()
+
+	totalFiles := len(zipReader.Reader.File)
+	log.Println("Count: ", totalFiles)
+
+	extractedFiles := 0
+
+	writer := uilive.New()
+	// start listening for updates and render
+	writer.Start()
 
 	targetDir := "./"
 	if lastIndex := strings.LastIndex(zipLocation, string(os.PathSeparator)); lastIndex > -1 {
 		targetDir = zipLocation[:lastIndex]
 	}
 	// Iterate through each file/dir found in
+
 	for _, file := range zipReader.Reader.File {
 		// Open the file inside the zip archive
 		// like a normal file
+
+		extractedFiles++
+
+		fmt.Fprintf(writer, "Extracting files .. (%d/%d)\n", extractedFiles, totalFiles)
+		time.Sleep(time.Millisecond * 1)
+
 		zippedFile, err := file.Open()
 		if err != nil {
 			unzipSuccessful = false
@@ -196,11 +238,12 @@ func unzip(zipLocation string) bool {
 			// Create directories to recreate directory
 			// structure inside the zip archive. Also
 			// preserves permissions
-			log.Println("Creating directory:", extractionPath)
+			//log.Println("Creating directory:", extractionPath)
 			os.MkdirAll(extractionPath, file.Mode())
 		} else {
 			// Extract regular file since not a directory
-			log.Println("Extracting file:", file.Name)
+			//log.Println("Extracting file:", file.Name)
+
 			// Open an output file for writing
 			outputFile, err := os.OpenFile(
 				extractionPath,
@@ -224,6 +267,16 @@ func unzip(zipLocation string) bool {
 			}
 		}
 	}
+
+	writer.Stop() // flush and stop rendering
+
+	log.Println("Extracted: ", extractedFiles)
+	if totalFiles == extractedFiles {
+		log.Println("Equal: true")
+	} else {
+		log.Println("Equal: false")
+	}
+
 	log.Println("Unzipping finished")
 	return unzipSuccessful
 }

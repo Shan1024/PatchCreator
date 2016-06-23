@@ -272,6 +272,8 @@ func findMatches(patchLocation, distributionLocation string) {
 								CopyDir(src, dest)
 
 							} else {
+								fmt.Println("One or more entered indices are invalid. " +
+								"Please enter again")
 								isOK = false
 								break
 							}

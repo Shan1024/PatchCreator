@@ -15,6 +15,9 @@ import (
 	"github.com/apcera/termtables"
 	"time"
 	"github.com/gosuri/uilive"
+	"bufio"
+	"sort"
+	"strconv"
 )
 
 type Entry struct {
@@ -90,7 +93,7 @@ func main() {
 			//	log.Println("Patch location does not exist")
 			//}
 
-			traverse(patchLocation, patchEntries)
+			traverse(patchLocation, patchEntries, false)
 
 			//distLocationExists := checkLocation(unzipLocation)
 			//if distLocationExists {
@@ -114,7 +117,7 @@ func main() {
 				os.Exit(1)
 			}
 
-			traverse(unzipLocation, distEntries)
+			traverse(unzipLocation, distEntries, true)
 			findMatches(patchLocation, unzipLocation)
 
 		} else {
@@ -130,8 +133,8 @@ func main() {
 			fmt.Println("Distribution location does not exist")
 			os.Exit(1)
 		}
-		traverse(patchLocation, patchEntries)
-		traverse(distributionLocation, distEntries)
+		traverse(patchLocation, patchEntries, false)
+		traverse(distributionLocation, distEntries, true)
 		findMatches(patchLocation, distributionLocation)
 
 	}
@@ -149,8 +152,8 @@ func findMatches(patchLocation, distributionLocation string) {
 	color.Set(color.FgCyan)
 	//fmt.Println("Matching files started ------------------------------------------------------------------------")
 	termtables.EnableUTF8()
-	table := termtables.CreateTable()
-	table.AddHeaders("File(s)/Folder(s) in patch", "Location(s) of similar file(s)/folder(s) in the distribution")
+	overallViewTable := termtables.CreateTable()
+	overallViewTable.AddHeaders("File(s)/Folder(s) in patch", "Location(s) of similar file(s)/folder(s) in the distribution")
 
 	tempDir := "tempPatchDir"
 
@@ -182,10 +185,10 @@ func findMatches(patchLocation, distributionLocation string) {
 	rowCount := 0
 	for patchEntryString, patchEntry := range patchEntries {
 
-		if len(patchEntry.locationMap) > 1 {
-			fmt.Println("Duplicates found in patch location: ", patchEntryString)
-			os.Exit(1)
-		}
+		//if len(patchEntry.locationMap) > 1 {
+		//	fmt.Println("Duplicates found in patch location: ", patchEntryString)
+		//	os.Exit(1)
+		//}
 
 		distEntry, ok := distEntries[patchEntryString]
 		if ok {
@@ -193,15 +196,93 @@ func findMatches(patchLocation, distributionLocation string) {
 			fmt.Println("Location(s) in Dist: ", distEntry)
 
 			if len(distEntry.locationMap) > 1 {
+
+				fmt.Println(patchEntryString, " was found in multiple locations in the distribution\n")
+
+				locationMap := make(map[string]string)
+
+				tempTable := termtables.CreateTable()
+				tempTable.AddHeaders("index", "Location(s) of similar" +
+				" file(s)/folder(s) in the distribution")
+
+				index := 1
 				isFirst := true
-				for path, _ := range distEntry.locationMap {
-					if isFirst {
-						table.AddRow(patchEntryString, path)
-						isFirst = false
-					} else {
-						table.AddRow("", path)
+				for path, isDirInDist := range distEntry.locationMap {
+
+					for _, isDirInPatch := range patchEntry.locationMap {
+
+						if isDirInDist == isDirInPatch {
+
+							locationMap[strconv.Itoa(index)] = path
+
+							if isFirst {
+								overallViewTable.AddRow(patchEntryString, path)
+								isFirst = false
+							} else {
+								overallViewTable.AddRow("", path)
+							}
+							tempTable.AddRow(index, path)
+							index++
+						}
 					}
 				}
+				color.Set(color.FgGreen)
+				fmt.Println("Map: ", locationMap)
+
+				fmt.Println(tempTable.Render())
+
+				//loop until user enter valid indices or decide to exit
+				for {
+					fmt.Println("Enter preferred locations separated by commas[Enter 0 to exit]: ")
+					//fmt.Println(locationList)
+					reader := bufio.NewReader(os.Stdin)
+					fmt.Print("Enter text: ")
+					enteredPreferences, _ := reader.ReadString('\n')
+
+					enteredPreferences = strings.TrimSuffix(enteredPreferences, "\n")
+					selectedIndices := strings.Split(enteredPreferences, ",");
+
+					sort.Strings(selectedIndices)
+
+					if selectedIndices[0] == "0" {
+						fmt.Println("0 entered. Exiting.....")
+						color.Unset()
+						os.Exit(0)
+					} else {
+						//todo check for valid indices
+						fmt.Println("Sorted indices: ", selectedIndices)
+						isOK := true
+						for _, selectedIndex := range selectedIndices {
+							selectedPath, ok := locationMap[selectedIndex]
+							if ok {
+								fmt.Println("Selected index ", selectedIndex, " was " +
+								"found in map")
+								fmt.Println("selected path: " + selectedPath)
+
+								tempFilePath := strings.TrimPrefix(selectedPath, distributionLocation)
+
+								src := patchLocation + string(os.PathSeparator) +
+								patchEntryString
+								destPath := tempDir + tempFilePath + string(os.PathSeparator)
+								dest := destPath + patchEntryString
+
+								fmt.Println("src : ", src)
+								fmt.Println("dest: ", dest)
+
+								CopyDir(src, dest)
+
+							} else {
+								isOK = false
+								break
+							}
+						}
+						if isOK {
+							break
+						}
+					}
+				}
+				color.Unset()
+				color.Set(color.FgCyan)
 			} else {
 				for path, isDirInDist := range distEntry.locationMap {
 
@@ -209,7 +290,7 @@ func findMatches(patchLocation, distributionLocation string) {
 
 						if isDirInDist == isDirInPatch {
 							fmt.Println("Both locations contain same type")
-							table.AddRow(patchEntryString, path)
+							overallViewTable.AddRow(patchEntryString, path)
 
 							tempFilePath := strings.TrimPrefix(path, distributionLocation)
 
@@ -217,16 +298,16 @@ func findMatches(patchLocation, distributionLocation string) {
 							destPath := tempDir + tempFilePath + string(os.PathSeparator)
 							dest := destPath + patchEntryString
 
-							err := os.MkdirAll(destPath, 0777)
-
 							fmt.Println("src : ", src)
 							fmt.Println("dest: ", dest)
 
-							newFile, err := os.Create(dest)
+							err := os.MkdirAll(destPath, 0777)
+
+							//newFile, err := os.Create(dest)
 							if err != nil {
 								log.Fatal("Y: ", err)
 							}
-							newFile.Close()
+							//newFile.Close()
 
 							copyErr := CopyToTemp(src, dest)
 							if copyErr != nil {
@@ -234,7 +315,12 @@ func findMatches(patchLocation, distributionLocation string) {
 							}
 						} else {
 							fmt.Println("Locations contain different types")
-							table.AddRow(patchEntryString, " - ")
+
+							typePostfix := " (file)"
+							if isDirInPatch {
+								typePostfix = " (dir)"
+							}
+							overallViewTable.AddRow(patchEntryString + typePostfix, " - ")
 						}
 					}
 
@@ -243,20 +329,110 @@ func findMatches(patchLocation, distributionLocation string) {
 		} else {
 			fmt.Println("No match found for ", patchEntryString)
 			fmt.Println("Location(s) in Patch: ", patchEntry)
-			table.AddRow(patchEntryString, " - ")
+			overallViewTable.AddRow(patchEntryString, " - ")
 		}
 		fmt.Println("+++++++++++++++++++++++++++")
 		rowCount++
 		if rowCount < len(patchEntries) {
-			table.AddSeparator()
+			overallViewTable.AddSeparator()
 		}
 	}
 	fmt.Println("Matching files ended ------------------------------------------------------------------------")
 	defer color.Unset()
 	color.Set(color.FgYellow)
-	fmt.Println(table.Render())
+
+	fmt.Println("\nOverall view\n")
+
+	fmt.Println(overallViewTable.Render())
 	defer color.Unset()
 }
+
+
+// Copies file source to destination dest.
+func CopyFile(source string, dest string) (err error) {
+	sf, err := os.Open(source)
+	if err != nil {
+		return err
+	}
+	defer sf.Close()
+	df, err := os.Create(dest)
+	if err != nil {
+		return err
+	}
+	defer df.Close()
+	_, err = io.Copy(df, sf)
+	if err == nil {
+		si, err := os.Stat(source)
+		if err != nil {
+			err = os.Chmod(dest, si.Mode())
+		}
+
+	}
+
+	return
+}
+
+// Recursively copies a directory tree, attempting to preserve permissions.
+// Source directory must exist, destination directory must *not* exist.
+func CopyDir(source string, dest string) (err error) {
+
+	// get properties of source dir
+	fi, err := os.Stat(source)
+	if err != nil {
+		return err
+	}
+
+	if !fi.IsDir() {
+		return &CustomError{"Source is not a directory"}
+	}
+
+	// ensure dest dir does not already exist
+
+	_, err = os.Open(dest)
+	if !os.IsNotExist(err) {
+		return &CustomError{"Destination already exists"}
+	}
+
+	// create dest dir
+
+	err = os.MkdirAll(dest, fi.Mode())
+	if err != nil {
+		return err
+	}
+
+	entries, err := ioutil.ReadDir(source)
+
+	for _, entry := range entries {
+
+		sfp := source + "/" + entry.Name()
+		dfp := dest + "/" + entry.Name()
+		if entry.IsDir() {
+			err = CopyDir(sfp, dfp)
+			if err != nil {
+				log.Println(err)
+			}
+		} else {
+			// perform copy
+			err = CopyFile(sfp, dfp)
+			if err != nil {
+				log.Println(err)
+			}
+		}
+
+	}
+	return
+}
+
+// A struct for returning custom error messages
+type CustomError struct {
+	What string
+}
+
+// Returns the error message defined in What as a string
+func (e *CustomError) Error() string {
+	return e.What
+}
+
 
 //func CopyToTemp(src, dst string) (int64, error) {
 //	src_file, err := os.Open(src)
@@ -355,7 +531,7 @@ func checkLocation(location string) bool {
 	return true
 }
 
-func traverse(path string, entryMap map[string]Entry) {
+func traverse(path string, entryMap map[string]Entry, isDist bool) {
 	//log.Println("Root: " + path)
 	files, _ := ioutil.ReadDir(path)
 	for _, f := range files {
@@ -376,9 +552,10 @@ func traverse(path string, entryMap map[string]Entry) {
 				},
 			}
 		}
-		if f.IsDir() {
+
+		if f.IsDir() &&isDist {
 			//log.Println("Is a dir: " + path + string(os.PathSeparator) + f.Name())
-			traverse(path + string(os.PathSeparator) + f.Name(), entryMap)
+			traverse(path + string(os.PathSeparator) + f.Name(), entryMap, isDist)
 		}
 	}
 	//patchStat, err := os.Stat(path)

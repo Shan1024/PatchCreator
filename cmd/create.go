@@ -39,7 +39,7 @@ const TEMP_DIR_LOCATION = TEMP_DIR_NAME + string(os.PathSeparator) + CARBON_HOME
 var PATCH_NAME_PREFIX = "WSO2-CARBON-PATCH"
 var KERNEL_VERSION string
 var PATCH_NUMBER string
-var patchName string
+var PATCH_NAME string
 
 func Create(patchLocation, distributionLocation string, logsEnabled bool) {
 	if (!logsEnabled) {
@@ -117,7 +117,7 @@ func Create(patchLocation, distributionLocation string, logsEnabled bool) {
 			copyResourceFiles(patchLocation, unzipLocation)
 			log.Println("Copying resource files finished")
 			log.Println("Creating zip file")
-			createPatchZip(patchName)
+			createPatchZip()
 			log.Println("Creating zip file finished")
 		} else {
 			fmt.Println("Error occurred while unzipping")
@@ -137,7 +137,7 @@ func Create(patchLocation, distributionLocation string, logsEnabled bool) {
 		copyResourceFiles(patchLocation, distributionLocation)
 		log.Println("Copying resource files finished")
 		log.Println("Creating zip file")
-		createPatchZip(patchName)
+		createPatchZip()
 		log.Println("Creating zip file finished")
 	}
 }
@@ -154,7 +154,7 @@ func readPatchInfo() {
 	PATCH_NUMBER = strings.TrimSuffix(PATCH_NUMBER, "\n")
 	log.Println("Entered patch number: ", PATCH_NUMBER)
 
-	PATCH_NAME := PATCH_NAME_PREFIX + "-" + KERNEL_VERSION + "-" + PATCH_NUMBER + ".zip"
+	PATCH_NAME = PATCH_NAME_PREFIX + "-" + KERNEL_VERSION + "-" + PATCH_NUMBER + ".zip"
 	log.Println("Patch Name: " + PATCH_NAME)
 }
 
@@ -539,10 +539,12 @@ func traverse(path string, entryMap map[string]Entry, isDist bool) {
 	}
 }
 
-func createPatchZip(zipFileName string) {
+func createPatchZip() {
 	// Create a file to write the archive buffer to
 	// Could also use an in memory buffer.
-	outFile, err := os.Create(zipFileName)
+
+	log.Println("Creating patch zip file: ", PATCH_NAME)
+	outFile, err := os.Create(PATCH_NAME)
 	if err != nil {
 		log.Fatal(err)
 	}

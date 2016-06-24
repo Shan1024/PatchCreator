@@ -154,7 +154,7 @@ func readPatchInfo() {
 	PATCH_NUMBER = strings.TrimSuffix(PATCH_NUMBER, "\n")
 	log.Println("Entered patch number: ", PATCH_NUMBER)
 
-	PATCH_NAME = PATCH_NAME_PREFIX + "-" + KERNEL_VERSION + "-" + PATCH_NUMBER + ".zip"
+	PATCH_NAME = PATCH_NAME_PREFIX + "-" + KERNEL_VERSION + "-" + PATCH_NUMBER
 	log.Println("Patch Name: " + PATCH_NAME)
 }
 
@@ -204,10 +204,14 @@ func findMatches(patchLocation, distributionLocation string) {
 
 		//todo check for underscore and dash when matching
 
+
 		distEntry, ok := distEntries[patchEntryString]
 		if ok {
 			log.Println("Match found for ", patchEntryString)
 			log.Println("Location(s) in Dist: ", distEntry)
+
+			distPath := getDistPath(distributionLocation)
+			log.Println("Dist Path used for trimming: ", distPath)
 
 			if len(distEntry.locationMap) > 1 {
 				color.Set(color.FgRed)
@@ -237,7 +241,8 @@ func findMatches(patchLocation, distributionLocation string) {
 							//} else {
 							//	overallViewTable.AddRow("", path)
 							//}
-							tempTable.AddRow(index, path)
+							log.Println("Trimming: ", path, "; using: ", distPath)
+							tempTable.AddRow(index, strings.TrimPrefix(path, distPath))
 							index++
 						}
 					}
@@ -311,15 +316,15 @@ func findMatches(patchLocation, distributionLocation string) {
 										locationMap[strconv.Itoa(index)] = path
 
 										if isFirst {
-											found := stringInSlice(path, selectedPathsList)
+											found := stringIsInSlice(path, selectedPathsList)
 											if found {
-												overallViewTable.AddRow(patchEntryString, path)
+												overallViewTable.AddRow(patchEntryString, strings.TrimPrefix(path, distPath))
 												isFirst = false
 											}
 										} else {
-											found := stringInSlice(path, selectedPathsList)
+											found := stringIsInSlice(path, selectedPathsList)
 											if found {
-												overallViewTable.AddRow("", path)
+												overallViewTable.AddRow("", strings.TrimPrefix(path, distPath))
 											}
 										}
 									}
@@ -336,7 +341,7 @@ func findMatches(patchLocation, distributionLocation string) {
 
 						if isDirInDist == isDirInPatch {
 							log.Println("Both locations contain same type")
-							overallViewTable.AddRow(patchEntryString, path)
+							overallViewTable.AddRow(patchEntryString, strings.TrimPrefix(path, distPath))
 
 							tempFilePath := strings.TrimPrefix(path, distributionLocation)
 
@@ -400,7 +405,16 @@ func findMatches(patchLocation, distributionLocation string) {
 	defer color.Unset()
 }
 
-func stringInSlice(a string, list []string) bool {
+func getDistPath(distributionLoc string) string {
+	index := strings.LastIndex(distributionLoc, string(os.PathSeparator))
+	if index != -1 {
+		return distributionLoc[:index]
+	} else {
+		return distributionLoc
+	}
+}
+
+func stringIsInSlice(a string, list []string) bool {
 	for _, b := range list {
 		if b == a {
 			return true
@@ -543,8 +557,8 @@ func createPatchZip() {
 	// Create a file to write the archive buffer to
 	// Could also use an in memory buffer.
 
-	log.Println("Creating patch zip file: ", PATCH_NAME)
-	outFile, err := os.Create(PATCH_NAME)
+	log.Println("Creating patch zip file: ", PATCH_NAME + ".zip")
+	outFile, err := os.Create(PATCH_NAME + ".zip")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -561,7 +575,8 @@ func createPatchZip() {
 			// Create and write files to the archive, which in turn
 			// are getting written to the underlying writer to the
 			// .zip file we created at the beginning
-			fileWriter, err := zipWriter.Create(strings.TrimPrefix(path, TEMP_DIR_NAME + string(os.PathSeparator)))
+			fileWriter, err := zipWriter.Create(PATCH_NAME + string(os.PathSeparator) +
+			strings.TrimPrefix(path, TEMP_DIR_NAME + string(os.PathSeparator)))
 			if err != nil {
 				log.Fatal("X: ", err)
 			}

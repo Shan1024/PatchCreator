@@ -39,6 +39,7 @@ const TEMP_DIR_LOCATION = TEMP_DIR_NAME + string(os.PathSeparator) + CARBON_HOME
 var PATCH_NAME_PREFIX = "WSO2-CARBON-PATCH"
 var KERNEL_VERSION string
 var PATCH_NUMBER string
+var patchName string
 
 func Create(patchLocation, distributionLocation string, logsEnabled bool) {
 	if (!logsEnabled) {
@@ -52,31 +53,37 @@ func Create(patchLocation, distributionLocation string, logsEnabled bool) {
 	if patchLocationExists {
 		log.Println("Patch location exists.")
 	} else {
-		fmt.Println("Patch location does not exist. Enter a valid directory location.")
+		fmt.Println("Patch location does not exist. Enter a valid directory.")
 		os.Exit(1)
+	}
+
+	if (isAZipFile(distributionLocation)) {
+		zipFileExists := checkFile(distributionLocation)
+		if zipFileExists {
+			log.Println("Distribution location exists.")
+		} else {
+			fmt.Println("Distribution zip does not exist. Enter a valid location.")
+			os.Exit(1)
+		}
+	} else {
+		distributionLocationExists := checkDir(distributionLocation)
+		if distributionLocationExists {
+			log.Println("Distribution location exists.")
+		} else {
+			fmt.Println("Distribution location does not exist. Enter a valid location.")
+			os.Exit(1)
+		}
 	}
 
 	log.Println("Product Loc: " + distributionLocation)
 
-	reader := bufio.NewReader(os.Stdin)
-	fmt.Print("Enter kernel version: ")
-	KERNEL_VERSION, _ = reader.ReadString('\n')
-	KERNEL_VERSION = strings.TrimSuffix(KERNEL_VERSION, "\n")
-	log.Println("Entered kernel version: ", KERNEL_VERSION)
-
-	fmt.Print("Enter patch number: ")
-	PATCH_NUMBER, _ = reader.ReadString('\n')
-	PATCH_NUMBER = strings.TrimSuffix(PATCH_NUMBER, "\n")
-	log.Println("Entered patch number: ", PATCH_NUMBER)
-
-	patchName := PATCH_NAME_PREFIX + "-" + KERNEL_VERSION + "-" + PATCH_NUMBER + ".zip"
-	log.Println("Patch Name: " + patchName)
+	readPatchInfo()
 
 	patchEntries = make(map[string]Entry)
 	distEntries = make(map[string]Entry)
 
 	var unzipLocation string
-	if strings.HasSuffix(distributionLocation, ".zip") {
+	if isAZipFile(distributionLocation) {
 		log.Println("Distribution location is a zip file. Extracting zip file...")
 		unzipLocation = strings.TrimSuffix(distributionLocation, ".zip")
 		log.Println("Unzip Location: " + unzipLocation)
@@ -90,9 +97,8 @@ func Create(patchLocation, distributionLocation string, logsEnabled bool) {
 			log.Println("Traversing patch location")
 			traverse(patchLocation, patchEntries, false)
 			log.Println("Traversing patch location finished")
-			log.Println("Traversing distLocation location")
+
 			distLocationExists := checkDir(unzipLocation)
-			log.Println("Traversing distLocation finished")
 			if distLocationExists {
 				log.Println("Distribution location(unzipped locations) exists. Reading files: ",
 					unzipLocation)
@@ -100,6 +106,7 @@ func Create(patchLocation, distributionLocation string, logsEnabled bool) {
 				fmt.Println("Distribution location(unzipped location) does not exist: ", unzipLocation)
 				os.Exit(1)
 			}
+
 			log.Println("Traversing unzip location")
 			traverse(unzipLocation, distEntries, true)
 			log.Println("Traversing unzip location finished")
@@ -116,14 +123,7 @@ func Create(patchLocation, distributionLocation string, logsEnabled bool) {
 			fmt.Println("Error occurred while unzipping")
 		}
 	} else {
-		fmt.Println("Distribution location is not a zip file")
-		distLocationExists := checkDir(distributionLocation)
-		if distLocationExists {
-			fmt.Println("Distribution location exists. Reading files: ", distributionLocation)
-		} else {
-			fmt.Println("Distribution location does not exist")
-			os.Exit(1)
-		}
+		log.Println("Distribution location is not a zip file")
 		log.Println("Traversing patch location")
 		traverse(patchLocation, patchEntries, false)
 		log.Println("Traversing patch location finished")
@@ -142,6 +142,22 @@ func Create(patchLocation, distributionLocation string, logsEnabled bool) {
 	}
 }
 
+func readPatchInfo() {
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Print("Enter kernel version: ")
+	KERNEL_VERSION, _ = reader.ReadString('\n')
+	KERNEL_VERSION = strings.TrimSuffix(KERNEL_VERSION, "\n")
+	log.Println("Entered kernel version: ", KERNEL_VERSION)
+
+	fmt.Print("Enter patch number: ")
+	PATCH_NUMBER, _ = reader.ReadString('\n')
+	PATCH_NUMBER = strings.TrimSuffix(PATCH_NUMBER, "\n")
+	log.Println("Entered patch number: ", PATCH_NUMBER)
+
+	PATCH_NAME := PATCH_NAME_PREFIX + "-" + KERNEL_VERSION + "-" + PATCH_NUMBER + ".zip"
+	log.Println("Patch Name: " + PATCH_NAME)
+}
+
 func copyResourceFiles(patchLocation, distributionLocation string) {
 	for _, resourceFile := range RESOURCE_FILES {
 		filePath := RESOURCE_DIR + string(os.PathSeparator) + resourceFile
@@ -156,6 +172,10 @@ func copyResourceFiles(patchLocation, distributionLocation string) {
 			}
 		}
 	}
+}
+
+func isAZipFile(path string) bool {
+	return strings.HasSuffix(path, ".zip")
 }
 
 func findMatches(patchLocation, distributionLocation string) {
@@ -181,6 +201,8 @@ func findMatches(patchLocation, distributionLocation string) {
 
 	rowCount := 0
 	for patchEntryString, patchEntry := range patchEntries {
+
+		//todo check for underscore and dash when matching
 
 		distEntry, ok := distEntries[patchEntryString]
 		if ok {
@@ -359,8 +381,10 @@ func findMatches(patchLocation, distributionLocation string) {
 				}
 			}
 		} else {
-			fmt.Println("No match found for ", patchEntryString)
-			fmt.Println("Location(s) in Patch: ", patchEntry)
+			color.Set(color.FgRed)
+			fmt.Println("\nNo match found for ", patchEntryString, "\n")
+			color.Unset()
+			log.Println("Location(s) in Patch: ", patchEntry)
 			overallViewTable.AddRow(patchEntryString, " - ")
 		}
 		log.Println("++++++++++++++++++++++++++++++++++++++++++++++++++++")
@@ -371,6 +395,7 @@ func findMatches(patchLocation, distributionLocation string) {
 	}
 	log.Println("Matching files ended ------------------------------------------------------------------------")
 	color.Set(color.FgYellow)
+	fmt.Println("# Summary\n")
 	fmt.Println(overallViewTable.Render())
 	defer color.Unset()
 }
@@ -485,6 +510,7 @@ func checkFile(path string) bool {
 	}
 	return true
 }
+
 func traverse(path string, entryMap map[string]Entry, isDist bool) {
 	//log.Println("Root: " + path)
 	files, _ := ioutil.ReadDir(path)
@@ -574,6 +600,7 @@ func unzip(zipLocation string) (bool, error) {
 	zipReader, err := zip.OpenReader(zipLocation)
 
 	if err != nil {
+		fmt.Println(err)
 		log.Fatal(err)
 	}
 	defer zipReader.Close()

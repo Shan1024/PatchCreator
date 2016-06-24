@@ -3,7 +3,7 @@ package main
 import (
 	"gopkg.in/alecthomas/kingpin.v2"
 	"os"
-	"github.com/shan1024/pct/cmd"
+	"github.com/shan/pct/cmd"
 	"log"
 )
 

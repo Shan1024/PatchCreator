@@ -16,30 +16,46 @@ import (
 	"bufio"
 	"sort"
 	"strconv"
+	"gopkg.in/yaml.v2"
 )
 
-type Entry struct {
+type entry struct {
 	locationMap map[string]bool
 }
 
-func (entry *Entry) add(path string) {
+func (entry *entry) add(path string) {
 	entry.locationMap[path] = true
 }
 
-var patchEntries map[string]Entry
-var distEntries map[string]Entry
+type update_descriptor struct {
+	Update_number    string `yaml:"update_number"`
+	Kernel_version   string `yaml:"kernel_version"`
+	Platform_version string `yaml:"platform_version"`
+	Applies_to       string `yaml:"applies_to"`
+	Bug_fixes        map[string]string `yaml:"bug_fixes"`
+	Description      string `yaml:"description"`
+}
 
-var RESOURCE_FILES = []string{"LICENSE.txt", "NOT_A_CONTRIBUTION.txt", "README.txt"}
+const (
+	_RESOURCE_DIR = "res"
+	_TEMP_DIR_NAME = "temp"
+	_CARBON_HOME = "carbon.home"
+	_TEMP_DIR_LOCATION = _TEMP_DIR_NAME + string(os.PathSeparator) + _CARBON_HOME
+	_DESCRIPTOR_YAML_NAME = "update-descriptor.yaml"
+	_PATCH_NAME_PREFIX = "WSO2-CARBON-PATCH"
+)
 
-const RESOURCE_DIR = "res"
-const TEMP_DIR_NAME = "temp"
-const CARBON_HOME = "carbon.home"
-const TEMP_DIR_LOCATION = TEMP_DIR_NAME + string(os.PathSeparator) + CARBON_HOME
+var (
+	_RESOURCE_FILES = []string{"LICENSE.txt", "NOT_A_CONTRIBUTION.txt", "README.txt"}
 
-var PATCH_NAME_PREFIX = "WSO2-CARBON-PATCH"
-var KERNEL_VERSION string
-var PATCH_NUMBER string
-var PATCH_NAME string
+	descriptor update_descriptor
+	patchEntries map[string]entry
+	distEntries map[string]entry
+
+	_KERNEL_VERSION string
+	_PATCH_NUMBER string
+	_PATCH_NAME string
+)
 
 func Create(patchLocation, distributionLocation string, logsEnabled bool) {
 	if (!logsEnabled) {
@@ -48,7 +64,12 @@ func Create(patchLocation, distributionLocation string, logsEnabled bool) {
 		log.Println("Logs enabled")
 	}
 	log.Println("create command called")
+
+	if strings.HasSuffix(patchLocation, string(os.PathSeparator)) {
+		patchLocation = strings.TrimSuffix(patchLocation, string(os.PathSeparator))
+	}
 	log.Println("Patch Loc: " + patchLocation)
+
 	patchLocationExists := checkDir(patchLocation)
 	if patchLocationExists {
 		log.Println("Patch location exists.")
@@ -77,10 +98,22 @@ func Create(patchLocation, distributionLocation string, logsEnabled bool) {
 
 	log.Println("Product Loc: " + distributionLocation)
 
-	readPatchInfo()
+	descriptorLocation := patchLocation + string(os.PathSeparator) + _DESCRIPTOR_YAML_NAME
+	log.Println("Descriptor Location: ", descriptorLocation)
 
-	patchEntries = make(map[string]Entry)
-	distEntries = make(map[string]Entry)
+	descriptorExists := checkFile(descriptorLocation);
+	log.Println("Descriptor Exists: ", descriptorExists)
+
+	if descriptorExists {
+		readDescriptor(descriptorLocation)
+	} else {
+		//readPatchInfo()
+		fmt.Println(_DESCRIPTOR_YAML_NAME + " not found at " + descriptorLocation)
+		os.Exit(1)
+	}
+
+	patchEntries = make(map[string]entry)
+	distEntries = make(map[string]entry)
 
 	var unzipLocation string
 	if isAZipFile(distributionLocation) {
@@ -114,7 +147,7 @@ func Create(patchLocation, distributionLocation string, logsEnabled bool) {
 			findMatches(patchLocation, unzipLocation)
 			log.Println("Finding matches finished")
 			log.Println("Copying resource files")
-			copyResourceFiles(patchLocation, unzipLocation)
+			copyResourceFiles(patchLocation)
 			log.Println("Copying resource files finished")
 			log.Println("Creating zip file")
 			createPatchZip()
@@ -134,7 +167,7 @@ func Create(patchLocation, distributionLocation string, logsEnabled bool) {
 		findMatches(patchLocation, distributionLocation)
 		log.Println("Finding matches finished")
 		log.Println("Copying resource files")
-		copyResourceFiles(patchLocation, distributionLocation)
+		copyResourceFiles(patchLocation)
 		log.Println("Copying resource files finished")
 		log.Println("Creating zip file")
 		createPatchZip()
@@ -142,31 +175,89 @@ func Create(patchLocation, distributionLocation string, logsEnabled bool) {
 	}
 }
 
-func readPatchInfo() {
-	reader := bufio.NewReader(os.Stdin)
-	fmt.Print("Enter kernel version: ")
-	KERNEL_VERSION, _ = reader.ReadString('\n')
-	KERNEL_VERSION = strings.TrimSuffix(KERNEL_VERSION, "\n")
-	log.Println("Entered kernel version: ", KERNEL_VERSION)
+func readDescriptor(path string) {
+	yamlFile, err := ioutil.ReadFile(path)
+	if err != nil {
+		log.Println("Error occurred while reading the descriptor: ", err)
+	}
+	descriptor = update_descriptor{}
 
-	fmt.Print("Enter patch number: ")
-	PATCH_NUMBER, _ = reader.ReadString('\n')
-	PATCH_NUMBER = strings.TrimSuffix(PATCH_NUMBER, "\n")
-	log.Println("Entered patch number: ", PATCH_NUMBER)
+	err = yaml.Unmarshal(yamlFile, &descriptor)
+	if err != nil {
+		log.Fatalf("error: %v", err)
+	}
 
-	PATCH_NAME = PATCH_NAME_PREFIX + "-" + KERNEL_VERSION + "-" + PATCH_NUMBER
-	log.Println("Patch Name: " + PATCH_NAME)
+	log.Println("update_number:", descriptor.Update_number)
+	log.Println("kernel_version:", descriptor.Kernel_version)
+	log.Println("platform_version:", descriptor.Platform_version)
+	log.Println("applies_to: ", descriptor.Applies_to)
+	log.Println("bug_fixes: ")
+	for key, value := range (descriptor.Bug_fixes) {
+		fmt.Println("\t", key, ":", value)
+	}
+	log.Println("description: \n" + descriptor.Description)
+
+	if descriptor.Update_number == nil {
+		fmt.Println("update_number", " field not found in ", _DESCRIPTOR_YAML_NAME)
+		os.Exit(1)
+	}
+	if descriptor.Kernel_version == nil {
+		fmt.Println("kernel_version", " field not found in ", _DESCRIPTOR_YAML_NAME)
+		os.Exit(1)
+	}
+	if descriptor.Platform_version == nil {
+		fmt.Println("platform_version", " field not found in ", _DESCRIPTOR_YAML_NAME)
+		os.Exit(1)
+	}
+	if descriptor.Applies_to == nil {
+		fmt.Println("applies_to", " field not found in ", _DESCRIPTOR_YAML_NAME)
+		os.Exit(1)
+	}
+	if descriptor.Bug_fixes == nil {
+		fmt.Println("bug_fixes", " field not found in ", _DESCRIPTOR_YAML_NAME)
+		os.Exit(1)
+	}
+	if descriptor.Description == nil {
+		fmt.Println("description", " field not found in ", _DESCRIPTOR_YAML_NAME)
+		os.Exit(1)
+	}
+
+	_KERNEL_VERSION, _ = descriptor.Kernel_version
+	log.Println("kernel version set to: ", _KERNEL_VERSION)
+
+	_PATCH_NUMBER, _ = descriptor.Update_number
+	log.Println("patch number set to: ", _PATCH_NUMBER)
+
+	_PATCH_NAME = _PATCH_NAME_PREFIX + "-" + _KERNEL_VERSION + "-" + _PATCH_NUMBER
+	log.Println("Patch Name: " + _PATCH_NAME)
 }
 
-func copyResourceFiles(patchLocation, distributionLocation string) {
-	for _, resourceFile := range RESOURCE_FILES {
-		filePath := RESOURCE_DIR + string(os.PathSeparator) + resourceFile
+//func readPatchInfo() {
+//	reader := bufio.NewReader(os.Stdin)
+//	fmt.Print("Enter kernel version: ")
+//	_KERNEL_VERSION, _ = reader.ReadString('\n')
+//	_KERNEL_VERSION = strings.TrimSuffix(_KERNEL_VERSION, "\n")
+//	log.Println("Entered kernel version: ", _KERNEL_VERSION)
+//
+//	fmt.Print("Enter patch number: ")
+//	_PATCH_NUMBER, _ = reader.ReadString('\n')
+//	_PATCH_NUMBER = strings.TrimSuffix(_PATCH_NUMBER, "\n")
+//	log.Println("Entered patch number: ", _PATCH_NUMBER)
+//
+//	_PATCH_NAME = _PATCH_NAME_PREFIX + "-" + _KERNEL_VERSION + "-" + _PATCH_NUMBER
+//	log.Println("Patch Name: " + _PATCH_NAME)
+//}
+
+//This method copies resource files to the
+func copyResourceFiles(patchLocation string) {
+	for _, resourceFile := range _RESOURCE_FILES {
+		filePath := _RESOURCE_DIR + string(os.PathSeparator) + resourceFile
 		ok := checkFile(filePath)
 		if !ok {
 			fmt.Println("Resource: ", filePath, " not found")
 		} else {
-			log.Println("Copying resource: ", filePath, " to: " + TEMP_DIR_NAME)
-			err := CopyFile(filePath, TEMP_DIR_NAME + string(os.PathSeparator) + resourceFile)
+			log.Println("Copying resource: ", filePath, " to: " + _TEMP_DIR_NAME)
+			err := CopyFile(filePath, _TEMP_DIR_NAME + string(os.PathSeparator) + resourceFile)
 			if (err != nil) {
 				fmt.Println("Error occurred while copying the resource file: ", filePath, err)
 			}
@@ -174,6 +265,7 @@ func copyResourceFiles(patchLocation, distributionLocation string) {
 	}
 }
 
+//Check whether the given path contain a zip file
 func isAZipFile(path string) bool {
 	return strings.HasSuffix(path, ".zip")
 }
@@ -186,14 +278,14 @@ func findMatches(patchLocation, distributionLocation string) {
 	//overallViewTable.AddTitle("Summary")
 	overallViewTable.AddHeaders("File/Folder", "Copied To")
 
-	err := os.RemoveAll(TEMP_DIR_LOCATION)
+	err := os.RemoveAll(_TEMP_DIR_LOCATION)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			log.Fatal(err)
 		}
 	}
 
-	err = os.MkdirAll(TEMP_DIR_LOCATION, 0777)
+	err = os.MkdirAll(_TEMP_DIR_LOCATION, 0777)
 
 	if err != nil {
 		log.Fatal(err)
@@ -215,7 +307,7 @@ func findMatches(patchLocation, distributionLocation string) {
 
 			if len(distEntry.locationMap) > 1 {
 				color.Set(color.FgRed)
-				fmt.Println("\n\"" + patchEntryString +
+				fmt.Println("\"" + patchEntryString +
 				"\" was found in multiple locations in the distribution")
 				color.Unset()
 				locationMap := make(map[string]string)
@@ -290,7 +382,7 @@ func findMatches(patchLocation, distributionLocation string) {
 
 								src := patchLocation + string(os.PathSeparator) +
 								patchEntryString
-								destPath := TEMP_DIR_LOCATION + tempFilePath + string(os.PathSeparator)
+								destPath := _TEMP_DIR_LOCATION + tempFilePath + string(os.PathSeparator)
 								dest := destPath + patchEntryString
 
 								log.Println("src : ", src)
@@ -346,7 +438,7 @@ func findMatches(patchLocation, distributionLocation string) {
 							tempFilePath := strings.TrimPrefix(path, distributionLocation)
 
 							src := path + string(os.PathSeparator) + patchEntryString
-							destPath := TEMP_DIR_LOCATION + tempFilePath + string(os.PathSeparator)
+							destPath := _TEMP_DIR_LOCATION + tempFilePath + string(os.PathSeparator)
 							dest := destPath + patchEntryString
 
 							log.Println("src : ", src)
@@ -356,13 +448,13 @@ func findMatches(patchLocation, distributionLocation string) {
 
 							//newFile, err := os.Create(dest)
 							if err != nil {
-								fmt.Errorf("Y: ", err)
+								fmt.Println(err)
 							}
 							//newFile.Close()
 
 							copyErr := CopyFile(src, dest)
 							if copyErr != nil {
-								fmt.Errorf("X: ", copyErr)
+								fmt.Println(copyErr)
 							}
 						} else {
 
@@ -405,6 +497,7 @@ func findMatches(patchLocation, distributionLocation string) {
 	defer color.Unset()
 }
 
+//Get the path of the distribution location. This is used to trim the prefixes
 func getDistPath(distributionLoc string) string {
 	index := strings.LastIndex(distributionLoc, string(os.PathSeparator))
 	if index != -1 {
@@ -414,6 +507,7 @@ func getDistPath(distributionLoc string) string {
 	}
 }
 
+//Check whether the given string is in the given slice
 func stringIsInSlice(a string, list []string) bool {
 	for _, b := range list {
 		if b == a {
@@ -497,6 +591,7 @@ func (e *CustomError) Error() string {
 	return e.What
 }
 
+//Check whether the given path points to a directory
 func checkDir(location string) bool {
 	log.Println("Checking Location: " + location)
 	locationInfo, err := os.Stat(location)
@@ -511,6 +606,7 @@ func checkDir(location string) bool {
 	return true
 }
 
+//Check whether the given path points to a file
 func checkFile(path string) bool {
 	log.Println("Checking path: " + path)
 	locationInfo, err := os.Stat(path)
@@ -525,7 +621,8 @@ func checkFile(path string) bool {
 	return true
 }
 
-func traverse(path string, entryMap map[string]Entry, isDist bool) {
+//Traverse the given path and add entries to the given map
+func traverse(path string, entryMap map[string]entry, isDist bool) {
 	//log.Println("Root: " + path)
 	files, _ := ioutil.ReadDir(path)
 	for _, f := range files {
@@ -540,25 +637,23 @@ func traverse(path string, entryMap map[string]Entry, isDist bool) {
 			if f.IsDir() {
 				isDir = true
 			}
-			entryMap[f.Name()] = Entry{
+			entryMap[f.Name()] = entry{
 				map[string]bool{
 					path: isDir,
 				},
 			}
 		}
-		if f.IsDir() &&isDist {
+		if f.IsDir() && isDist {
 			//log.Println("Is a dir: " + path + string(os.PathSeparator) + f.Name())
 			traverse(path + string(os.PathSeparator) + f.Name(), entryMap, isDist)
 		}
 	}
 }
 
+//This function creates the patch zip file
 func createPatchZip() {
-	// Create a file to write the archive buffer to
-	// Could also use an in memory buffer.
-
-	log.Println("Creating patch zip file: ", PATCH_NAME + ".zip")
-	outFile, err := os.Create(PATCH_NAME + ".zip")
+	log.Println("Creating patch zip file: ", _PATCH_NAME + ".zip")
+	outFile, err := os.Create(_PATCH_NAME + ".zip")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -567,7 +662,7 @@ func createPatchZip() {
 	// Create a zip writer on top of the file writer
 	zipWriter := zip.NewWriter(outFile)
 
-	err = filepath.Walk(TEMP_DIR_NAME, func(path string, f os.FileInfo, err error) error {
+	err = filepath.Walk(_TEMP_DIR_NAME, func(path string, f os.FileInfo, err error) error {
 
 		log.Println("Walking: ", path)
 
@@ -575,8 +670,8 @@ func createPatchZip() {
 			// Create and write files to the archive, which in turn
 			// are getting written to the underlying writer to the
 			// .zip file we created at the beginning
-			fileWriter, err := zipWriter.Create(PATCH_NAME + string(os.PathSeparator) +
-			strings.TrimPrefix(path, TEMP_DIR_NAME + string(os.PathSeparator)))
+			fileWriter, err := zipWriter.Create(_PATCH_NAME + string(os.PathSeparator) +
+			strings.TrimPrefix(path, _TEMP_DIR_NAME + string(os.PathSeparator)))
 			if err != nil {
 				log.Fatal("X: ", err)
 			}
@@ -599,9 +694,15 @@ func createPatchZip() {
 		return nil
 	})
 	if err != nil {
-		fmt.Println("Directory Walk failed: ", err)
+		log.Println("Directory Walk failed: ", err)
+		color.Set(color.FgRed)
+		fmt.Println("Patch file " + _PATCH_NAME + ".zip creation failed")
+		color.Unset()
 	} else {
 		log.Println("Directory Walk completed successfully")
+		color.Set(color.FgGreen)
+		fmt.Println("Patch file " + _PATCH_NAME + ".zip successfully created")
+		color.Unset()
 	}
 	// Clean up
 	err = zipWriter.Close()
@@ -610,6 +711,7 @@ func createPatchZip() {
 	}
 }
 
+//This function unzips a zip file at given location
 func unzip(zipLocation string) (bool, error) {
 	log.Println("Unzipping started")
 
@@ -651,7 +753,7 @@ func unzip(zipLocation string) (bool, error) {
 			log.Println(err)
 			return false, err
 		}
-		defer zippedFile.Close()
+
 		// Specify what the extracted file name should be.
 		// You can specify a full path or a prefix
 		// to move it to a different directory.
@@ -694,6 +796,7 @@ func unzip(zipLocation string) (bool, error) {
 				}
 			}
 		}
+		zippedFile.Close()
 	}
 	writer.Stop()
 	log.Println("Unzipping finished")

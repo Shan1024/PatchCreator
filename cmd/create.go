@@ -260,7 +260,7 @@ func copyResourceFiles(patchLocation string) {
 			fmt.Println("Resource: ", filePath, " not found")
 		} else {
 			log.Println("Copying resource: ", filePath, " to: " + _TEMP_DIR_NAME)
-			err := copyFile(filePath, _TEMP_DIR_NAME + string(os.PathSeparator) + resourceFile)
+			err := CopyFile(filePath, _TEMP_DIR_NAME + string(os.PathSeparator) + resourceFile)
 			if (err != nil) {
 				fmt.Println("Error occurred while copying the resource file: ", filePath, err)
 			}
@@ -272,7 +272,7 @@ func copyResourceFiles(patchLocation string) {
 		fmt.Println("Resource: ", filePath, " not found")
 	} else {
 		log.Println("Copying resource: ", filePath, " to: " + _TEMP_DIR_NAME)
-		err := copyFile(filePath, _TEMP_DIR_NAME + string(os.PathSeparator) + _DESCRIPTOR_YAML_NAME)
+		err := CopyFile(filePath, _TEMP_DIR_NAME + string(os.PathSeparator) + _DESCRIPTOR_YAML_NAME)
 		if (err != nil) {
 			fmt.Println("Error occurred while copying the resource file: ", filePath, err)
 		}
@@ -448,7 +448,7 @@ func findMatches(patchLocation, distributionLocation string) {
 								log.Println("src : ", src)
 								log.Println("dest: ", dest)
 
-								copyDir(src, dest)
+								CopyDir(src, dest)
 
 							} else {
 								fmt.Println("One or more entered indices are invalid. " +
@@ -512,7 +512,7 @@ func findMatches(patchLocation, distributionLocation string) {
 							}
 							//newFile.Close()
 
-							copyErr := copyFile(src, dest)
+							copyErr := CopyFile(src, dest)
 							if copyErr != nil {
 								fmt.Println(copyErr)
 							}
@@ -578,7 +578,7 @@ func stringIsInSlice(a string, list []string) bool {
 }
 
 // Copies file source to destination dest.
-func copyFile(source string, dest string) (err error) {
+func CopyFile(source string, dest string) (err error) {
 	sf, err := os.Open(source)
 	if err != nil {
 		return err
@@ -602,19 +602,19 @@ func copyFile(source string, dest string) (err error) {
 
 // Recursively copies a directory tree, attempting to preserve permissions.
 // Source directory must exist, destination directory must *not* exist.
-func copyDir(source string, dest string) (err error) {
+func CopyDir(source string, dest string) (err error) {
 	// get properties of source dir
 	fi, err := os.Stat(source)
 	if err != nil {
 		return err
 	}
 	if !fi.IsDir() {
-		return &customError{"Source is not a directory"}
+		return &CustomError{"Source is not a directory"}
 	}
 	// ensure dest dir does not already exist
 	_, err = os.Open(dest)
 	if !os.IsNotExist(err) {
-		return &customError{"Destination already exists"}
+		return &CustomError{"Destination already exists"}
 	}
 	// create dest dir
 	err = os.MkdirAll(dest, fi.Mode())
@@ -626,13 +626,13 @@ func copyDir(source string, dest string) (err error) {
 		sfp := source + "/" + entry.Name()
 		dfp := dest + "/" + entry.Name()
 		if entry.IsDir() {
-			err = copyDir(sfp, dfp)
+			err = CopyDir(sfp, dfp)
 			if err != nil {
 				log.Println(err)
 			}
 		} else {
 			// perform copy
-			err = copyFile(sfp, dfp)
+			err = CopyFile(sfp, dfp)
 			if err != nil {
 				log.Println(err)
 			}
@@ -642,12 +642,12 @@ func copyDir(source string, dest string) (err error) {
 }
 
 // A struct for returning custom error messages
-type customError struct {
+type CustomError struct {
 	What string
 }
 
 // Returns the error message defined in What as a string
-func (e *customError) error() string {
+func (e *CustomError) Error() string {
 	return e.What
 }
 

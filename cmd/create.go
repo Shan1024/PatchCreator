@@ -17,6 +17,7 @@ import (
 	"sort"
 	"strconv"
 	"gopkg.in/yaml.v2"
+	"text/template"
 )
 
 type entry struct {
@@ -43,14 +44,16 @@ const (
 	_TEMP_DIR_LOCATION = _TEMP_DIR_NAME + string(os.PathSeparator) + _CARBON_HOME
 	_DESCRIPTOR_YAML_NAME = "update-descriptor.yaml"
 	_PATCH_NAME_PREFIX = "WSO2-CARBON-PATCH"
+	_JIRA_URL_PREFIX = "https://wso2.org/jira/browse/"
 )
 
 var (
-	_RESOURCE_FILES = []string{"LICENSE.txt", "NOT_A_CONTRIBUTION.txt", "README.txt"}
+	_RESOURCE_FILES = []string{"LICENSE.txt", "NOT_A_CONTRIBUTION.txt"}
 
-	descriptor update_descriptor
 	patchEntries map[string]entry
 	distEntries map[string]entry
+
+	descriptor update_descriptor
 
 	_KERNEL_VERSION string
 	_PATCH_NUMBER string
@@ -191,41 +194,41 @@ func readDescriptor(path string) {
 	log.Println("kernel_version:", descriptor.Kernel_version)
 	log.Println("platform_version:", descriptor.Platform_version)
 	log.Println("applies_to: ", descriptor.Applies_to)
-	log.Println("bug_fixes: ")
-	for key, value := range (descriptor.Bug_fixes) {
-		fmt.Println("\t", key, ":", value)
-	}
+	log.Println("bug_fixes: ", descriptor.Bug_fixes)
+	//for key, value := range (descriptor.Bug_fixes) {
+	//	fmt.Println("\t", key, ":", value)
+	//}
 	log.Println("description: \n" + descriptor.Description)
 
-	if descriptor.Update_number == nil {
+	if len(descriptor.Update_number) == 0 {
 		fmt.Println("update_number", " field not found in ", _DESCRIPTOR_YAML_NAME)
 		os.Exit(1)
 	}
-	if descriptor.Kernel_version == nil {
+	if len(descriptor.Kernel_version) == 0 {
 		fmt.Println("kernel_version", " field not found in ", _DESCRIPTOR_YAML_NAME)
 		os.Exit(1)
 	}
-	if descriptor.Platform_version == nil {
+	if len(descriptor.Platform_version) == 0 {
 		fmt.Println("platform_version", " field not found in ", _DESCRIPTOR_YAML_NAME)
 		os.Exit(1)
 	}
-	if descriptor.Applies_to == nil {
+	if len(descriptor.Applies_to) == 0 {
 		fmt.Println("applies_to", " field not found in ", _DESCRIPTOR_YAML_NAME)
 		os.Exit(1)
 	}
-	if descriptor.Bug_fixes == nil {
+	if len(descriptor.Bug_fixes) == 0 {
 		fmt.Println("bug_fixes", " field not found in ", _DESCRIPTOR_YAML_NAME)
 		os.Exit(1)
 	}
-	if descriptor.Description == nil {
+	if len(descriptor.Description) == 0 {
 		fmt.Println("description", " field not found in ", _DESCRIPTOR_YAML_NAME)
 		os.Exit(1)
 	}
 
-	_KERNEL_VERSION, _ = descriptor.Kernel_version
+	_KERNEL_VERSION = descriptor.Kernel_version
 	log.Println("kernel version set to: ", _KERNEL_VERSION)
 
-	_PATCH_NUMBER, _ = descriptor.Update_number
+	_PATCH_NUMBER = descriptor.Update_number
 	log.Println("patch number set to: ", _PATCH_NUMBER)
 
 	_PATCH_NAME = _PATCH_NAME_PREFIX + "-" + _KERNEL_VERSION + "-" + _PATCH_NUMBER
@@ -257,12 +260,69 @@ func copyResourceFiles(patchLocation string) {
 			fmt.Println("Resource: ", filePath, " not found")
 		} else {
 			log.Println("Copying resource: ", filePath, " to: " + _TEMP_DIR_NAME)
-			err := CopyFile(filePath, _TEMP_DIR_NAME + string(os.PathSeparator) + resourceFile)
+			err := copyFile(filePath, _TEMP_DIR_NAME + string(os.PathSeparator) + resourceFile)
 			if (err != nil) {
 				fmt.Println("Error occurred while copying the resource file: ", filePath, err)
 			}
 		}
 	}
+	filePath := patchLocation + string(os.PathSeparator) + _DESCRIPTOR_YAML_NAME
+	ok := checkFile(filePath)
+	if !ok {
+		fmt.Println("Resource: ", filePath, " not found")
+	} else {
+		log.Println("Copying resource: ", filePath, " to: " + _TEMP_DIR_NAME)
+		err := copyFile(filePath, _TEMP_DIR_NAME + string(os.PathSeparator) + _DESCRIPTOR_YAML_NAME)
+		if (err != nil) {
+			fmt.Println("Error occurred while copying the resource file: ", filePath, err)
+		}
+	}
+	generateReadMe()
+}
+
+func generateReadMe() {
+
+	type readMeData struct {
+		Patch_id        string
+		Applies_to      string
+		Associated_jira string
+		Description     string
+		Instructions    string
+	}
+
+	README_FILENAME := "README.txt"
+	t, err := template.ParseFiles(_RESOURCE_DIR + string(os.PathSeparator) + README_FILENAME)
+	if err != nil {
+		log.Print(err)
+		os.Exit(1)
+	}
+
+	f, err := os.Create(_TEMP_DIR_NAME + string(os.PathSeparator) + README_FILENAME)
+	if err != nil {
+		log.Println("create file: ", err)
+		os.Exit(1)
+	}
+
+	associatedJIRAs := ""
+	for key, _ := range descriptor.Bug_fixes {
+		associatedJIRAs += (_JIRA_URL_PREFIX + key + ", ")
+	}
+	associatedJIRAs = strings.TrimSuffix(associatedJIRAs, ", ")
+	log.Println("Associated JIRAs: ", associatedJIRAs)
+
+	data := readMeData{
+		Patch_id:_PATCH_NAME,
+		Applies_to:descriptor.Applies_to,
+		Associated_jira:associatedJIRAs,
+		Description:descriptor.Description,
+	}
+
+	err = t.Execute(f, data) //merge template ‘t’ with content of ‘p’
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	f.Close()
 }
 
 //Check whether the given path contain a zip file
@@ -388,7 +448,7 @@ func findMatches(patchLocation, distributionLocation string) {
 								log.Println("src : ", src)
 								log.Println("dest: ", dest)
 
-								CopyDir(src, dest)
+								copyDir(src, dest)
 
 							} else {
 								fmt.Println("One or more entered indices are invalid. " +
@@ -452,7 +512,7 @@ func findMatches(patchLocation, distributionLocation string) {
 							}
 							//newFile.Close()
 
-							copyErr := CopyFile(src, dest)
+							copyErr := copyFile(src, dest)
 							if copyErr != nil {
 								fmt.Println(copyErr)
 							}
@@ -518,7 +578,7 @@ func stringIsInSlice(a string, list []string) bool {
 }
 
 // Copies file source to destination dest.
-func CopyFile(source string, dest string) (err error) {
+func copyFile(source string, dest string) (err error) {
 	sf, err := os.Open(source)
 	if err != nil {
 		return err
@@ -542,19 +602,19 @@ func CopyFile(source string, dest string) (err error) {
 
 // Recursively copies a directory tree, attempting to preserve permissions.
 // Source directory must exist, destination directory must *not* exist.
-func CopyDir(source string, dest string) (err error) {
+func copyDir(source string, dest string) (err error) {
 	// get properties of source dir
 	fi, err := os.Stat(source)
 	if err != nil {
 		return err
 	}
 	if !fi.IsDir() {
-		return &CustomError{"Source is not a directory"}
+		return &customError{"Source is not a directory"}
 	}
 	// ensure dest dir does not already exist
 	_, err = os.Open(dest)
 	if !os.IsNotExist(err) {
-		return &CustomError{"Destination already exists"}
+		return &customError{"Destination already exists"}
 	}
 	// create dest dir
 	err = os.MkdirAll(dest, fi.Mode())
@@ -566,13 +626,13 @@ func CopyDir(source string, dest string) (err error) {
 		sfp := source + "/" + entry.Name()
 		dfp := dest + "/" + entry.Name()
 		if entry.IsDir() {
-			err = CopyDir(sfp, dfp)
+			err = copyDir(sfp, dfp)
 			if err != nil {
 				log.Println(err)
 			}
 		} else {
 			// perform copy
-			err = CopyFile(sfp, dfp)
+			err = copyFile(sfp, dfp)
 			if err != nil {
 				log.Println(err)
 			}
@@ -582,12 +642,12 @@ func CopyDir(source string, dest string) (err error) {
 }
 
 // A struct for returning custom error messages
-type CustomError struct {
+type customError struct {
 	What string
 }
 
 // Returns the error message defined in What as a string
-func (e *CustomError) Error() string {
+func (e *customError) error() string {
 	return e.What
 }
 
@@ -626,26 +686,28 @@ func traverse(path string, entryMap map[string]entry, isDist bool) {
 	//log.Println("Root: " + path)
 	files, _ := ioutil.ReadDir(path)
 	for _, f := range files {
-		_, ok := entryMap[f.Name()]
-		if (ok) {
-			entry := entryMap[f.Name()]
-			//log.Println("ENTRY: ", &entry.locations[0])
-			entry.add(path)
-			//entryMap[f.Name()] = entry
-		} else {
-			isDir := false
-			if f.IsDir() {
-				isDir = true
+		if f.Name() != _DESCRIPTOR_YAML_NAME {
+			_, ok := entryMap[f.Name()]
+			if (ok) {
+				entry := entryMap[f.Name()]
+				//log.Println("ENTRY: ", &entry.locations[0])
+				entry.add(path)
+				//entryMap[f.Name()] = entry
+			} else {
+				isDir := false
+				if f.IsDir() {
+					isDir = true
+				}
+				entryMap[f.Name()] = entry{
+					map[string]bool{
+						path: isDir,
+					},
+				}
 			}
-			entryMap[f.Name()] = entry{
-				map[string]bool{
-					path: isDir,
-				},
+			if f.IsDir() && isDist {
+				//log.Println("Is a dir: " + path + string(os.PathSeparator) + f.Name())
+				traverse(path + string(os.PathSeparator) + f.Name(), entryMap, isDist)
 			}
-		}
-		if f.IsDir() && isDist {
-			//log.Println("Is a dir: " + path + string(os.PathSeparator) + f.Name())
-			traverse(path + string(os.PathSeparator) + f.Name(), entryMap, isDist)
 		}
 	}
 }

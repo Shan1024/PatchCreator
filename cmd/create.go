@@ -43,6 +43,7 @@ const (
 	_CARBON_HOME = "carbon.home"
 	_TEMP_DIR_LOCATION = _TEMP_DIR_NAME + string(os.PathSeparator) + _CARBON_HOME
 	_DESCRIPTOR_YAML_NAME = "update-descriptor.yaml"
+	_README_FILE = "README.txt"
 	_PATCH_NAME_PREFIX = "WSO2-CARBON-PATCH"
 	_JIRA_URL_PREFIX = "https://wso2.org/jira/browse/"
 )
@@ -163,6 +164,7 @@ func Create(patchLocation, distributionLocation string, logsEnabled bool) {
 		log.Println("Traversing patch location")
 		traverse(patchLocation, patchEntries, false)
 		log.Println("Traversing patch location finished")
+		log.Println("Patch Entries: ", patchEntries)
 		log.Println("Traversing distribution location")
 		traverse(distributionLocation, distEntries, true)
 		log.Println("Traversing distribution location finished")
@@ -181,13 +183,13 @@ func Create(patchLocation, distributionLocation string, logsEnabled bool) {
 func readDescriptor(path string) {
 	yamlFile, err := ioutil.ReadFile(path)
 	if err != nil {
-		log.Println("Error occurred while reading the descriptor: ", err)
+		fmt.Println("Error occurred while reading the descriptor: ", err)
 	}
 	descriptor = update_descriptor{}
 
 	err = yaml.Unmarshal(yamlFile, &descriptor)
 	if err != nil {
-		log.Fatalf("error: %v", err)
+		fmt.Println("error: %v", err)
 	}
 
 	log.Println("update_number:", descriptor.Update_number)
@@ -198,7 +200,7 @@ func readDescriptor(path string) {
 	//for key, value := range (descriptor.Bug_fixes) {
 	//	fmt.Println("\t", key, ":", value)
 	//}
-	log.Println("description: \n" + descriptor.Description)
+	log.Println("description: " + descriptor.Description)
 
 	if len(descriptor.Update_number) == 0 {
 		fmt.Println("update_number", " field not found in ", _DESCRIPTOR_YAML_NAME)
@@ -277,7 +279,19 @@ func copyResourceFiles(patchLocation string) {
 			fmt.Println("Error occurred while copying the resource file: ", filePath, err)
 		}
 	}
-	generateReadMe()
+
+	filePath = patchLocation + string(os.PathSeparator) + _README_FILE
+	ok = checkFile(filePath)
+	if !ok {
+		fmt.Println("Readme: ", filePath, " not found")
+	} else {
+		log.Println("Copying readme: ", filePath, " to: " + _TEMP_DIR_NAME)
+		err := CopyFile(filePath, _TEMP_DIR_NAME + string(os.PathSeparator) + _README_FILE)
+		if (err != nil) {
+			fmt.Println("Error occurred while copying the resource file: ", filePath, err)
+		}
+	}
+	//generateReadMe()
 }
 
 func generateReadMe() {
@@ -322,7 +336,12 @@ func generateReadMe() {
 		fmt.Println(err)
 		os.Exit(1)
 	}
-	f.Close()
+	//f.Close()
+	//err = t.Execute(os.Stdout, data) //merge template ‘t’ with content of ‘p’
+	//if err != nil {
+	//	fmt.Println(err)
+	//	os.Exit(1)
+	//}
 }
 
 //Check whether the given path contain a zip file
@@ -353,10 +372,7 @@ func findMatches(patchLocation, distributionLocation string) {
 
 	rowCount := 0
 	for patchEntryString, patchEntry := range patchEntries {
-
-		//todo check for underscore and dash when matching
-
-
+		//todo check for underscore and dash when matching in plugins folder
 		distEntry, ok := distEntries[patchEntryString]
 		if ok {
 			log.Println("Match found for ", patchEntryString)
@@ -379,13 +395,13 @@ func findMatches(patchLocation, distributionLocation string) {
 
 				index := 1
 				//isFirst := true
-				for path, isDirInDist := range distEntry.locationMap {
+				for pathInDist, isDirInDist := range distEntry.locationMap {
 
 					for _, isDirInPatch := range patchEntry.locationMap {
 
 						if isDirInDist == isDirInPatch {
 
-							locationMap[strconv.Itoa(index)] = path
+							locationMap[strconv.Itoa(index)] = pathInDist
 
 							//if isFirst {
 							//	overallViewTable.AddRow(patchEntryString, path)
@@ -393,14 +409,14 @@ func findMatches(patchLocation, distributionLocation string) {
 							//} else {
 							//	overallViewTable.AddRow("", path)
 							//}
-							log.Println("Trimming: ", path, "; using: ", distPath)
-							tempTable.AddRow(index, strings.TrimPrefix(path, distPath))
+							log.Println("Trimming: ", pathInDist, "; using: ", distPath)
+							tempTable.AddRow(index, strings.TrimPrefix(pathInDist, distPath))
 							index++
 						}
 					}
 				}
 
-				log.Println("Map: ", locationMap)
+				log.Println("Location Map for Dist: ", locationMap)
 
 				tempTable.SetAlign(termtables.AlignCenter, 1)
 				fmt.Println(tempTable.Render())
@@ -448,7 +464,25 @@ func findMatches(patchLocation, distributionLocation string) {
 								log.Println("src : ", src)
 								log.Println("dest: ", dest)
 
-								CopyDir(src, dest)
+								CopyDir(src, dest) //todo multiple files with same name
+
+								//if checkFile(src) {
+								//	log.Println("Copying file: ", src, " ; To:", dest)
+								//	copyErr := CopyFile(src, dest)
+								//	if copyErr != nil {
+								//		fmt.Println("Error occurred while copying file:",
+								//			copyErr)
+								//		os.Exit(1)
+								//	}
+								//} else if checkDir(src) {
+								//	log.Println("Copying directory: ", src, " ; To:", dest)
+								//	copyErr := CopyDir(src, dest)
+								//	if copyErr != nil {
+								//		fmt.Println("Error occurred while copying " +
+								//		"directory:", copyErr)
+								//		os.Exit(1)
+								//	}
+								//}
 
 							} else {
 								fmt.Println("One or more entered indices are invalid. " +
@@ -489,7 +523,7 @@ func findMatches(patchLocation, distributionLocation string) {
 			} else {
 				for path, isDirInDist := range distEntry.locationMap {
 
-					for pathInDist, isDirInPatch := range patchEntry.locationMap {
+					for pathInPatch, isDirInPatch := range patchEntry.locationMap {
 
 						if isDirInDist == isDirInPatch {
 							log.Println("Both locations contain same type")
@@ -497,7 +531,7 @@ func findMatches(patchLocation, distributionLocation string) {
 
 							tempFilePath := strings.TrimPrefix(path, distributionLocation)
 
-							src := path + string(os.PathSeparator) + patchEntryString
+							src := pathInPatch + string(os.PathSeparator) + patchEntryString
 							destPath := _TEMP_DIR_LOCATION + tempFilePath + string(os.PathSeparator)
 							dest := destPath + patchEntryString
 
@@ -508,14 +542,30 @@ func findMatches(patchLocation, distributionLocation string) {
 
 							//newFile, err := os.Create(dest)
 							if err != nil {
-								fmt.Println(err)
+								fmt.Println("Error occurred while creating " +
+								"directory", err)
+								os.Exit(1)
 							}
 							//newFile.Close()
 
-							copyErr := CopyFile(src, dest)
-							if copyErr != nil {
-								fmt.Println(copyErr)
+							if checkFile(src) {
+								log.Println("Copying file: ", src, " ; To:", dest)
+								copyErr := CopyFile(src, dest)
+								if copyErr != nil {
+									fmt.Println("Error occurred while copying file:",
+										copyErr)
+									os.Exit(1)
+								}
+							} else if checkDir(src) {
+								log.Println("Copying directory: ", src, " ; To:", dest)
+								copyErr := CopyDir(src, dest)
+								if copyErr != nil {
+									fmt.Println("Error occurred while copying " +
+									"directory:", copyErr)
+									os.Exit(1)
+								}
 							}
+
 						} else {
 
 							fmt.Println(color.RedString("\nFollowing locations contain"),
@@ -523,7 +573,7 @@ func findMatches(patchLocation, distributionLocation string) {
 								color.RedString("but types are different"))
 							color.Set(color.FgRed)
 							fmt.Println(" - ", path)
-							fmt.Println(" - ", pathInDist)
+							fmt.Println(" - ", pathInPatch)
 							fmt.Println()
 							color.Unset()
 
@@ -686,7 +736,7 @@ func traverse(path string, entryMap map[string]entry, isDist bool) {
 	//log.Println("Root: " + path)
 	files, _ := ioutil.ReadDir(path)
 	for _, f := range files {
-		if f.Name() != _DESCRIPTOR_YAML_NAME {
+		if f.Name() != _DESCRIPTOR_YAML_NAME && f.Name() != _README_FILE {
 			_, ok := entryMap[f.Name()]
 			if (ok) {
 				entry := entryMap[f.Name()]

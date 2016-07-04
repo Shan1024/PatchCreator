@@ -96,7 +96,7 @@ func validate() {
 				log.Println(patchLoc, "found in addedFilesMap")
 			} else {
 				log.Println(patchLoc, "not found in addedFilesMap")
-				log.Println("addedFilesMap: ",addedFilesMap)
+				log.Println("addedFilesMap: ", addedFilesMap)
 				color.Set(color.FgRed)
 				fmt.Println(patchLoc, "not found in distribution and it is not a newly added file.")
 				fmt.Println("If it is a new file, please check the entry in", _DESCRIPTOR_YAML_NAME,
@@ -150,7 +150,7 @@ func readPatchZip(zipLocation string, logsEnabled bool) (bool, error) {
 	for _, file := range zipReader.Reader.File {
 		filesRead++
 		if (!logsEnabled) {
-			fmt.Fprintf(writer, "Reading files .. (%d/%d)\n", filesRead, totalFiles)
+			fmt.Fprintf(writer, "Reading files from patch zip: (%d/%d)\n", filesRead, totalFiles)
 			time.Sleep(time.Millisecond * 5)
 		}
 
@@ -193,7 +193,8 @@ func readPatchZip(zipLocation string, logsEnabled bool) (bool, error) {
 					fmt.Println("Error occurred while unmarshalling the yaml:", err)
 					color.Unset()
 				}
-				fmt.Println(descriptor)
+
+				log.Println("descriptor:", descriptor)
 
 				for _, addedFile := range descriptor.File_changes.Added_files {
 
@@ -278,7 +279,7 @@ func readDistZip(zipLocation string, logsEnabled bool) (bool, error) {
 	for _, file := range zipReader.Reader.File {
 		filesRead++
 		if (!logsEnabled) {
-			fmt.Fprintf(writer, "Reading files .. (%d/%d)\n", filesRead, totalFiles)
+			fmt.Fprintf(writer, "Reading files from distribution zip: (%d/%d)\n", filesRead, totalFiles)
 			time.Sleep(time.Millisecond * 2)
 		}
 
@@ -330,7 +331,16 @@ func readDistZip(zipLocation string, logsEnabled bool) (bool, error) {
 }
 func readDistDir(distributionLocation string, logsEnabled bool) {
 
+	writer := uilive.New()
+	//start listening for updates and render
+	writer.Start()
+	filesRead := 0
 	err := filepath.Walk(distributionLocation, func(path string, fileInfo os.FileInfo, err error) error {
+		filesRead++;
+		if (!logsEnabled) {
+			fmt.Fprintf(writer, "Reading files from distribution zip: %d files read\n", filesRead)
+			time.Sleep(time.Millisecond * 2)
+		}
 
 		log.Println("Walking: ", path)
 
@@ -366,4 +376,6 @@ func readDistDir(distributionLocation string, logsEnabled bool) {
 		os.Exit(1)
 		color.Unset()
 	}
+	log.Println("Total files read:", filesRead)
+	writer.Stop()
 }

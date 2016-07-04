@@ -49,7 +49,7 @@ const (
 	_DESCRIPTOR_YAML_NAME = "update-descriptor.yaml"
 	_README_FILE = "README.txt"
 	_INSTRUCTIONS_NAME = "instructions.txt"
-	_PATCH_NAME_PREFIX = "WSO2-CARBON-PATCH"
+	_PATCH_NAME_PREFIX = "WSO2-CARBON-UPDATE"
 	_JIRA_URL_PREFIX = "https://wso2.org/jira/browse/"
 )
 

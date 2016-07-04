@@ -29,12 +29,16 @@ func (entry *entry) add(path string) {
 }
 
 type update_descriptor struct {
-	Update_number    string `yaml:"update_number"`
-	Kernel_version   string `yaml:"kernel_version"`
-	Platform_version string `yaml:"platform_version"`
-	Applies_to       string `yaml:"applies_to"`
-	Bug_fixes        map[string]string `yaml:"bug_fixes"`
-	Description      string `yaml:"description"`
+	Update_number    string            /*`yaml:"update_number"`*/
+	Kernel_version   string            /*`yaml:"kernel_version"`*/
+	Platform_version string            /*`yaml:"platform_version"`*/
+	Applies_to       string            /*`yaml:"applies_to"`*/
+	Bug_fixes        map[string]string /*`yaml:"bug_fixes"`*/
+	Description      string            /*`yaml:"description"`*/
+	File_changes     struct {
+				 Added_files   []string /*`yaml:"added_files,flow"`*/
+				 Removed_files []string /*`yaml:"removed_files,flow"`*/
+			 }
 }
 
 const (
@@ -207,15 +211,19 @@ func readDescriptor(path string) {
 	err = yaml.Unmarshal(yamlFile, &descriptor)
 	if err != nil {
 		color.Set(color.FgRed)
-		fmt.Println("error: %v", err)
+		fmt.Println("Error occurred while unmarshalling the yaml:", err)
 		color.Unset()
 	}
 
+	log.Println("----------------------------------------------------------------")
 	log.Println("update_number:", descriptor.Update_number)
 	log.Println("kernel_version:", descriptor.Kernel_version)
 	log.Println("platform_version:", descriptor.Platform_version)
 	log.Println("applies_to: ", descriptor.Applies_to)
 	log.Println("bug_fixes: ", descriptor.Bug_fixes)
+	log.Println("file_changes: ", descriptor.File_changes)
+	log.Println("----------------------------------------------------------------")
+
 	//for key, value := range (descriptor.Bug_fixes) {
 	//	fmt.Println("\t", key, ":", value)
 	//}
@@ -866,7 +874,7 @@ func createPatchZip() {
 			// are getting written to the underlying writer to the
 			// .zip file we created at the beginning
 
-			log.Println("Time: ", time.Now().UnixNano())
+			//log.Println("Time: ", time.Now().UnixNano())
 
 			header, err := zip.FileInfoHeader(fileInfo)
 			if err != nil {
@@ -876,7 +884,23 @@ func createPatchZip() {
 				color.Unset()
 			}
 
+			header.Name = _PATCH_NAME + string(os.PathSeparator) + strings.TrimPrefix(path, _TEMP_DIR_NAME + string(os.PathSeparator))
 			fileWriter, err := zipWriter.CreateHeader(header)
+
+			//header := &zip.FileHeader{
+			//	Name:         _PATCH_NAME + string(os.PathSeparator) + strings.TrimPrefix(path, _TEMP_DIR_NAME + string(os.PathSeparator)),
+			//	//a.filename,
+			//	//Method:       zip.Store,
+			//	//crea
+			//	//ModifiedTime: uint16(time.Now().UnixNano()),
+			//	//ModifiedDate: uint16(time.Now().UnixNano()),
+			//}
+
+			//fileWriter, err := zipWriter.Create(_PATCH_NAME + string(os.PathSeparator) +
+			//strings.TrimPrefix(path, _TEMP_DIR_NAME + string(os.PathSeparator)))
+
+			//fileWriter, err := zipWriter.CreateHeader(header)
+
 
 			if err != nil {
 				color.Set(color.FgRed)

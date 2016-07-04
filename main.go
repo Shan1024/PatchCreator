@@ -4,7 +4,6 @@ import (
 	"gopkg.in/alecthomas/kingpin.v2"
 	"os"
 	"github.com/shan1024/pct/cmd"
-	"log"
 )
 
 var (
@@ -27,6 +26,6 @@ func main() {
 	case createCommand.FullCommand():
 		cmd.Create(*createPatchLoc, *createDistLoc, *enableLogsForCreateCommand)
 	case validateCommand.FullCommand():
-		log.Println("validate command called")
+		cmd.Validate(*validatePatchLoc, *validateDistLoc, *enableLogsForValidateCommand)
 	}
 }

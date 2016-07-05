@@ -14,20 +14,14 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-var allResFiles = map[string]bool{"LICENSE.txt":true, "NOT_A_CONTRIBUTION.txt":true, "README.txt":true,
-	"update-descriptor.yaml":true, "instructions.txt":true}
-
 var (
+	allResFiles  map[string]bool
 	patchFilesMap map[string]bool
 	distFileMap map[string]bool
 	addedFilesMap map[string]bool
 )
 
 func Validate(patchLocation, distributionLocation string, logsEnabled bool) {
-
-	patchFilesMap = make(map[string]bool)
-	distFileMap = make(map[string]bool)
-	addedFilesMap = make(map[string]bool)
 
 	if (!logsEnabled) {
 		log.SetOutput(ioutil.Discard)
@@ -36,9 +30,13 @@ func Validate(patchLocation, distributionLocation string, logsEnabled bool) {
 	}
 	log.Println("validate command called")
 
+	initialize()
+
 	log.Println("Patch Loc: " + patchLocation)
 	if !isAZipFile(patchLocation) {
+		color.Set(color.FgRed)
 		fmt.Println("Patch file should be a zip file.")
+		color.Unset()
 		os.Exit(1)
 	}
 	patchLocationExists := checkFile(patchLocation)
@@ -83,6 +81,19 @@ func Validate(patchLocation, distributionLocation string, logsEnabled bool) {
 	validate()
 }
 
+func initialize() {
+	allResFiles = make(map[string]bool)
+	allResFiles[_LICENSE_FILE_NAME] = true
+	allResFiles[_NOT_A_CONTRIBUTION_FILE_NAME] = true
+	allResFiles[_README_FILE_NAME] = true
+	allResFiles[_UPDATE_DESCRIPTOR_FILE_NAME] = true
+	allResFiles[_INSTRUCTIONS_FILE_NAME] = true
+
+	patchFilesMap = make(map[string]bool)
+	distFileMap = make(map[string]bool)
+	addedFilesMap = make(map[string]bool)
+}
+
 func validate() {
 	for patchLoc, _ := range patchFilesMap {
 		log.Println("Checking location: ", patchLoc)
@@ -99,7 +110,7 @@ func validate() {
 				log.Println("addedFilesMap: ", addedFilesMap)
 				color.Set(color.FgRed)
 				fmt.Println(patchLoc, "not found in distribution and it is not a newly added file.")
-				fmt.Println("If it is a new file, please check the entry in", _DESCRIPTOR_YAML_NAME,
+				fmt.Println("If it is a new file, please add an entry in", _UPDATE_DESCRIPTOR_FILE_NAME,
 					"file")
 				fmt.Println("\nValidation FAILED\n")
 				color.Unset()
@@ -121,18 +132,22 @@ func readPatchZip(zipLocation string, logsEnabled bool) (bool, error) {
 
 	log.Println("Patch name: ", patchName)
 
-	if !strings.HasPrefix(patchName, _PATCH_NAME_PREFIX) {
-		fmt.Println("Patch file does not have", _PATCH_NAME_PREFIX, "prefix")
-		os.Exit(0)
+	if !strings.HasPrefix(patchName, _UPDATE_NAME_PREFIX) {
+		color.Set(color.FgRed)
+		fmt.Println("Patch file does not have", _UPDATE_NAME_PREFIX, "prefix")
+		color.Unset()
+		os.Exit(1)
 	} else {
-		log.Println("Patch file does have", _PATCH_NAME_PREFIX, "prefix")
+		log.Println("Patch file does have", _UPDATE_NAME_PREFIX, "prefix")
 	}
 
 	// Create a reader out of the zip archive
 	zipReader, err := zip.OpenReader(zipLocation)
 
 	if err != nil {
-		fmt.Println(err)
+		color.Set(color.FgRed)
+		fmt.Println("Error occurred while reading zip:", err)
+		color.Unset()
 		log.Fatal(err)
 	}
 	defer zipReader.Close()
@@ -155,12 +170,35 @@ func readPatchZip(zipLocation string, logsEnabled bool) (bool, error) {
 		}
 
 		log.Println("Checking file: ", file.Name)
+
+		index := strings.Index(file.Name, string(os.PathSeparator))
+
+		if index == -1 {
+			color.Set(color.FgRed)
+			fmt.Println("Patch zip file should have a root folder called", patchName)
+			color.Unset()
+			os.Exit(1)
+		} else {
+			rootFolder := file.Name[:index]
+			log.Println("RootFolder:", rootFolder)
+			if rootFolder != patchName {
+				color.Set(color.FgRed)
+				fmt.Println(file.Name, "should be in", patchName, "root folder. But it is in ",
+					rootFolder, "folder")
+				color.Unset()
+				os.Exit(1)
+			}
+		}
+
 		_, found := allResFiles[file.FileInfo().Name()]
 
 		if !found {
 			containsCarbonHome := strings.Contains(file.Name, _CARBON_HOME)
 			if (!containsCarbonHome) {
-				fmt.Println("Does not have a", _CARBON_HOME, "folder")
+				color.Set(color.FgRed)
+				fmt.Println("Does not have a '" + _CARBON_HOME + "' folder in the root folder '" +
+				patchName + "'")
+				color.Unset()
 				os.Exit(1)
 			}
 			log.Println("Have a", _CARBON_HOME, "folder")
@@ -173,11 +211,11 @@ func readPatchZip(zipLocation string, logsEnabled bool) (bool, error) {
 			delete(allResFiles, file.FileInfo().Name())
 			log.Println(file.FileInfo().Name(), "was removed from the map")
 
-			if file.FileInfo().Name() == _DESCRIPTOR_YAML_NAME {
+			if file.FileInfo().Name() == _UPDATE_DESCRIPTOR_FILE_NAME {
 				yamlFile, err := file.Open()
 				if err != nil {
 					color.Set(color.FgRed)
-					fmt.Println("Error occurred while reading the", _DESCRIPTOR_YAML_NAME, "file:",
+					fmt.Println("Error occurred while reading the", _UPDATE_DESCRIPTOR_FILE_NAME, "file:",
 						err)
 					color.Unset()
 				}
@@ -213,14 +251,19 @@ func readPatchZip(zipLocation string, logsEnabled bool) (bool, error) {
 		}
 	}
 
+	//Delete instructions.txt file if it is left in the map
+	delete(allResFiles,_INSTRUCTIONS_FILE_NAME)
+
 	log.Println("Resource map:", allResFiles)
 	log.Println(patchFilesMap)
 	if (len(allResFiles) != 0) {
 		writer.Stop()
+		color.Set(color.FgRed)
 		fmt.Println("Following resource file(s) were not found in the patch: ")
 		for key, _ := range allResFiles {
-			fmt.Println("\t", key)
+			fmt.Println("\t", "-", key)
 		}
+		color.Unset()
 		os.Exit(1)
 	}
 
@@ -239,7 +282,7 @@ func readPatchZip(zipLocation string, logsEnabled bool) (bool, error) {
 	}
 }
 
-//This function reads the files of the given patch zip
+//This function reads the files of the given distribution zip
 func readDistZip(zipLocation string, logsEnabled bool) (bool, error) {
 	log.Println("Zip file reading started: ", zipLocation)
 
@@ -247,21 +290,14 @@ func readDistZip(zipLocation string, logsEnabled bool) (bool, error) {
 	if lastIndex := strings.LastIndex(distName, string(os.PathSeparator)); lastIndex > -1 {
 		distName = distName[lastIndex + 1:]
 	}
-	//
-	//log.Println("Patch name: ", patchName)
-	//
-	//if !strings.HasPrefix(patchName, _PATCH_NAME_PREFIX) {
-	//	fmt.Println("Patch file does not have", _PATCH_NAME_PREFIX, "prefix")
-	//	os.Exit(0)
-	//} else {
-	//	log.Println("Patch file does have", _PATCH_NAME_PREFIX, "prefix")
-	//}
 
 	// Create a reader out of the zip archive
 	zipReader, err := zip.OpenReader(zipLocation)
 
 	if err != nil {
-		fmt.Println(err)
+		color.Set(color.FgRed)
+		fmt.Println("Error occurred while reading zip:", err)
+		color.Unset()
 		log.Fatal(err)
 	}
 	defer zipReader.Close()
@@ -284,36 +320,12 @@ func readDistZip(zipLocation string, logsEnabled bool) (bool, error) {
 		}
 
 		log.Println("Checking file: ", file.Name)
-		//_, found := allResFiles[file.FileInfo().Name()]
-
-		//if !found {
-		//	containsCarbonHome := strings.Contains(file.Name, _CARBON_HOME)
-		//	if (!containsCarbonHome) {
-		//		fmt.Println("Does not have a", _CARBON_HOME, "folder")
-		//		os.Exit(1)
-		//	}
-		//	log.Println("Have a", _CARBON_HOME, "folder")
 
 		temp := strings.TrimPrefix(file.Name, distName)
 		log.Println("Entry: ", temp)
 		distFileMap[temp] = true
-		//} else {
-		//	log.Println(file.FileInfo().Name(), "was found in resource map")
-		//	delete(allResFiles, file.FileInfo().Name())
-		//	log.Println(file.FileInfo().Name(), "was removed from the map")
-		//}
-	}
 
-	//log.Println("Resource map:", allResFiles)
-	//log.Println(patchFilesMap)
-	//if (len(allResFiles) != 0) {
-	//	writer.Stop()
-	//	fmt.Println("Following resource file(s) were not found in the patch: ")
-	//	for key, _ := range allResFiles {
-	//		fmt.Println("\t", key)
-	//	}
-	//	os.Exit(1)
-	//}
+	}
 
 	writer.Stop()
 	log.Println("Zip file reading finished")
@@ -329,6 +341,7 @@ func readDistZip(zipLocation string, logsEnabled bool) (bool, error) {
 		return false, nil
 	}
 }
+
 func readDistDir(distributionLocation string, logsEnabled bool) {
 
 	writer := uilive.New()
@@ -338,7 +351,7 @@ func readDistDir(distributionLocation string, logsEnabled bool) {
 	err := filepath.Walk(distributionLocation, func(path string, fileInfo os.FileInfo, err error) error {
 		filesRead++;
 		if (!logsEnabled) {
-			fmt.Fprintf(writer, "Reading files from distribution zip: %d files read\n", filesRead)
+			fmt.Fprintf(writer, "Reading files from distribution directory: %d files read\n", filesRead)
 			time.Sleep(time.Millisecond * 2)
 		}
 

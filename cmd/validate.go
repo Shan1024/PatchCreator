@@ -137,7 +137,7 @@ func validate() {
 		}
 	}
 	color.Set(color.FgGreen)
-	fmt.Println("\nValidation SUCCESSFUL\n")
+	fmt.Println("\n[INFO] Validation SUCCESSFUL\n")
 	color.Unset()
 }
 
@@ -154,7 +154,7 @@ func readUpdateZip(zipLocation string, logsEnabled bool) {
 	//Check whether the update name has the required prefix
 	if !strings.HasPrefix(updateName, _UPDATE_NAME_PREFIX) {
 		color.Set(color.FgRed)
-		fmt.Println("Update file does not have", _UPDATE_NAME_PREFIX, "prefix")
+		fmt.Println("[FAILURE] Update file does not have", _UPDATE_NAME_PREFIX, "prefix")
 		color.Unset()
 		os.Exit(1)
 	} else {
@@ -165,7 +165,7 @@ func readUpdateZip(zipLocation string, logsEnabled bool) {
 	zipReader, err := zip.OpenReader(zipLocation)
 	if err != nil {
 		color.Set(color.FgRed)
-		fmt.Println("Error occurred while reading zip:", err)
+		fmt.Println("[FAILURE] Error occurred while reading zip:", err)
 		color.Unset()
 		log.Fatal(err)
 	}
@@ -194,7 +194,7 @@ func readUpdateZip(zipLocation string, logsEnabled bool) {
 		index := strings.Index(file.Name, string(os.PathSeparator))
 		if index == -1 {
 			color.Set(color.FgRed)
-			fmt.Println("Update zip file should have a root folder called", updateName)
+			fmt.Println("[FAILURE] Update zip file should have a root folder called", updateName)
 			color.Unset()
 			os.Exit(1)
 		} else {
@@ -202,8 +202,8 @@ func readUpdateZip(zipLocation string, logsEnabled bool) {
 			log.Println("RootFolder:", rootFolder)
 			if rootFolder != updateName {
 				color.Set(color.FgRed)
-				fmt.Println(file.Name, "should be in", updateName, "root folder. But it is in ",
-					rootFolder, "folder")
+				fmt.Println("[FAILURE]", file.Name, "should be in", updateName, "root folder. But it " +
+				"is in ", rootFolder, "folder")
 				color.Unset()
 				os.Exit(1)
 			}
@@ -216,8 +216,9 @@ func readUpdateZip(zipLocation string, logsEnabled bool) {
 			containsCarbonHome := strings.Contains(file.Name, _CARBON_HOME)
 			if (!containsCarbonHome) {
 				color.Set(color.FgRed)
-				fmt.Println("Does not have a '" + _CARBON_HOME + "' folder in the root folder '" +
-				updateName + "'")
+				fmt.Println("[FAILURE] '" + file.Name + "' is not a known resource file. " +
+				"It should be in '" + updateName + string(os.PathSeparator) + _CARBON_HOME +
+				string(os.PathSeparator) + "' folder")
 				color.Unset()
 				os.Exit(1)
 			}
@@ -239,7 +240,7 @@ func readUpdateZip(zipLocation string, logsEnabled bool) {
 				yamlFile, err := file.Open()
 				if err != nil {
 					color.Set(color.FgRed)
-					fmt.Println("Error occurred while reading the", _UPDATE_DESCRIPTOR_FILE_NAME, "file:",
+					fmt.Println("[FAILURE] Error occurred while reading the", _UPDATE_DESCRIPTOR_FILE_NAME, "file:",
 						err)
 					color.Unset()
 				}
@@ -253,7 +254,7 @@ func readUpdateZip(zipLocation string, logsEnabled bool) {
 				err = yaml.Unmarshal(data, &descriptor)
 				if err != nil {
 					color.Set(color.FgRed)
-					fmt.Println("Error occurred while unmarshalling the yaml:", err)
+					fmt.Println("[FAILURE] Error occurred while unmarshalling the yaml:", err)
 					color.Unset()
 				}
 				log.Println("descriptor:", descriptor)
@@ -277,7 +278,7 @@ func readUpdateZip(zipLocation string, logsEnabled bool) {
 	if (len(allResFiles) != 0) {
 		//Print the missing files
 		color.Set(color.FgRed)
-		fmt.Println("Following resource file(s) were not found in the update zip: ")
+		fmt.Println("[FAILURE] Following resource file(s) were not found in the update zip: ")
 		for key, _ := range allResFiles {
 			fmt.Println("\t", "-", key)
 		}
@@ -292,7 +293,7 @@ func readUpdateZip(zipLocation string, logsEnabled bool) {
 		log.Println("All files read")
 	} else {
 		color.Set(color.FgRed)
-		fmt.Println("All files not read from zip file")
+		fmt.Println("[FAILURE] All files not read from zip file")
 		color.Unset()
 		os.Exit(1)
 	}
@@ -312,7 +313,7 @@ func readDistZip(zipLocation string, logsEnabled bool) {
 	zipReader, err := zip.OpenReader(zipLocation)
 	if err != nil {
 		color.Set(color.FgRed)
-		fmt.Println("Error occurred while reading zip:", err)
+		fmt.Println("[FAILURE] Error occurred while reading zip:", err)
 		color.Unset()
 		log.Fatal(err)
 	}
@@ -354,7 +355,7 @@ func readDistZip(zipLocation string, logsEnabled bool) {
 		log.Println("All files read")
 	} else {
 		color.Set(color.FgRed)
-		fmt.Println("All files not read from zip file")
+		fmt.Println("[FAILURE] All files not read from zip file")
 		color.Unset()
 		os.Exit(1)
 	}
@@ -383,7 +384,7 @@ func readDistDir(distributionLocation string, logsEnabled bool) {
 	})
 	if err != nil {
 		color.Set(color.FgRed)
-		fmt.Println("Error occurred while reading the zip file: ", err)
+		fmt.Println("[FAILURE] Error occurred while reading the zip file: ", err)
 		os.Exit(1)
 		color.Unset()
 	}

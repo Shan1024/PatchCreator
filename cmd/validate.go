@@ -16,13 +16,13 @@ import (
 
 var (
 	allResFiles  map[string]bool
-	patchFilesMap map[string]bool
+	updatedFilesMap map[string]bool
 	distFileMap map[string]bool
 	addedFilesMap map[string]bool
 )
 
 //Entry point of the validate command
-func Validate(patchLocation, distributionLocation string, logsEnabled bool) {
+func Validate(updateLocation, distributionLocation string, logsEnabled bool) {
 
 	if (!logsEnabled) {
 		log.SetOutput(ioutil.Discard)
@@ -34,29 +34,29 @@ func Validate(patchLocation, distributionLocation string, logsEnabled bool) {
 	//Initialize variables
 	initialize()
 
-	//patch location should be a zip file
-	log.Println("Patch Loc: " + patchLocation)
-	if !isAZipFile(patchLocation) {
+	//Update location should be a zip file
+	log.Println("Update Loc: " + updateLocation)
+	if !isAZipFile(updateLocation) {
 		color.Set(color.FgRed)
-		fmt.Println("Patch file should be a zip file.")
+		fmt.Println("Update file should be a zip file.")
 		color.Unset()
 		os.Exit(1)
 	}
-	//Check whether the patch location exists
-	patchLocationExists := checkFile(patchLocation)
-	if patchLocationExists {
-		log.Println("Patch location exists.")
+	//Check whether the update location exists
+	updateLocationExists := checkFile(updateLocation)
+	if updateLocationExists {
+		log.Println("Update location exists.")
 	} else {
 		color.Set(color.FgRed)
-		fmt.Println("Patch location does not exist. Enter a valid file location.")
+		fmt.Println("Update location does not exist. Enter a valid file location.")
 		color.Unset()
 		os.Exit(1)
 	}
 
-	log.Println("Reading patch zip...")
-	readPatchZip(patchLocation, logsEnabled)
-	log.Println("Patch zip successfully read.")
-	log.Println("Entries in patch zip: ", patchFilesMap)
+	log.Println("Reading update zip...")
+	readUpdateZip(updateLocation, logsEnabled)
+	log.Println("Update zip successfully read.")
+	log.Println("Entries in update zip: ", updatedFilesMap)
 
 	log.Println("Distribution Loc: " + distributionLocation)
 	//Check whether the distribution is a zip or a directory
@@ -98,36 +98,36 @@ func initialize() {
 	allResFiles[_UPDATE_DESCRIPTOR_FILE_NAME] = true
 	allResFiles[_INSTRUCTIONS_FILE_NAME] = true
 
-	patchFilesMap = make(map[string]bool)
+	updatedFilesMap = make(map[string]bool)
 	distFileMap = make(map[string]bool)
 	addedFilesMap = make(map[string]bool)
 }
 
 //This method validates the files
 func validate() {
-	//Iterate through all the files in the patch. All files should be in the distribution unless they are newly
+	//Iterate through all the files in the update. All files should be in the distribution unless they are newly
 	// added files
-	for patchLoc, _ := range patchFilesMap {
-		log.Println("Checking location: ", patchLoc)
+	for updateLoc, _ := range updatedFilesMap {
+		log.Println("Checking location: ", updateLoc)
 		//Check whether the distribution has a file with the same name
-		_, found := distFileMap[patchLoc]
+		_, found := distFileMap[updateLoc]
 		//If there is a file
 		if found {
-			log.Println(patchLoc, "found in distFileMap")
+			log.Println(updateLoc, "found in distFileMap")
 		} else {
 			//If there is no file
-			log.Println(patchLoc, "not found in distFileMap")
+			log.Println(updateLoc, "not found in distFileMap")
 			//Check whether it is a newly added file
-			_, found := addedFilesMap[patchLoc]
+			_, found := addedFilesMap[updateLoc]
 			//if it is a newly added file
 			if found {
-				log.Println(patchLoc, "found in addedFilesMap")
+				log.Println(updateLoc, "found in addedFilesMap")
 			} else {
 				//If it is not a newly added file, print an error
-				log.Println(patchLoc, "not found in addedFilesMap")
+				log.Println(updateLoc, "not found in addedFilesMap")
 				log.Println("addedFilesMap: ", addedFilesMap)
 				color.Set(color.FgRed)
-				fmt.Println(patchLoc, "not found in distribution and it is not a newly added file.")
+				fmt.Println(updateLoc, "not found in distribution and it is not a newly added file.")
 				fmt.Println("If it is a new file, please add an entry in", _UPDATE_DESCRIPTOR_FILE_NAME,
 					"file")
 				fmt.Println("\nValidation FAILED\n")
@@ -136,27 +136,29 @@ func validate() {
 			}
 		}
 	}
+	color.Set(color.FgGreen)
 	fmt.Println("\nValidation SUCCESSFUL\n")
+	color.Unset()
 }
 
-//This function reads the files of the given patch zip
-func readPatchZip(zipLocation string, logsEnabled bool) {
+//This function reads the files of the given update zip
+func readUpdateZip(zipLocation string, logsEnabled bool) {
 	log.Println("Zip file reading started: ", zipLocation)
 
-	patchName := strings.TrimSuffix(zipLocation, ".zip")
-	if lastIndex := strings.LastIndex(patchName, string(os.PathSeparator)); lastIndex > -1 {
-		patchName = patchName[lastIndex + 1:]
+	updateName := strings.TrimSuffix(zipLocation, ".zip")
+	if lastIndex := strings.LastIndex(updateName, string(os.PathSeparator)); lastIndex > -1 {
+		updateName = updateName[lastIndex + 1:]
 	}
-	log.Println("Patch name: ", patchName)
+	log.Println("Update name: ", updateName)
 
-	//Check whether the patch name has the required prefix
-	if !strings.HasPrefix(patchName, _UPDATE_NAME_PREFIX) {
+	//Check whether the update name has the required prefix
+	if !strings.HasPrefix(updateName, _UPDATE_NAME_PREFIX) {
 		color.Set(color.FgRed)
-		fmt.Println("Patch file does not have", _UPDATE_NAME_PREFIX, "prefix")
+		fmt.Println("Update file does not have", _UPDATE_NAME_PREFIX, "prefix")
 		color.Unset()
 		os.Exit(1)
 	} else {
-		log.Println("Patch file does have", _UPDATE_NAME_PREFIX, "prefix")
+		log.Println("Update file does have", _UPDATE_NAME_PREFIX, "prefix")
 	}
 
 	// Create a reader out of the zip archive
@@ -182,8 +184,8 @@ func readPatchZip(zipLocation string, logsEnabled bool) {
 	for _, file := range zipReader.Reader.File {
 		fileCount++
 		if (!logsEnabled) {
-			fmt.Fprintf(writer, "Reading files from patch zip: (%d/%d)\n", fileCount, totalFiles)
-			time.Sleep(time.Millisecond * 5)
+			fmt.Fprintf(writer, "Reading files from update zip: (%d/%d)\n", fileCount, totalFiles)
+			time.Sleep(time.Millisecond * 2)
 		}
 
 		log.Println("Checking file: ", file.Name)
@@ -192,15 +194,15 @@ func readPatchZip(zipLocation string, logsEnabled bool) {
 		index := strings.Index(file.Name, string(os.PathSeparator))
 		if index == -1 {
 			color.Set(color.FgRed)
-			fmt.Println("Patch zip file should have a root folder called", patchName)
+			fmt.Println("Update zip file should have a root folder called", updateName)
 			color.Unset()
 			os.Exit(1)
 		} else {
 			rootFolder := file.Name[:index]
 			log.Println("RootFolder:", rootFolder)
-			if rootFolder != patchName {
+			if rootFolder != updateName {
 				color.Set(color.FgRed)
-				fmt.Println(file.Name, "should be in", patchName, "root folder. But it is in ",
+				fmt.Println(file.Name, "should be in", updateName, "root folder. But it is in ",
 					rootFolder, "folder")
 				color.Unset()
 				os.Exit(1)
@@ -215,15 +217,15 @@ func readPatchZip(zipLocation string, logsEnabled bool) {
 			if (!containsCarbonHome) {
 				color.Set(color.FgRed)
 				fmt.Println("Does not have a '" + _CARBON_HOME + "' folder in the root folder '" +
-				patchName + "'")
+				updateName + "'")
 				color.Unset()
 				os.Exit(1)
 			}
 			log.Println("Have a", _CARBON_HOME, "folder")
 
-			temp := strings.TrimPrefix(file.Name, patchName + string(os.PathSeparator) + _CARBON_HOME)
+			temp := strings.TrimPrefix(file.Name, updateName + string(os.PathSeparator) + _CARBON_HOME)
 			log.Println("Entry: ", temp)
-			patchFilesMap[temp] = true
+			updatedFilesMap[temp] = true
 		} else {
 			//If the file is a resource file, delete the entry from allResFiles. This map is later used
 			// to track missing resource files
@@ -268,14 +270,14 @@ func readPatchZip(zipLocation string, logsEnabled bool) {
 	//Delete instructions.txt file if it is left in the map because it is optional
 	delete(allResFiles, _INSTRUCTIONS_FILE_NAME)
 	log.Println("Resource map:", allResFiles)
-	log.Println(patchFilesMap)
+	log.Println(updatedFilesMap)
 
 	//At this point, the size of the allResFiles should be zero. If one or more files are not found, that means
 	// that some required files are missing
 	if (len(allResFiles) != 0) {
 		//Print the missing files
 		color.Set(color.FgRed)
-		fmt.Println("Following resource file(s) were not found in the patch: ")
+		fmt.Println("Following resource file(s) were not found in the update zip: ")
 		for key, _ := range allResFiles {
 			fmt.Println("\t", "-", key)
 		}
@@ -297,7 +299,7 @@ func readPatchZip(zipLocation string, logsEnabled bool) {
 }
 
 //This function reads the files of the given distribution zip
-func readDistZip(zipLocation string, logsEnabled bool) (bool, error) {
+func readDistZip(zipLocation string, logsEnabled bool) {
 	log.Println("Zip file reading started: ", zipLocation)
 
 	//Get the distribution name
@@ -350,13 +352,11 @@ func readDistZip(zipLocation string, logsEnabled bool) (bool, error) {
 	log.Println("Total files read: ", fileCount)
 	if totalFiles == fileCount {
 		log.Println("All files read")
-		return true, nil
 	} else {
 		color.Set(color.FgRed)
 		fmt.Println("All files not read from zip file")
 		color.Unset()
 		os.Exit(1)
-		return false, nil
 	}
 }
 

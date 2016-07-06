@@ -10,7 +10,6 @@ import (
 	"io/ioutil"
 	"fmt"
 	"github.com/fatih/color"
-	"github.com/apcera/termtables"
 	"time"
 	"github.com/gosuri/uilive"
 	"bufio"
@@ -18,6 +17,7 @@ import (
 	"strconv"
 	"gopkg.in/yaml.v2"
 	"text/template"
+	"github.com/olekukonko/tablewriter"
 )
 
 //struct to store location(s) in the distribution for a given file/directory
@@ -349,8 +349,8 @@ func copyResourceFiles(patchLocation string) {
 				"directory and run the tool again.")
 				os.Exit(0)
 			} else if preference[0] == 'n' || preference[0] == 'N' {
-				color.Set(color.FgGreen)
-				fmt.Println("Skipping copying/creating '" + _INSTRUCTIONS_FILE_NAME + "' file")
+				color.Set(color.FgYellow)
+				fmt.Println("Skipping creating '" + _INSTRUCTIONS_FILE_NAME + "' file")
 				color.Unset()
 				break;
 			} else {
@@ -430,10 +430,12 @@ func isAZipFile(path string) bool {
 func findMatches(patchLocation, distributionLocation string) {
 
 	//Enable UTF8 table characters
-	termtables.EnableUTF8()
-	//Create a new table
-	overallViewTable := termtables.CreateTable()
-	overallViewTable.AddHeaders("File/Folder", "Copied To")
+	overallViewTable := tablewriter.NewWriter(os.Stdout)
+	overallViewTable.SetHeader([]string{"File/Folder", "Copied To"})
+	//termtables.EnableUTF8()
+	////Create a new table
+	//overallViewTable := termtables.CreateTable()
+	//overallViewTable.AddHeaders("File/Folder", "Copied To")
 
 	//Delete temp files
 	err := os.RemoveAll(_TEMP_DIR_NAME)
@@ -477,9 +479,12 @@ func findMatches(patchLocation, distributionLocation string) {
 				//This is used to temporary store all the locations
 				locationMap := make(map[string]string)
 				//Create the temporary table
-				tempTable := termtables.CreateTable()
-				tempTable.AddHeaders("index", "Location(s) of similar" +
-				" file(s)/folder(s) in the distribution")
+
+				tempTable := tablewriter.NewWriter(os.Stdout)
+				tempTable.SetHeader([]string{"index", "Location"})
+				//tempTable := termtables.CreateTable()
+				//tempTable.AddHeaders("index", "Location(s) of similar" +
+				//" file(s)/folder(s) in the distribution")
 
 				//Add data to the table
 				index := 1
@@ -489,8 +494,9 @@ func findMatches(patchLocation, distributionLocation string) {
 							//Add the location to the map. Key is the index
 							locationMap[strconv.Itoa(index)] = pathInDist
 							log.Println("Trimming: ", pathInDist, "; using: ", distPath)
-							tempTable.AddRow(index, strings.TrimPrefix(pathInDist,
-								distPath) + string(os.PathSeparator))
+							tempTable.Append([]string{strconv.Itoa(index), strings.TrimPrefix(pathInDist, distPath) + string(os.PathSeparator)})
+							//tempTable.AddRow(index, strings.TrimPrefix(pathInDist,
+							//	distPath) + string(os.PathSeparator))
 							index++
 						}
 					}
@@ -498,8 +504,9 @@ func findMatches(patchLocation, distributionLocation string) {
 				log.Println("Location Map for Dist: ", locationMap)
 
 				//Print the temporary table
-				tempTable.SetAlign(termtables.AlignCenter, 1)
-				fmt.Println(tempTable.Render())
+				//tempTable.SetAlign(termtables.AlignCenter, 1)
+				tempTable.Render()
+				//fmt.Println(tempTable.Render())
 
 				//loop until user enter valid indices or decide to exit
 				for {
@@ -548,8 +555,6 @@ func findMatches(patchLocation, distributionLocation string) {
 								log.Println("src : ", src)
 								log.Println("dest: ", dest)
 
-								//CopyDir(src, dest) //todo multiple files with same name - OK
-
 								//If source is a file
 								if checkFile(src) {
 									log.Println("Copying file: ", src, " ; To:", dest)
@@ -593,13 +598,15 @@ func findMatches(patchLocation, distributionLocation string) {
 										if isFirst {
 											found := stringIsInSlice(path, selectedPathsList)
 											if found {
-												overallViewTable.AddRow(patchEntryName, strings.TrimPrefix(path, distPath) + string(os.PathSeparator))
+												overallViewTable.Append([]string{patchEntryName, strings.TrimPrefix(path, distPath) + string(os.PathSeparator)})
+												//overallViewTable.AddRow(patchEntryName, strings.TrimPrefix(path, distPath) + string(os.PathSeparator))
 												isFirst = false
 											}
 										} else {
 											found := stringIsInSlice(path, selectedPathsList)
 											if found {
-												overallViewTable.AddRow("", strings.TrimPrefix(path, distPath) + string(os.PathSeparator))
+												overallViewTable.Append([]string{"", strings.TrimPrefix(path, distPath) + string(os.PathSeparator)})
+												//overallViewTable.AddRow("", strings.TrimPrefix(path, distPath) + string(os.PathSeparator))
 											}
 										}
 									}
@@ -622,7 +629,8 @@ func findMatches(patchLocation, distributionLocation string) {
 						if isDirInDist == isDirInPatch {
 							//Add an entry to the table
 							log.Println("Both locations contain same type")
-							overallViewTable.AddRow(patchEntryName, strings.TrimPrefix(pathInDist, distPath) + string(os.PathSeparator))
+							overallViewTable.Append([]string{patchEntryName, strings.TrimPrefix(pathInDist, distPath) + string(os.PathSeparator)})
+							//overallViewTable.AddRow(patchEntryName, strings.TrimPrefix(pathInDist, distPath) + string(os.PathSeparator))
 
 							//Get the path relative to the distribution
 							tempFilePath := strings.TrimPrefix(pathInDist, distributionLocation)
@@ -685,7 +693,9 @@ func findMatches(patchLocation, distributionLocation string) {
 							if isDirInPatch {
 								typePostfix = " (dir)"
 							}
-							overallViewTable.AddRow(patchEntryName + typePostfix, " - ")
+							overallViewTable.Append([]string{patchEntryName +
+							typePostfix, " - "})
+							//overallViewTable.AddRow(patchEntryName + typePostfix, " - ")
 						}
 					}
 				}
@@ -696,19 +706,20 @@ func findMatches(patchLocation, distributionLocation string) {
 			fmt.Println("\nNo match found for ", patchEntryName, "\n")
 			color.Unset()
 			log.Println("Location(s) in Patch: ", patchEntry)
-			overallViewTable.AddRow(patchEntryName, " - ")
+			overallViewTable.Append([]string{patchEntryName, " - "})
+			//overallViewTable.AddRow(patchEntryName, " - ")
 		}
 		log.Println("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 		rowCount++
 		if rowCount < len(patchEntries) {
-			overallViewTable.AddSeparator()
+			//overallViewTable.AddSeparator()
+			//overallViewTable.AddSeparator()
 		}
 	}
 	//Print summary
-	color.Set(color.FgGreen)
 	fmt.Println("\n# Summary\n")
-	fmt.Println(overallViewTable.Render())
-	color.Unset()
+	overallViewTable.Render()
+	//fmt.Println(overallViewTable.Render())
 }
 
 //Get the path of the distribution location. This is used to trim the prefixes
@@ -967,7 +978,7 @@ func createUpdateZip() {
 
 	log.Println("Directory Walk completed successfully")
 	color.Set(color.FgGreen)
-	fmt.Println("Patch file " + _UPDATE_NAME + ".zip successfully created")
+	fmt.Println("\nUpdate file " + _UPDATE_NAME + ".zip successfully created\n\n")
 	color.Unset()
 }
 
@@ -1067,4 +1078,3 @@ func readDistributionZip(zipLocation string, logsEnabled bool) {
 		os.Exit(1)
 	}
 }
-

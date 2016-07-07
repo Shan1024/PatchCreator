@@ -38,7 +38,7 @@ func Validate(updateLocation, distributionLocation string, logsEnabled bool) {
 	log.Println("Update Loc: " + updateLocation)
 	if !isAZipFile(updateLocation) {
 		color.Set(color.FgRed)
-		fmt.Println("Update file should be a zip file.")
+		fmt.Println("[FAILURE]: Update file should be a zip file.")
 		color.Unset()
 		os.Exit(1)
 	}
@@ -48,7 +48,7 @@ func Validate(updateLocation, distributionLocation string, logsEnabled bool) {
 		log.Println("Update location exists.")
 	} else {
 		color.Set(color.FgRed)
-		fmt.Println("Update location does not exist. Enter a valid file location.")
+		fmt.Println("[FAILURE]: Update location does not exist. Enter a valid file location.")
 		color.Unset()
 		os.Exit(1)
 	}
@@ -68,7 +68,7 @@ func Validate(updateLocation, distributionLocation string, logsEnabled bool) {
 			readDistZip(distributionLocation, logsEnabled)
 		} else {
 			color.Set(color.FgRed)
-			fmt.Println("Distribution zip does not exist. Enter a valid location.")
+			fmt.Println("[FAILURE]: Distribution zip does not exist. Enter a valid location.")
 			color.Unset()
 			os.Exit(1)
 		}
@@ -80,7 +80,7 @@ func Validate(updateLocation, distributionLocation string, logsEnabled bool) {
 			readDistDir(distributionLocation, logsEnabled)
 		} else {
 			color.Set(color.FgRed)
-			fmt.Println("Distribution location does not exist. Enter a valid location.")
+			fmt.Println("[FAILURE]: Distribution location does not exist. Enter a valid location.")
 			color.Unset()
 			os.Exit(1)
 		}
@@ -127,9 +127,10 @@ func validate() {
 				log.Println(updateLoc, "not found in addedFilesMap")
 				log.Println("addedFilesMap: ", addedFilesMap)
 				color.Set(color.FgRed)
-				fmt.Println(updateLoc, "not found in distribution and it is not a newly added file.")
+				fmt.Println("[FAILURE]:", updateLoc, "not found in distribution and it is not a " +
+				"newly added file.")
 				fmt.Println("If it is a new file, please add an entry in", _UPDATE_DESCRIPTOR_FILE_NAME,
-					"file")
+					"file.")
 				fmt.Println("\nValidation FAILED\n")
 				color.Unset()
 				os.Exit(1)

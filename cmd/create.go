@@ -710,16 +710,19 @@ func findMatches(patchLocation, distributionLocation string) {
 	//fmt.Println(overallViewTable.Render())
 }
 
+//This will compare and print warnings for new files when copying directories from patch to temp directory
 func compareDir(pathInPatch, pathInDist, patchLoc, distLoc string) {
 
 	log.Println("patchLoc:", patchLoc)
 	log.Println("distLoc:", distLoc)
 
+	//Create maps to store the file details
 	filesInPatch := make(map[string]bool)
 	filesInDist := make(map[string]bool)
 
 	log.Println("Comparing:", pathInPatch, ";", pathInDist)
 
+	//Walk the directory in the patch
 	err := filepath.Walk(pathInPatch, func(path string, fileInfo os.FileInfo, err error) error {
 		log.Println("Walking: ", path)
 		if err != nil {
@@ -728,11 +731,13 @@ func compareDir(pathInPatch, pathInDist, patchLoc, distLoc string) {
 			color.Unset()
 			os.Exit(1)
 		}
-		//We only want to add the files to the zip. Corresponding directories will be auto created
+		//We only want to check files
 		if !fileInfo.IsDir() {
 			log.Println("File in patch: ", path)
+			//construct the relative path in the distribution
 			tempPatchFilePath := strings.TrimPrefix(path, pathInPatch)
 			log.Println("tempPath: ", tempPatchFilePath)
+			//Add the entry
 			filesInPatch[tempPatchFilePath] = true
 		}
 		return nil
@@ -744,6 +749,7 @@ func compareDir(pathInPatch, pathInDist, patchLoc, distLoc string) {
 		os.Exit(1)
 	}
 
+	//Walk the directory in the distribution
 	err = filepath.Walk(pathInDist, func(path string, fileInfo os.FileInfo, err error) error {
 		log.Println("Walking: ", path)
 		if err != nil {
@@ -752,7 +758,7 @@ func compareDir(pathInPatch, pathInDist, patchLoc, distLoc string) {
 			color.Unset()
 			os.Exit(1)
 		}
-		//We only want to add the files to the zip. Corresponding directories will be auto created
+		//We only want to check files
 		if !fileInfo.IsDir() {
 			log.Println("File in dist: ", path)
 			tempDistFilePath := strings.TrimPrefix(path, pathInDist)
@@ -768,13 +774,18 @@ func compareDir(pathInPatch, pathInDist, patchLoc, distLoc string) {
 		os.Exit(1)
 	}
 
+	//Look for match for each file in patch location
 	for path, _ := range filesInPatch {
+		//Check whether distribution has a match
 		_, found := filesInDist[path]
 		if found {
+			//If a match found, log it
 			log.Println("'" + path + "' found in the distribution.")
 		} else {
+			//If no match is found, show warning message and how to add it to the update -descriptor.yaml
 			color.Set(color.FgYellow)
-			fmt.Println("[WARNING] '" + strings.TrimPrefix(path, string(os.PathSeparator)) + "' not found in '" + pathInDist + string(os.PathSeparator) + "'")
+			fmt.Println("[WARNING] '" + strings.TrimPrefix(path, string(os.PathSeparator)) + "' not found in '" +
+			strings.TrimPrefix(pathInDist + string(os.PathSeparator), distLoc) + "'")
 			tempDistFilePath := strings.TrimPrefix(pathInDist, distLoc)
 			fmt.Println("If this is a new file, add '" + tempDistFilePath + path + "' to 'added_files' " + "section in '" + _UPDATE_DESCRIPTOR_FILE_NAME + "'\n")
 			color.Unset()

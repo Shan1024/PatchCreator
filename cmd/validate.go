@@ -192,7 +192,8 @@ func readUpdateZip(zipLocation string, logsEnabled bool) {
 		log.Println("Checking file: ", file.Name)
 
 		//Every file should be in a root folder. Check for the os.PathSeparator character to identify this
-		index := strings.Index(file.Name, string(os.PathSeparator))
+		index := strings.Index(file.Name, "/")//string(os.PathSeparator) removed because it does not work
+		// properly in windows
 		if index == -1 {
 			color.Set(color.FgRed)
 			fmt.Println("[FAILURE] Update zip file should have a root folder called", updateName)
@@ -217,15 +218,15 @@ func readUpdateZip(zipLocation string, logsEnabled bool) {
 			containsCarbonHome := strings.Contains(file.Name, _CARBON_HOME)
 			if (!containsCarbonHome) {
 				color.Set(color.FgRed)
+				//string(os.PathSeparator) removed because it does not work properly in windows
 				fmt.Println("[FAILURE] '" + file.Name + "' is not a known resource file. " +
-				"It should be in '" + updateName + string(os.PathSeparator) + _CARBON_HOME +
-				string(os.PathSeparator) + "' folder")
+				"It should be in '" + updateName + "/" + _CARBON_HOME + "/" + "' folder")
 				color.Unset()
 				os.Exit(1)
 			}
 			log.Println("Have a", _CARBON_HOME, "folder")
-
-			temp := strings.TrimPrefix(file.Name, updateName + string(os.PathSeparator) + _CARBON_HOME)
+			//string(os.PathSeparator) removed because it does not work properly in windows
+			temp := strings.TrimPrefix(file.Name, updateName + "/" + _CARBON_HOME)
 			log.Println("Entry: ", temp)
 			updatedFilesMap[temp] = true
 		} else {

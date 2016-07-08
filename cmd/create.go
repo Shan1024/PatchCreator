@@ -506,12 +506,16 @@ func findMatches(patchLocation, distributionLocation string) {
 					reader := bufio.NewReader(os.Stdin)
 					fmt.Print("Preferred Locations: ")
 					enteredPreferences, _ := reader.ReadString('\n')
+					fmt.Println("enteredPreferences:", enteredPreferences)
 					//Remove the new line at the end
-					enteredPreferences = strings.TrimSuffix(enteredPreferences, "\n")
+					enteredPreferences = strings.TrimSpace(enteredPreferences)
+					fmt.Println("enteredPreferences2:", enteredPreferences)
 					//Split the locations
 					selectedIndices := strings.Split(enteredPreferences, ",");
+					fmt.Println("selectedIndices:", selectedIndices)
 					//Sort the locations
 					sort.Strings(selectedIndices)
+					log.Println("Sorted indices: ", selectedIndices)
 
 					if selectedIndices[0] == "0" {
 						fmt.Println("0 entered. Cancelling.....")
@@ -519,7 +523,7 @@ func findMatches(patchLocation, distributionLocation string) {
 					} else {
 						//This is used
 						selectedPathsList := make([]string, 0)
-						log.Println("Sorted indices: ", selectedIndices)
+
 						//This is used to identify whether the all indices are valid
 						isOK := true
 						//Iterate through all the selected indices
@@ -589,13 +593,15 @@ func findMatches(patchLocation, distributionLocation string) {
 										if isFirst {
 											found := stringIsInSlice(path, selectedPathsList)
 											if found {
-												overallViewTable.Append([]string{patchEntryName, strings.TrimPrefix(path, distPath) + string(os.PathSeparator)})
+												temp := strings.TrimPrefix(path, distPath) + string(os.PathSeparator)
+												overallViewTable.Append([]string{patchEntryName, strings.Replace(temp, "\\", "/", -1)})
 												isFirst = false
 											}
 										} else {
 											found := stringIsInSlice(path, selectedPathsList)
 											if found {
-												overallViewTable.Append([]string{"", strings.TrimPrefix(path, distPath) + string(os.PathSeparator)})
+												temp := strings.TrimPrefix(path, distPath) + string(os.PathSeparator)
+												overallViewTable.Append([]string{"", strings.Replace(temp, "\\", "/", -1)})
 											}
 										}
 									}
@@ -789,10 +795,10 @@ func compareDir(pathInPatch, pathInDist, patchLoc, distLoc string) {
 		} else {
 			//If no match is found, show warning message and how to add it to the update -descriptor.yaml
 			color.Set(color.FgYellow)
-			fmt.Println("[WARNING] '" + strings.TrimPrefix(path, string(os.PathSeparator)) + "' not found in '" +
+			fmt.Println("[WARNING] '" + strings.Replace(strings.TrimPrefix(path, string(os.PathSeparator)), "\\", "/", -1) + "' not found in '" +
 			strings.TrimPrefix(pathInDist + string(os.PathSeparator), distLoc) + "'")
 			tempDistFilePath := strings.TrimPrefix(pathInDist, distLoc)
-			fmt.Println("If this is a new file, add '" + tempDistFilePath + path + "' to 'added_files' " + "section in '" + _UPDATE_DESCRIPTOR_FILE_NAME + "'\n")
+			fmt.Println("If this is a new file, add '" + strings.Replace(tempDistFilePath + path, "\\", "/", -1) + "' to 'added_files' " + "section in '" + _UPDATE_DESCRIPTOR_FILE_NAME + "'\n")
 			color.Unset()
 		}
 	}

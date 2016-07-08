@@ -191,9 +191,15 @@ func Create(patchLocation, distributionLocation string, logsEnabled bool) {
 	log.Println("Patch Entries: ", patchEntries)
 
 	//Find matches
-	log.Println("Finding matches")
-	findMatches(patchLocation, distributionLocation)
-	log.Println("Finding matches finished")
+	if (isAZipFile(distributionLocation)) {
+		log.Println("Finding matches")
+		findMatches(patchLocation, strings.TrimSuffix(distributionLocation, ".zip"))
+		log.Println("Finding matches finished")
+	} else {
+		log.Println("Finding matches")
+		findMatches(patchLocation, distributionLocation)
+		log.Println("Finding matches finished")
+	}
 
 	//Copy resource files to the temp location
 	log.Println("Copying resource files")
@@ -535,16 +541,21 @@ func findMatches(patchLocation, distributionLocation string) {
 								log.Println("Selected index ", selectedIndex, " was " +
 								"found in map")
 								log.Println("selected path: " + selectedPath)
-
+								log.Println("distPath: " + distPath)
+								log.Println("distributionLocation:", distributionLocation)
+								log.Println("Trimming:", selectedPath, " ; using:", distributionLocation)
 								tempFilePath := strings.TrimPrefix(selectedPath, distributionLocation)
+								fmt.Println("tempFilePath:", tempFilePath)
+
 								selectedPathsList = append(selectedPathsList, selectedPath)
 
 								src := patchLocation + string(os.PathSeparator) + patchEntryName
 								destPath := _TEMP_DIR_LOCATION + tempFilePath + string(os.PathSeparator)
+								fmt.Println("destPath:", destPath)
 								dest := destPath + patchEntryName
 
-								log.Println("src : ", src)
-								log.Println("dest: ", dest)
+								log.Println("src 1: ", src)
+								log.Println("dest1: ", dest)
 
 								//If source is a file
 								if checkFile(src) {
@@ -625,6 +636,7 @@ func findMatches(patchLocation, distributionLocation string) {
 							log.Println("Both locations contain same type")
 							log.Println("pathInDist:", pathInDist)
 							log.Println("distPath:", distPath)
+							log.Println("distributionLocation:", distributionLocation)
 							tempLoc := strings.TrimPrefix(pathInDist, distPath) + string(os.PathSeparator)
 							overallViewTable.Append([]string{patchEntryName, strings.Replace(tempLoc, "\\", "/", -1)})
 
@@ -638,8 +650,8 @@ func findMatches(patchLocation, distributionLocation string) {
 							//Construct the destination location
 							dest := destPath + patchEntryName
 
-							log.Println("src : ", src)
-							log.Println("dest: ", dest)
+							log.Println("src 2: ", src)
+							log.Println("dest2: ", dest)
 
 							//Create all directories. Otherwise copy will return an error.
 							// We cannot copy directories in GO. We have to copy file
@@ -1255,7 +1267,7 @@ func unzipAndReadDistribution(zipLocation string, logsEnabled bool) (bool, error
 
 			log.Println("Trimming:", fullPath, "; using:", dir)
 			fullPath = strings.TrimSuffix(fullPath, dir)
-			log.Println("fullPath2:", file.Name)
+			log.Println("fullPath2:", fullPath)
 		} else {
 			// Extract regular file since not a directory
 			//log.Println("Extracting file:", file.Name)
@@ -1288,7 +1300,7 @@ func unzipAndReadDistribution(zipLocation string, logsEnabled bool) (bool, error
 			//string(os.PathSeparator) removed because it does not work properly in windows
 			log.Println("Trimming:", fullPath, "; using:", "/" + file.FileInfo().Name())
 			fullPath = strings.TrimSuffix(fullPath, "/" + file.FileInfo().Name())
-			log.Println("fullPath3:", file.Name)
+			log.Println("fullPath3:", fullPath)
 		}
 
 		// Add the distribution location so that the full path will look like it points to locations of the

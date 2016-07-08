@@ -97,6 +97,10 @@ func Create(patchLocation, distributionLocation string, logsEnabled bool) {
 	}
 	log.Println("create command called")
 
+	//Initialize maps
+	patchEntries = make(map[string]entry)
+	distEntries = make(map[string]entry)
+
 	//Check whether the patch location has a / or \ character at the end and remove if it has a / or \ character
 	if strings.HasSuffix(patchLocation, string(os.PathSeparator)) {
 		patchLocation = strings.TrimSuffix(patchLocation, string(os.PathSeparator))
@@ -119,6 +123,23 @@ func Create(patchLocation, distributionLocation string, logsEnabled bool) {
 		zipFileExists := checkFile(distributionLocation)
 		if zipFileExists {
 			log.Println("Distribution location exists.")
+
+			unzipSuccessful, err := unzipAndReadDistribution(distributionLocation, logsEnabled)
+
+			if err != nil {
+				color.Set(color.FgRed)
+				fmt.Println("[FAILURE] Error occurred while unzipping the distribution zip: ", err)
+				color.Unset()
+				os.Exit(1)
+			}
+			if !unzipSuccessful {
+				color.Set(color.FgRed)
+				fmt.Println("[FAILURE] Unzipping distribution failed.")
+				color.Unset()
+				os.Exit(1)
+			}
+			//Delete the extracted distribution directory
+			defer os.RemoveAll(strings.TrimSuffix(distributionLocation, ".zip"))
 		} else {
 			color.Set(color.FgRed)
 			fmt.Println("[FAILURE] Distribution zip does not exist. Enter a valid location.")
@@ -126,10 +147,16 @@ func Create(patchLocation, distributionLocation string, logsEnabled bool) {
 			os.Exit(1)
 		}
 	} else {
+		//If the distribution is not a zip file, we need to read the files from the distribution directory
+
 		//Check whether the given distribution directory exists.
 		distributionLocationExists := checkDir(distributionLocation)
 		if distributionLocationExists {
 			log.Println("Distribution location exists.")
+			//Traverse and read the distribution
+			log.Println("Traversing distribution location")
+			traverse(distributionLocation, distEntries, true)
+			log.Println("Traversing distribution location finished")
 		} else {
 			color.Set(color.FgRed)
 			fmt.Println("[FAILURE] Distribution location does not exist. Enter a valid location.")
@@ -156,45 +183,18 @@ func Create(patchLocation, distributionLocation string, logsEnabled bool) {
 		color.Unset()
 		os.Exit(1)
 	}
-	//Initialize maps
-	patchEntries = make(map[string]entry)
-	distEntries = make(map[string]entry)
 
-	//If the distribution is a zip file, we need to read the zip file
-	if isAZipFile(distributionLocation) {
-		//Traverse and read the distribution
-		log.Println("Distribution location is a zip file. Reading zip file...")
-		readDistributionZip(distributionLocation, logsEnabled)
-		newDistributionLocation := strings.TrimSuffix(distributionLocation, ".zip")
-		log.Println("newDistributionLocation:" + newDistributionLocation)
+	//Traverse and read the patch
+	log.Println("Traversing patch location")
+	traverse(patchLocation, patchEntries, false)
+	log.Println("Traversing patch location finished")
+	log.Println("Patch Entries: ", patchEntries)
 
-		//Traverse and read the patch
-		log.Println("Traversing patch location")
-		traverse(patchLocation, patchEntries, false)
-		log.Println("Traversing patch location finished")
+	//Find matches
+	log.Println("Finding matches")
+	findMatches(patchLocation, distributionLocation)
+	log.Println("Finding matches finished")
 
-		//Find matches
-		log.Println("Finding matches")
-		findMatches(patchLocation, newDistributionLocation)
-		log.Println("Finding matches finished")
-	} else {
-		//Traverse and read the distribution
-		log.Println("Traversing distribution location")
-		traverse(distributionLocation, distEntries, true)
-		log.Println("Traversing distribution location finished")
-
-		//Traverse and read the patch
-		log.Println("Distribution location is not a zip file")
-		log.Println("Traversing patch location")
-		traverse(patchLocation, patchEntries, false)
-		log.Println("Traversing patch location finished")
-		log.Println("Patch Entries: ", patchEntries)
-
-		//Find matches
-		log.Println("Finding matches")
-		findMatches(patchLocation, distributionLocation)
-		log.Println("Finding matches finished")
-	}
 	//Copy resource files to the temp location
 	log.Println("Copying resource files")
 	copyResourceFiles(patchLocation)
@@ -470,8 +470,7 @@ func findMatches(patchLocation, distributionLocation string) {
 			//If there are more than 1 match, we need to ask preferred locations from the user
 			if len(distEntry.locationMap) > 1 {
 				color.Set(color.FgRed)
-				fmt.Println("\n\"" + patchEntryName +
-				"\" was found in multiple locations in the distribution")
+				fmt.Println("\n'" + patchEntryName + "' was found in multiple locations in the distribution")
 				color.Unset()
 				//This is used to temporary store all the locations
 				locationMap := make(map[string]string)
@@ -504,15 +503,15 @@ func findMatches(patchLocation, distributionLocation string) {
 					"cancel and exit]: ")
 					//Get the user input
 					reader := bufio.NewReader(os.Stdin)
-					fmt.Print("Preferred Locations: ")
+					log.Print("Preferred Locations: ")
 					enteredPreferences, _ := reader.ReadString('\n')
-					fmt.Println("enteredPreferences:", enteredPreferences)
+					log.Println("enteredPreferences:", enteredPreferences)
 					//Remove the new line at the end
 					enteredPreferences = strings.TrimSpace(enteredPreferences)
-					fmt.Println("enteredPreferences2:", enteredPreferences)
+					log.Println("enteredPreferences2:", enteredPreferences)
 					//Split the locations
 					selectedIndices := strings.Split(enteredPreferences, ",");
-					fmt.Println("selectedIndices:", selectedIndices)
+					log.Println("selectedIndices:", selectedIndices)
 					//Sort the locations
 					sort.Strings(selectedIndices)
 					log.Println("Sorted indices: ", selectedIndices)
@@ -1071,15 +1070,116 @@ func createUpdateZip() {
 	color.Unset()
 }
 
-//This function reads the files of the given distribution zip
-func readDistributionZip(zipLocation string, logsEnabled bool) {
-	log.Println("Zip file reading started: ", zipLocation)
-	//Get the distribution name. This is used later for trimming
-	distName := strings.TrimSuffix(zipLocation, ".zip")
-	if lastIndex := strings.LastIndex(distName, string(os.PathSeparator)); lastIndex > -1 {
-		distName = distName[lastIndex + 1:]
-	}
-	log.Println("distName used for trimming: ", distName)
+////This function reads the files of the given distribution zip
+//func readDistributionZip(zipLocation string, logsEnabled bool) {
+//	log.Println("Zip file reading started: ", zipLocation)
+//	//Get the distribution name. This is used later for trimming
+//	distName := strings.TrimSuffix(zipLocation, ".zip")
+//	if lastIndex := strings.LastIndex(distName, string(os.PathSeparator)); lastIndex > -1 {
+//		distName = distName[lastIndex + 1:]
+//	}
+//	log.Println("distName used for trimming: ", distName)
+//
+//	//Get the location of the zip file. This is later used to create the full path of a file
+//	index := strings.LastIndex(zipLocation, string(os.PathSeparator))
+//	distLocation := zipLocation[:index]
+//	log.Println("distLocation: ", distLocation)
+//	// Create a reader out of the zip archive
+//	zipReader, err := zip.OpenReader(zipLocation)
+//	if err != nil {
+//		color.Set(color.FgRed)
+//		fmt.Println("[FAILURE] Error occurred while reading zip:", err)
+//		color.Unset()
+//		log.Fatal(err)
+//	}
+//	defer zipReader.Close()
+//
+//	totalFiles := len(zipReader.Reader.File)
+//	log.Println("File count in zip: ", totalFiles)
+//
+//	filesRead := 0
+//
+//	// writer to show the progress
+//	writer := uilive.New()
+//	// start listening for updates and render
+//	writer.Start()
+//
+//	// Iterate through each file/dir found in zip
+//	for _, file := range zipReader.Reader.File {
+//		filesRead++
+//		if (!logsEnabled) {
+//			fmt.Fprintf(writer, "Reading files from distribution zip: (%d/%d)\n", filesRead, totalFiles)
+//			time.Sleep(time.Millisecond * 2)
+//		}
+//		log.Println("Checking file: ", file.Name)
+//
+//		//Start constructing the full path
+//		fullPath := file.Name
+//		log.Println("fullPath1:", file.Name)
+//		if file.FileInfo().IsDir() {
+//			// We only need the location of the directory. fullPath contains the directory name too. We
+//			// need to trim and remove the directory name.
+//			//string(os.PathSeparator) removed because it does not work properly in windows
+//			dir := "/" + file.FileInfo().Name() + "/"
+//
+//			log.Println("Trimming:", fullPath, "; using:", dir)
+//			fullPath = strings.TrimSuffix(fullPath, dir)
+//			log.Println("fullPath2:", file.Name)
+//		} else {
+//			// We only need the location of the file. fullPath contains the file name too. We
+//			// need to trim and remove the file name.
+//
+//			//string(os.PathSeparator) removed because it does not work properly in windows
+//			log.Println("Trimming:", fullPath, "; using:", "/" + file.FileInfo().Name())
+//			fullPath = strings.TrimSuffix(fullPath, "/" + file.FileInfo().Name())
+//			log.Println("fullPath3:", file.Name)
+//		}
+//
+//		// Add the distribution location so that the full path will look like it points to locations of the
+//		// extracted zip
+//		fullPath = distLocation + string(os.PathSeparator) + fullPath
+//		log.Println("FileName:", file.FileInfo().Name(), "; fullPath:", fullPath)
+//
+//		//Add the entries to the distEntries map
+//
+//		//Check whether the filename is already in the map
+//		_, ok := distEntries[file.FileInfo().Name()]
+//		if (ok) {
+//			//If the file is already in the map, we only need to add a new entry
+//			entry := distEntries[file.FileInfo().Name()]
+//			entry.add(fullPath)
+//		} else {
+//			//This is to identify whether the location contain a file or a directory
+//			isDir := false
+//			if file.FileInfo().IsDir() {
+//				isDir = true
+//			}
+//			//Add a new entry
+//			distEntries[file.FileInfo().Name()] = entry{
+//				map[string]bool{
+//					fullPath: isDir,
+//				},
+//			}
+//		}
+//	}
+//	// stop the writer
+//	writer.Stop()
+//	log.Println("Zip file reading finished")
+//	log.Println("Total files read: ", filesRead)
+//	//Check whether all files are read or not
+//	if totalFiles == filesRead {
+//		log.Println("All files read")
+//	} else {
+//		color.Set(color.FgRed)
+//		fmt.Println("[FAILURE] All files not read from zip file")
+//		color.Unset()
+//		os.Exit(1)
+//	}
+//}
+
+//This function unzips a zip file at given location
+func unzipAndReadDistribution(zipLocation string, logsEnabled bool) (bool, error) {
+	log.Println("Unzipping started")
 
 	//Get the location of the zip file. This is later used to create the full path of a file
 	index := strings.LastIndex(zipLocation, string(os.PathSeparator))
@@ -1105,7 +1205,12 @@ func readDistributionZip(zipLocation string, logsEnabled bool) {
 	// start listening for updates and render
 	writer.Start()
 
-	// Iterate through each file/dir found in zip
+	targetDir := "./"
+	if lastIndex := strings.LastIndex(zipLocation, string(os.PathSeparator)); lastIndex > -1 {
+		targetDir = zipLocation[:lastIndex]
+	}
+	// Iterate through each file/dir found in
+
 	for _, file := range zipReader.Reader.File {
 		filesRead++
 		if (!logsEnabled) {
@@ -1117,7 +1222,32 @@ func readDistributionZip(zipLocation string, logsEnabled bool) {
 		//Start constructing the full path
 		fullPath := file.Name
 		log.Println("fullPath1:", file.Name)
+
+		// Open the file inside the zip archive
+		// like a normal file
+		zippedFile, err := file.Open()
+		if err != nil {
+			log.Println(err)
+			return false, err
+		}
+
+		// Specify what the extracted file name should be.
+		// You can specify a full path or a prefix
+		// to move it to a different directory.
+		// In this case, we will extract the file from
+		// the zip to a file of the same name.
+		extractionPath := filepath.Join(
+			targetDir,
+			file.Name,
+		)
+		// Extract the item (or create directory)
 		if file.FileInfo().IsDir() {
+			// Create directories to recreate directory
+			// structure inside the zip archive. Also
+			// preserves permissions
+			//log.Println("Creating directory:", extractionPath)
+			os.MkdirAll(extractionPath, file.Mode())
+
 			// We only need the location of the directory. fullPath contains the directory name too. We
 			// need to trim and remove the directory name.
 			//string(os.PathSeparator) removed because it does not work properly in windows
@@ -1127,6 +1257,31 @@ func readDistributionZip(zipLocation string, logsEnabled bool) {
 			fullPath = strings.TrimSuffix(fullPath, dir)
 			log.Println("fullPath2:", file.Name)
 		} else {
+			// Extract regular file since not a directory
+			//log.Println("Extracting file:", file.Name)
+
+			// Open an output file for writing
+			outputFile, err := os.OpenFile(
+				extractionPath,
+				os.O_WRONLY | os.O_CREATE | os.O_TRUNC,
+				file.Mode(),
+			)
+			if err != nil {
+				log.Println(err)
+				return false, err
+			}
+			if outputFile != nil {
+				// "Extract" the file by copying zipped file
+				// contents to the output file
+				_, err = io.Copy(outputFile, zippedFile)
+				outputFile.Close()
+
+				if err != nil {
+					log.Println(err)
+					return false, err
+				}
+			}
+
 			// We only need the location of the file. fullPath contains the file name too. We
 			// need to trim and remove the file name.
 
@@ -1162,18 +1317,117 @@ func readDistributionZip(zipLocation string, logsEnabled bool) {
 				},
 			}
 		}
+
+		zippedFile.Close()
 	}
-	// stop the writer
 	writer.Stop()
-	log.Println("Zip file reading finished")
-	log.Println("Total files read: ", filesRead)
-	//Check whether all files are read or not
+	log.Println("Unzipping finished")
+	log.Println("Extracted file count: ", filesRead)
 	if totalFiles == filesRead {
-		log.Println("All files read")
+		log.Println("All files extracted")
+		return true, nil
 	} else {
-		color.Set(color.FgRed)
-		fmt.Println("[FAILURE] All files not read from zip file")
-		color.Unset()
-		os.Exit(1)
+		log.Println("All files not extracted")
+		return false, nil
 	}
 }
+////This function unzips a zip file at given location
+//func unzip(zipLocation string) (bool, error) {
+//	log.Println("Unzipping started")
+//
+//	// Create a reader out of the zip archive
+//	zipReader, err := zip.OpenReader(zipLocation)
+//
+//	if err != nil {
+//		color.Set(color.FgRed)
+//		fmt.Println(err)
+//		color.Unset()
+//		log.Fatal(err)
+//	}
+//	defer zipReader.Close()
+//
+//	totalFiles := len(zipReader.Reader.File)
+//	log.Println("File count in zip: ", totalFiles)
+//
+//	extractedFiles := 0
+//
+//	writer := uilive.New()
+//	//start listening for updates and render
+//	writer.Start()
+//
+//	targetDir := "./"
+//	if lastIndex := strings.LastIndex(zipLocation, string(os.PathSeparator)); lastIndex > -1 {
+//		targetDir = zipLocation[:lastIndex]
+//	}
+//	// Iterate through each file/dir found in
+//
+//	for _, file := range zipReader.Reader.File {
+//		extractedFiles++
+//		fmt.Fprintf(writer, "Unzipping distribution: (%d/%d) files unzipped\n", extractedFiles, totalFiles)
+//
+//		//bar.Set(extractedFiles)
+//		time.Sleep(time.Millisecond * 5)
+//
+//		// Open the file inside the zip archive
+//		// like a normal file
+//		zippedFile, err := file.Open()
+//		if err != nil {
+//			log.Println(err)
+//			return false, err
+//		}
+//
+//		// Specify what the extracted file name should be.
+//		// You can specify a full path or a prefix
+//		// to move it to a different directory.
+//		// In this case, we will extract the file from
+//		// the zip to a file of the same name.
+//		extractionPath := filepath.Join(
+//			targetDir,
+//			file.Name,
+//		)
+//		// Extract the item (or create directory)
+//		if file.FileInfo().IsDir() {
+//			// Create directories to recreate directory
+//			// structure inside the zip archive. Also
+//			// preserves permissions
+//			//log.Println("Creating directory:", extractionPath)
+//			os.MkdirAll(extractionPath, file.Mode())
+//		} else {
+//			// Extract regular file since not a directory
+//			//log.Println("Extracting file:", file.Name)
+//
+//			// Open an output file for writing
+//			outputFile, err := os.OpenFile(
+//				extractionPath,
+//				os.O_WRONLY | os.O_CREATE | os.O_TRUNC,
+//				file.Mode(),
+//			)
+//			if err != nil {
+//				log.Println(err)
+//				return false, err
+//			}
+//			if outputFile != nil {
+//				// "Extract" the file by copying zipped file
+//				// contents to the output file
+//				_, err = io.Copy(outputFile, zippedFile)
+//				outputFile.Close()
+//
+//				if err != nil {
+//					log.Println(err)
+//					return false, err
+//				}
+//			}
+//		}
+//		zippedFile.Close()
+//	}
+//	writer.Stop()
+//	log.Println("Unzipping finished")
+//	log.Println("Extracted file count: ", extractedFiles)
+//	if totalFiles == extractedFiles {
+//		log.Println("All files extracted")
+//		return true, nil
+//	} else {
+//		log.Println("All files not extracted")
+//		return false, nil
+//	}
+//}

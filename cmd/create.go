@@ -53,8 +53,8 @@ const (
 	_UPDATE_DESCRIPTOR_FILE_NAME = "update-descriptor.yaml"
 
 	//Resourse directory which contains README,LICENCE and NOT_A_CONTRIBUTION files
-	_RESOURCE_DIR = "../res"
-	//Temporary dirctory to copy files before creating the new zip
+	_RESOURCE_DIR = ".." + string(os.PathSeparator) + "res"
+	//Temporary directory to copy files before creating the new zip
 	_TEMP_DIR_NAME = "temp"
 	//This is used to store carbon.home string
 	_CARBON_HOME = "carbon.home"
@@ -431,6 +431,7 @@ func findMatches(patchLocation, distributionLocation string) {
 
 	//Create a new table
 	overallViewTable := tablewriter.NewWriter(os.Stdout)
+	overallViewTable.SetAlignment(tablewriter.ALIGN_LEFT)
 	overallViewTable.SetHeader([]string{"File/Folder", "Copied To"})
 
 	//Delete temp files
@@ -486,7 +487,8 @@ func findMatches(patchLocation, distributionLocation string) {
 							//Add the location to the map. Key is the index
 							locationMap[strconv.Itoa(index)] = pathInDist
 							log.Println("Trimming: ", pathInDist, "; using: ", distPath)
-							tempTable.Append([]string{strconv.Itoa(index), strings.TrimPrefix(pathInDist, distPath) + string(os.PathSeparator)})
+							tempLoc := strings.TrimPrefix(pathInDist, distPath) + string(os.PathSeparator)
+							tempTable.Append([]string{strconv.Itoa(index), strings.Replace(tempLoc, "\\", "/", -1)})
 							index++
 						}
 					}
@@ -616,15 +618,18 @@ func findMatches(patchLocation, distributionLocation string) {
 						if isDirInDist == isDirInPatch {
 							//Add an entry to the table
 							log.Println("Both locations contain same type")
-							overallViewTable.Append([]string{patchEntryName, strings.TrimPrefix(pathInDist, distPath) + string(os.PathSeparator)})
-							//overallViewTable.AddRow(patchEntryName, strings.TrimPrefix(pathInDist, distPath) + string(os.PathSeparator))
+							log.Println("pathInDist:", pathInDist)
+							log.Println("distPath:", distPath)
+							tempLoc := strings.TrimPrefix(pathInDist, distPath) + string(os.PathSeparator)
+							overallViewTable.Append([]string{patchEntryName, strings.Replace(tempLoc, "\\", "/", -1)})
 
 							//Get the path relative to the distribution
 							tempFilePath := strings.TrimPrefix(pathInDist, distributionLocation)
-
+							log.Println("tempFilePath:", tempFilePath)
 							//Construct the source location
 							src := pathInPatch + string(os.PathSeparator) + patchEntryName
 							destPath := _TEMP_DIR_LOCATION + tempFilePath + string(os.PathSeparator)
+							log.Println("destPath:", destPath)
 							//Construct the destination location
 							dest := destPath + patchEntryName
 
@@ -682,8 +687,7 @@ func findMatches(patchLocation, distributionLocation string) {
 							if isDirInPatch {
 								typePostfix = " (dir)"
 							}
-							overallViewTable.Append([]string{patchEntryName +
-							typePostfix, " - "})
+							overallViewTable.Append([]string{patchEntryName + typePostfix, " - "})
 						}
 					}
 				}
@@ -692,7 +696,8 @@ func findMatches(patchLocation, distributionLocation string) {
 			//todo: Should ask for a location from the user?
 			//If there is no match
 			color.Set(color.FgRed)
-			fmt.Println("\n[WARNING] No match found for ", patchEntryName, "\n")
+			fmt.Println("\n[WARNING] No match found for", patchEntryName, ". If it is a new file, place " +
+			"it within a folder to identify the corresponding location.")
 			color.Unset()
 			log.Println("Location(s) in Patch: ", patchEntry)
 			overallViewTable.Append([]string{patchEntryName, " - "})
@@ -994,7 +999,14 @@ func createUpdateZip() {
 			}
 
 			//Construct the file path
-			header.Name = _UPDATE_NAME + string(os.PathSeparator) + strings.TrimPrefix(path, _TEMP_DIR_NAME + string(os.PathSeparator))
+			tempHeaderName := _UPDATE_NAME + string(os.PathSeparator) + strings.TrimPrefix(path, _TEMP_DIR_NAME + string(os.PathSeparator))
+
+			//Critical -
+			//If the paths in zip file have \ separators, they will not shown correctly on Ubuntu. But if
+			// we have / path separators, the file paths will be correctly shown in both Windows and
+			// Ubuntu. So we need to replace all \ with / before creating the zip.
+			header.Name = strings.Replace(tempHeaderName, "\\", "/", -1)
+			log.Println("header.Name:", header.Name)
 			//Create a Writer using the header
 			fileWriter, err := zipWriter.CreateHeader(header)
 			if err != nil {
@@ -1098,20 +1110,30 @@ func readDistributionZip(zipLocation string, logsEnabled bool) {
 
 		//Start constructing the full path
 		fullPath := file.Name
+		log.Println("fullPath1:", file.Name)
 		if file.FileInfo().IsDir() {
 			// We only need the location of the directory. fullPath contains the directory name too. We
 			// need to trim and remove the directory name.
-			fullPath = strings.TrimSuffix(fullPath, string(os.PathSeparator) + file.FileInfo().Name() + string(os.PathSeparator))
+			//string(os.PathSeparator) removed because it does not work properly in windows
+			dir := "/" + file.FileInfo().Name() + "/"
+
+			log.Println("Trimming:", fullPath, "; using:", dir)
+			fullPath = strings.TrimSuffix(fullPath, dir)
+			log.Println("fullPath2:", file.Name)
 		} else {
 			// We only need the location of the file. fullPath contains the file name too. We
 			// need to trim and remove the file name.
-			fullPath = strings.TrimSuffix(fullPath, string(os.PathSeparator) + file.FileInfo().Name())
+
+			//string(os.PathSeparator) removed because it does not work properly in windows
+			log.Println("Trimming:", fullPath, "; using:", "/" + file.FileInfo().Name())
+			fullPath = strings.TrimSuffix(fullPath, "/" + file.FileInfo().Name())
+			log.Println("fullPath3:", file.Name)
 		}
 
 		// Add the distribution location so that the full path will look like it points to locations of the
 		// extracted zip
 		fullPath = distLocation + string(os.PathSeparator) + fullPath
-		log.Println("FileName:", file.FileInfo().Name(), "; relativeLocation:", fullPath)
+		log.Println("FileName:", file.FileInfo().Name(), "; fullPath:", fullPath)
 
 		//Add the entries to the distEntries map
 

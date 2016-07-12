@@ -18,6 +18,7 @@ import (
 	"gopkg.in/yaml.v2"
 	"text/template"
 	"github.com/olekukonko/tablewriter"
+	"path"
 )
 
 //struct to store location(s) in the distribution for a given file/directory
@@ -52,7 +53,7 @@ const (
 	_INSTRUCTIONS_FILE_NAME = "instructions.txt"
 	_UPDATE_DESCRIPTOR_FILE_NAME = "update-descriptor.yaml"
 
-	//Resourse directory which contains README,LICENCE and NOT_A_CONTRIBUTION files
+	//Resource directory which contains README,LICENCE and NOT_A_CONTRIBUTION files
 	_RESOURCE_DIR = ".." + string(os.PathSeparator) + "res"
 	//Temporary directory to copy files before creating the new zip
 	_TEMP_DIR_NAME = "temp"
@@ -343,7 +344,7 @@ func copyResourceFiles(patchLocation string) {
 	ok = checkFile(filePath)
 	if !ok {
 		color.Set(color.FgRed)
-		fmt.Print("[WARNING]", _INSTRUCTIONS_FILE_NAME, " file not found. Do you want to add an " +
+		fmt.Print("[WARNING] ", _INSTRUCTIONS_FILE_NAME, " file not found. Do you want to add an " +
 		"'instructions.txt' file?[Y/N]: ")
 		color.Unset()
 
@@ -509,7 +510,6 @@ func findMatches(patchLocation, distributionLocation string) {
 					"cancel and exit]: ")
 					//Get the user input
 					reader := bufio.NewReader(os.Stdin)
-					log.Print("Preferred Locations: ")
 					enteredPreferences, _ := reader.ReadString('\n')
 					log.Println("enteredPreferences:", enteredPreferences)
 					//Remove the new line at the end
@@ -568,7 +568,6 @@ func findMatches(patchLocation, distributionLocation string) {
 										os.Exit(1)
 									}
 								} else if checkDir(src) {
-
 									//Compare the directories to identify new files
 									compareDir(src, selectedPath + string(os.PathSeparator) + patchEntryName, patchLocation, distributionLocation)
 
@@ -600,17 +599,17 @@ func findMatches(patchLocation, distributionLocation string) {
 								for _, isDirInPatch := range patchEntry.locationMap {
 									if isDirInDist == isDirInPatch {
 										locationMap[strconv.Itoa(index)] = path
+										temp := filepath.Join(_CARBON_HOME, strings.TrimPrefix(path, distributionLocation), string(os.PathSeparator))
+										fmt.Println("temp:", temp)
 										if isFirst {
 											found := stringIsInSlice(path, selectedPathsList)
 											if found {
-												temp := strings.TrimPrefix(path, distPath) + string(os.PathSeparator)
 												overallViewTable.Append([]string{patchEntryName, strings.Replace(temp, "\\", "/", -1)})
 												isFirst = false
 											}
 										} else {
 											found := stringIsInSlice(path, selectedPathsList)
 											if found {
-												temp := strings.TrimPrefix(path, distPath) + string(os.PathSeparator)
 												overallViewTable.Append([]string{"", strings.Replace(temp, "\\", "/", -1)})
 											}
 										}
@@ -637,7 +636,8 @@ func findMatches(patchLocation, distributionLocation string) {
 							log.Println("pathInDist:", pathInDist)
 							log.Println("distPath:", distPath)
 							log.Println("distributionLocation:", distributionLocation)
-							tempLoc := strings.TrimPrefix(pathInDist, distPath) + string(os.PathSeparator)
+
+							tempLoc := filepath.Join(_CARBON_HOME, strings.TrimPrefix(pathInDist, distributionLocation), string(os.PathSeparator))
 							overallViewTable.Append([]string{patchEntryName, strings.Replace(tempLoc, "\\", "/", -1)})
 
 							//Get the path relative to the distribution
@@ -666,6 +666,7 @@ func findMatches(patchLocation, distributionLocation string) {
 
 							//If source is a file
 							if checkFile(src) {
+
 								log.Println("Copying file: ", src, " ; To:", dest)
 								//copy source file to destination
 								copyErr := CopyFile(src, dest)
@@ -710,15 +711,99 @@ func findMatches(patchLocation, distributionLocation string) {
 				}
 			}
 		} else {
-			//todo: Should ask for a location from the user?
 			//If there is no match
-			color.Set(color.FgRed)
-			fmt.Println("\n[WARNING] No match found for", patchEntryName, ". If it is a new file, place " +
-			"it within a folder to identify the corresponding location.")
+			color.Set(color.FgYellow)
+			fmt.Println("\n[WARNING] No match found for '" + patchEntryName + "'\n")
+
+			fmt.Print("Do you want to add this as a new file/folder?[Y/N]: ")
+
+			reader := bufio.NewReader(os.Stdin)
+
+			enteredPreferences, _ := reader.ReadString('\n')
+			log.Println("enteredPreferences:", enteredPreferences)
+			//Remove the new line at the end
+			enteredPreferences = strings.TrimSpace(enteredPreferences)
+			log.Println("enteredPreferences2:", enteredPreferences)
+
+			if enteredPreferences[0] == 'Y' || enteredPreferences[0] == 'y' {
+
+				skipCopy:
+				for {
+					fmt.Print("Enter relative path in the distribution: ")
+					copyPath, _ := reader.ReadString('\n')
+					log.Println("copyPath:", copyPath)
+					//Remove the new line at the end
+					copyPath = path.Join(distributionLocation, strings.TrimSpace(copyPath))
+					log.Println("copyPath2:", copyPath)
+
+					if !checkDir(copyPath) {
+
+						for {
+							fmt.Print("Entered relative location does not exist in the " +
+							"distribution. Do you want to copy anyway?[Y/N]: ")
+							enteredPreferences, _ := reader.ReadString('\n')
+							log.Println("enteredPreferences:", enteredPreferences)
+							//Remove the new line at the end
+							enteredPreferences = strings.TrimSpace(enteredPreferences)
+							log.Println("enteredPreferences2:", enteredPreferences)
+
+							if enteredPreferences[0] == 'Y' || enteredPreferences[0] == 'y' {
+								//do nothing
+								log.Println("Creating the new relative location and copying " +
+								"the file")
+								break
+							} else if enteredPreferences[0] == 'N' || enteredPreferences[0] == 'n' {
+								log.Println("Not creating the new relative location and " +
+								"copying the file")
+								break skipCopy
+							} else {
+								fmt.Println("Invalid preference. Try again.\n")
+								continue
+							}
+						}
+					}
+
+					tempFilePath := strings.TrimPrefix(copyPath, distributionLocation)
+					destPath := _TEMP_DIR_LOCATION + tempFilePath + string(os.PathSeparator)
+					log.Println("destPath:", destPath)
+					//Construct the destination location
+					dest := destPath + patchEntryName
+
+					err := os.MkdirAll(destPath, 0777)
+					if err != nil {
+						color.Set(color.FgRed)
+						fmt.Println("[FAILURE] Error occurred while creating " +
+						"directory", err)
+						os.Exit(1)
+					}
+
+					log.Println("Entered location is a directory. Copying ...")
+					fileLocation := filepath.Join(patchLocation, patchEntryName)
+					if checkFile(fileLocation) {
+						fmt.Println("File found:", fileLocation)
+						//copyPath = path.Join(copyPath, patchEntryName)
+						fmt.Println("Copying file:", fileLocation, "; To:", dest)
+						CopyFile(fileLocation, dest)
+					} else if checkDir(fileLocation) {
+						fmt.Println("dir found:", fileLocation)
+						//copyPath = path.Join(copyPath, patchEntryName)
+						fmt.Println("Copying file:", fileLocation, "; To:", dest)
+						CopyDir(fileLocation, dest)
+					} else {
+						fmt.Println("Location not valid:", fileLocation)
+					}
+					break
+				}
+
+			} else if enteredPreferences[0] == 'N' || enteredPreferences[0] == 'n' {
+				log.Println("Not copying file.")
+				log.Println("Location(s) in Patch: ", patchEntry)
+				overallViewTable.Append([]string{patchEntryName, " - "})
+				break
+			} else {
+				fmt.Println("Invalid preference. Try again.\n")
+			}
 			color.Unset()
-			log.Println("Location(s) in Patch: ", patchEntry)
-			overallViewTable.Append([]string{patchEntryName, " - "})
-			//overallViewTable.AddRow(patchEntryName, " - ")
 		}
 		log.Println("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 		rowCount++
@@ -852,6 +937,8 @@ func CopyFile(source string, dest string) (err error) {
 		si, err := os.Stat(source)
 		if err != nil {
 			err = os.Chmod(dest, si.Mode())
+			fmt.Println("Error occurred while copying:", err)
+			os.Exit(1)
 		}
 
 	}
@@ -886,13 +973,15 @@ func CopyDir(source string, dest string) (err error) {
 		if entry.IsDir() {
 			err = CopyDir(sfp, dfp)
 			if err != nil {
-				log.Println(err)
+				fmt.Println("Error occurred while copying:", err)
+				os.Exit(1)
 			}
 		} else {
 			// perform copy
 			err = CopyFile(sfp, dfp)
 			if err != nil {
-				log.Println(err)
+				fmt.Println("Error occurred while copying:", err)
+				os.Exit(1)
 			}
 		}
 	}
@@ -1226,7 +1315,8 @@ func unzipAndReadDistribution(zipLocation string, logsEnabled bool) (bool, error
 	for _, file := range zipReader.Reader.File {
 		filesRead++
 		if (!logsEnabled) {
-			fmt.Fprintf(writer, "Reading files from distribution zip: (%d/%d)\n", filesRead, totalFiles)
+			fmt.Fprintf(writer, "Extracting and reading files from distribution zip: (%d/%d)\n", filesRead,
+				totalFiles)
 			time.Sleep(time.Millisecond * 2)
 		}
 		log.Println("Checking file: ", file.Name)

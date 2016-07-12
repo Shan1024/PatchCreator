@@ -36,8 +36,10 @@ do
     zipfile="uct-$uctVersion-$pos-$parch"
     zipdir="$(dirname $target)/build/target/$zipfile"
     mkdir -p $zipdir
-    cp -r "$(dirname $target)/cmd" $zipdir
+    # cp -r "$(dirname $target)/cmd" $zipdir
     cp -r "$(dirname $target)/res" $zipdir
+    cp -r "$(dirname $target)/README.txt" $zipdir
+    cp -r "$(dirname $target)/LICENSE.txt" $zipdir
 
     # set destination path for binary
     destination="$zipdir/bin/$output"

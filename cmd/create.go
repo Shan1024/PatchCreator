@@ -69,7 +69,7 @@ const (
 
 var (
 	//This contains the resource files that needs to be copied to the update zip
-	_RESOURCE_FILES = []string{_LICENSE_FILE_NAME, _NOT_A_CONTRIBUTION_FILE_NAME}
+	_RESOURCE_FILES = []string{_LICENSE_FILE_NAME}
 
 	//These are used to store file/directory locations to later find matches. Keys of the map are file/directory
 	// names and the value will be a entry which contain a slice which has locations of that file
@@ -101,12 +101,6 @@ func Create(patchLocation, distributionLocation string, logsEnabled bool) {
 	//Initialize maps
 	patchEntries = make(map[string]entry)
 	distEntries = make(map[string]entry)
-
-	//Check whether the patch location has a / or \ character at the end and remove if it has a / or \ character
-	if strings.HasSuffix(patchLocation, string(os.PathSeparator)) {
-		patchLocation = strings.TrimSuffix(patchLocation, string(os.PathSeparator))
-	}
-	log.Println("Patch Loc: " + patchLocation)
 
 	//Check whether the given patch location exists. It should be a directory.
 	patchLocationExists := checkDir(patchLocation)
@@ -169,7 +163,7 @@ func Create(patchLocation, distributionLocation string, logsEnabled bool) {
 	log.Println("Distribution Loc: " + distributionLocation)
 
 	//This will have the update-descriptor.yaml file location
-	descriptorLocation := patchLocation + string(os.PathSeparator) + _UPDATE_DESCRIPTOR_FILE_NAME
+	descriptorLocation := path.Join(patchLocation, _UPDATE_DESCRIPTOR_FILE_NAME)
 	log.Println("Descriptor Location: ", descriptorLocation)
 
 	//Check whether the update-descriptor.yaml file exists
@@ -289,7 +283,7 @@ func readDescriptor(path string) {
 //This method copies resource files to the
 func copyResourceFiles(patchLocation string) {
 	for _, resourceFile := range _RESOURCE_FILES {
-		filePath := _RESOURCE_DIR + string(os.PathSeparator) + resourceFile
+		filePath := path.Join(_RESOURCE_DIR, resourceFile)
 		ok := checkFile(filePath)
 		if !ok {
 			color.Set(color.FgRed)
@@ -298,7 +292,8 @@ func copyResourceFiles(patchLocation string) {
 			os.Exit(1)
 		} else {
 			log.Println("Copying resource: ", filePath, " to: " + _TEMP_DIR_NAME)
-			err := CopyFile(filePath, _TEMP_DIR_NAME + string(os.PathSeparator) + resourceFile)
+			tempPath := path.Join(_TEMP_DIR_NAME, resourceFile)
+			err := CopyFile(filePath, tempPath)
 			if (err != nil) {
 				color.Set(color.FgRed)
 				fmt.Println("[FAILURE] Error occurred while copying the resource file: ", filePath, err)
@@ -306,7 +301,8 @@ func copyResourceFiles(patchLocation string) {
 			}
 		}
 	}
-	filePath := patchLocation + string(os.PathSeparator) + _UPDATE_DESCRIPTOR_FILE_NAME
+
+	filePath := path.Join(patchLocation, _UPDATE_DESCRIPTOR_FILE_NAME)
 	ok := checkFile(filePath)
 	if !ok {
 		color.Set(color.FgRed)
@@ -315,7 +311,8 @@ func copyResourceFiles(patchLocation string) {
 		os.Exit(1)
 	} else {
 		log.Println("Copying resource: ", filePath, " to: " + _TEMP_DIR_NAME)
-		err := CopyFile(filePath, _TEMP_DIR_NAME + string(os.PathSeparator) + _UPDATE_DESCRIPTOR_FILE_NAME)
+		tempPath := path.Join(_TEMP_DIR_NAME, _UPDATE_DESCRIPTOR_FILE_NAME)
+		err := CopyFile(filePath, tempPath)
 		if (err != nil) {
 			color.Set(color.FgRed)
 			fmt.Println("Error occurred while copying the resource file: ", filePath, err)
@@ -323,7 +320,7 @@ func copyResourceFiles(patchLocation string) {
 		}
 	}
 
-	filePath = patchLocation + string(os.PathSeparator) + _README_FILE_NAME
+	filePath = path.Join(patchLocation, _README_FILE_NAME)
 	ok = checkFile(filePath)
 	if !ok {
 		color.Set(color.FgRed)
@@ -332,7 +329,8 @@ func copyResourceFiles(patchLocation string) {
 		os.Exit(1)
 	} else {
 		log.Println("Copying readme: ", filePath, " to: " + _TEMP_DIR_NAME)
-		err := CopyFile(filePath, _TEMP_DIR_NAME + string(os.PathSeparator) + _README_FILE_NAME)
+		tempPath := path.Join(_TEMP_DIR_NAME, _README_FILE_NAME)
+		err := CopyFile(filePath, tempPath)
 		if (err != nil) {
 			color.Set(color.FgRed)
 			fmt.Println("Error occurred while copying the resource file: ", filePath, err)
@@ -340,10 +338,28 @@ func copyResourceFiles(patchLocation string) {
 		}
 	}
 
-	filePath = patchLocation + string(os.PathSeparator) + _INSTRUCTIONS_FILE_NAME
+	filePath = path.Join(patchLocation, _NOT_A_CONTRIBUTION_FILE_NAME)
 	ok = checkFile(filePath)
 	if !ok {
-		color.Set(color.FgRed)
+		color.Set(color.FgYellow)
+		fmt.Println("\n[WARNING]", _NOT_A_CONTRIBUTION_FILE_NAME, "not found in the patch directory. Make " +
+		"sure that the Apache License is in", _LICENSE_FILE_NAME, "file.\n")
+		color.Unset()
+	} else {
+		log.Println("Copying NOT_A_CONTRIBUTION: ", filePath, " to: " + _TEMP_DIR_NAME)
+		tempPath := path.Join(_TEMP_DIR_NAME, _README_FILE_NAME)
+		err := CopyFile(filePath, tempPath)
+		if (err != nil) {
+			color.Set(color.FgRed)
+			fmt.Println("Error occurred while copying the resource file: ", filePath, err)
+			color.Unset()
+		}
+	}
+
+	filePath = path.Join(patchLocation, _INSTRUCTIONS_FILE_NAME)
+	ok = checkFile(filePath)
+	if !ok {
+		color.Set(color.FgYellow)
 		fmt.Print("[WARNING] ", _INSTRUCTIONS_FILE_NAME, " file not found. Do you want to add an " +
 		"'instructions.txt' file?[Y/N]: ")
 		color.Unset()
@@ -361,13 +377,14 @@ func copyResourceFiles(patchLocation string) {
 				color.Unset()
 				break;
 			} else {
-				fmt.Println("Invalid preference. Enter Y for Yes or N for No\n")
+				fmt.Println("Invalid preference. Enter Y for Yes or N for No.\n")
 				fmt.Print("Do you want to add an instructions.txt file?[Y/N]: ")
 			}
 		}
 	} else {
 		log.Println("Copying instructions: ", filePath, " to: " + _TEMP_DIR_NAME)
-		err := CopyFile(filePath, _TEMP_DIR_NAME + string(os.PathSeparator) + _INSTRUCTIONS_FILE_NAME)
+		tempPath := path.Join(_TEMP_DIR_NAME, _INSTRUCTIONS_FILE_NAME)
+		err := CopyFile(filePath, tempPath)
 		if (err != nil) {
 			color.Set(color.FgRed)
 			fmt.Println("[FAILURE] Error occurred while copying the resource file: ", filePath, err)
@@ -388,13 +405,15 @@ func generateReadMe() {
 		Instructions    string
 	}
 
-	t, err := template.ParseFiles(_RESOURCE_DIR + string(os.PathSeparator) + _README_FILE_NAME)
+	tempPath := path.Join(_RESOURCE_DIR, _README_FILE_NAME)
+	t, err := template.ParseFiles(tempPath)
 	if err != nil {
 		log.Print(err)
 		os.Exit(1)
 	}
 
-	f, err := os.Create(_TEMP_DIR_NAME + string(os.PathSeparator) + _README_FILE_NAME)
+	tempPath = path.Join(_TEMP_DIR_NAME, _README_FILE_NAME)
+	f, err := os.Create(tempPath)
 	if err != nil {
 		log.Println("create file: ", err)
 		os.Exit(1)
@@ -506,7 +525,7 @@ func findMatches(patchLocation, distributionLocation string) {
 
 				//loop until user enter valid indices or decide to exit
 				for {
-					fmt.Println("Enter preferred locations separated by commas[Enter 0 to " +
+					fmt.Print("Enter preferred locations separated by commas[Enter 0 to " +
 					"cancel and exit]: ")
 					//Get the user input
 					reader := bufio.NewReader(os.Stdin)
@@ -549,10 +568,10 @@ func findMatches(patchLocation, distributionLocation string) {
 
 								selectedPathsList = append(selectedPathsList, selectedPath)
 
-								src := patchLocation + string(os.PathSeparator) + patchEntryName
-								destPath := _TEMP_DIR_LOCATION + tempFilePath + string(os.PathSeparator)
+								src := path.Join(patchLocation, patchEntryName)
+								destPath := path.Join(_TEMP_DIR_LOCATION + tempFilePath)
 								fmt.Println("destPath:", destPath)
-								dest := destPath + patchEntryName
+								dest := path.Join(destPath, patchEntryName)
 
 								log.Println("src 1: ", src)
 								log.Println("dest1: ", dest)
@@ -565,11 +584,13 @@ func findMatches(patchLocation, distributionLocation string) {
 									if copyErr != nil {
 										color.Set(color.FgRed)
 										fmt.Println("[FAILURE] Error occurred while copying file:", copyErr)
+										color.Unset()
 										os.Exit(1)
 									}
 								} else if checkDir(src) {
 									//Compare the directories to identify new files
-									compareDir(src, selectedPath + string(os.PathSeparator) + patchEntryName, patchLocation, distributionLocation)
+									tempPath := path.Join(selectedPath, patchEntryName)
+									compareDir(src, tempPath, patchLocation, distributionLocation)
 
 									//If source is a directory
 									log.Println("Copying directory: ", src, " ; To:", dest)
@@ -579,6 +600,7 @@ func findMatches(patchLocation, distributionLocation string) {
 										color.Set(color.FgRed)
 										fmt.Println("[FAILURE] Error occurred while copying " +
 										"directory:", copyErr)
+										color.Unset()
 										os.Exit(1)
 									}
 								}
@@ -599,8 +621,8 @@ func findMatches(patchLocation, distributionLocation string) {
 								for _, isDirInPatch := range patchEntry.locationMap {
 									if isDirInDist == isDirInPatch {
 										locationMap[strconv.Itoa(index)] = path
-										temp := filepath.Join(_CARBON_HOME, strings.TrimPrefix(path, distributionLocation), string(os.PathSeparator))
-										fmt.Println("temp:", temp)
+										temp := filepath.Join(_CARBON_HOME, strings.TrimPrefix(path, distributionLocation)) + string(os.PathSeparator)
+										log.Println("temp:", temp)
 										if isFirst {
 											found := stringIsInSlice(path, selectedPathsList)
 											if found {
@@ -637,18 +659,18 @@ func findMatches(patchLocation, distributionLocation string) {
 							log.Println("distPath:", distPath)
 							log.Println("distributionLocation:", distributionLocation)
 
-							tempLoc := filepath.Join(_CARBON_HOME, strings.TrimPrefix(pathInDist, distributionLocation), string(os.PathSeparator))
+							tempLoc := filepath.Join(_CARBON_HOME, strings.TrimPrefix(pathInDist, distributionLocation)) + string(os.PathSeparator)
 							overallViewTable.Append([]string{patchEntryName, strings.Replace(tempLoc, "\\", "/", -1)})
 
 							//Get the path relative to the distribution
 							tempFilePath := strings.TrimPrefix(pathInDist, distributionLocation)
 							log.Println("tempFilePath:", tempFilePath)
 							//Construct the source location
-							src := pathInPatch + string(os.PathSeparator) + patchEntryName
-							destPath := _TEMP_DIR_LOCATION + tempFilePath + string(os.PathSeparator)
+							src := path.Join(pathInPatch, patchEntryName)
+							destPath := path.Join(_TEMP_DIR_LOCATION + tempFilePath)
 							log.Println("destPath:", destPath)
 							//Construct the destination location
-							dest := destPath + patchEntryName
+							dest := path.Join(destPath, patchEntryName)
 
 							log.Println("src 2: ", src)
 							log.Println("dest2: ", dest)
@@ -661,6 +683,7 @@ func findMatches(patchLocation, distributionLocation string) {
 								color.Set(color.FgRed)
 								fmt.Println("[FAILURE] Error occurred while creating " +
 								"directory", err)
+								color.Unset()
 								os.Exit(1)
 							}
 
@@ -674,12 +697,14 @@ func findMatches(patchLocation, distributionLocation string) {
 									color.Set(color.FgRed)
 									fmt.Println("[FAILURE] Error occurred while copying file:",
 										copyErr)
+									color.Unset()
 									os.Exit(1)
 								}
 							} else if checkDir(src) {
 
+								tempPath := path.Join(pathInDist, patchEntryName)
 								//Compare the directories to identify new files
-								compareDir(src, pathInDist + string(os.PathSeparator) + patchEntryName, patchLocation, distributionLocation)
+								compareDir(src, tempPath, patchLocation, distributionLocation)
 
 								//If source is a directory
 								log.Println("Copying directory: ", src, " ; To:", dest)
@@ -689,6 +714,7 @@ func findMatches(patchLocation, distributionLocation string) {
 									color.Set(color.FgRed)
 									fmt.Println("[FAILURE] Error occurred while copying " +
 									"directory:", copyErr)
+									color.Unset()
 									os.Exit(1)
 								}
 							}
@@ -740,7 +766,7 @@ func findMatches(patchLocation, distributionLocation string) {
 
 						for {
 							fmt.Print("Entered relative location does not exist in the " +
-							"distribution. Do you want to copy anyway?[Y/N]: ")
+							"distribution. Do you want to copy anyway?[Y/N/R(Re-enter)]: ")
 							enteredPreferences, _ := reader.ReadString('\n')
 							log.Println("enteredPreferences:", enteredPreferences)
 							//Remove the new line at the end
@@ -755,7 +781,11 @@ func findMatches(patchLocation, distributionLocation string) {
 							} else if enteredPreferences[0] == 'N' || enteredPreferences[0] == 'n' {
 								log.Println("Not creating the new relative location and " +
 								"copying the file")
+								overallViewTable.Append([]string{patchEntryName, " - "})
 								break skipCopy
+							} else if enteredPreferences[0] == 'R' || enteredPreferences[0] == 'r' {
+								log.Println("Re-enter selected")
+								continue skipCopy
 							} else {
 								fmt.Println("Invalid preference. Try again.\n")
 								continue
@@ -764,34 +794,39 @@ func findMatches(patchLocation, distributionLocation string) {
 					}
 
 					tempFilePath := strings.TrimPrefix(copyPath, distributionLocation)
-					destPath := _TEMP_DIR_LOCATION + tempFilePath + string(os.PathSeparator)
+					destPath := path.Join(_TEMP_DIR_LOCATION, tempFilePath)
 					log.Println("destPath:", destPath)
 					//Construct the destination location
-					dest := destPath + patchEntryName
+					dest := path.Join(destPath, patchEntryName)
 
 					err := os.MkdirAll(destPath, 0777)
 					if err != nil {
 						color.Set(color.FgRed)
 						fmt.Println("[FAILURE] Error occurred while creating " +
 						"directory", err)
+						color.Unset()
 						os.Exit(1)
 					}
 
 					log.Println("Entered location is a directory. Copying ...")
 					fileLocation := filepath.Join(patchLocation, patchEntryName)
+					tempDistPath := path.Join(_CARBON_HOME, tempFilePath) + string(os.PathSeparator)
 					if checkFile(fileLocation) {
-						fmt.Println("File found:", fileLocation)
+						log.Println("File found:", fileLocation)
 						//copyPath = path.Join(copyPath, patchEntryName)
-						fmt.Println("Copying file:", fileLocation, "; To:", dest)
+						log.Println("Copying file:", fileLocation, "; To:", dest)
 						CopyFile(fileLocation, dest)
+						overallViewTable.Append([]string{patchEntryName, tempDistPath})
 					} else if checkDir(fileLocation) {
-						fmt.Println("dir found:", fileLocation)
+						log.Println("dir found:", fileLocation)
 						//copyPath = path.Join(copyPath, patchEntryName)
-						fmt.Println("Copying file:", fileLocation, "; To:", dest)
+						log.Println("Copying file:", fileLocation, "; To:", dest)
 						CopyDir(fileLocation, dest)
+						overallViewTable.Append([]string{patchEntryName, tempDistPath})
 					} else {
-						fmt.Println("Location not valid:", fileLocation)
+						log.Println("Location not valid:", fileLocation)
 					}
+
 					break
 				}
 
@@ -799,7 +834,6 @@ func findMatches(patchLocation, distributionLocation string) {
 				log.Println("Not copying file.")
 				log.Println("Location(s) in Patch: ", patchEntry)
 				overallViewTable.Append([]string{patchEntryName, " - "})
-				break
 			} else {
 				fmt.Println("Invalid preference. Try again.\n")
 			}
@@ -1105,7 +1139,7 @@ func createUpdateZip() {
 			}
 
 			//Construct the file path
-			tempHeaderName := _UPDATE_NAME + string(os.PathSeparator) + strings.TrimPrefix(path, _TEMP_DIR_NAME + string(os.PathSeparator))
+			tempHeaderName := filepath.Join(_UPDATE_NAME, strings.TrimPrefix(path, _TEMP_DIR_NAME))
 
 			//Critical -
 			//If the paths in zip file have \ separators, they will not shown correctly on Ubuntu. But if
@@ -1170,113 +1204,6 @@ func createUpdateZip() {
 	fmt.Println("\n[INFO] Update file '" + _UPDATE_NAME + ".zip' successfully created\n\n")
 	color.Unset()
 }
-
-////This function reads the files of the given distribution zip
-//func readDistributionZip(zipLocation string, logsEnabled bool) {
-//	log.Println("Zip file reading started: ", zipLocation)
-//	//Get the distribution name. This is used later for trimming
-//	distName := strings.TrimSuffix(zipLocation, ".zip")
-//	if lastIndex := strings.LastIndex(distName, string(os.PathSeparator)); lastIndex > -1 {
-//		distName = distName[lastIndex + 1:]
-//	}
-//	log.Println("distName used for trimming: ", distName)
-//
-//	//Get the location of the zip file. This is later used to create the full path of a file
-//	index := strings.LastIndex(zipLocation, string(os.PathSeparator))
-//	distLocation := zipLocation[:index]
-//	log.Println("distLocation: ", distLocation)
-//	// Create a reader out of the zip archive
-//	zipReader, err := zip.OpenReader(zipLocation)
-//	if err != nil {
-//		color.Set(color.FgRed)
-//		fmt.Println("[FAILURE] Error occurred while reading zip:", err)
-//		color.Unset()
-//		log.Fatal(err)
-//	}
-//	defer zipReader.Close()
-//
-//	totalFiles := len(zipReader.Reader.File)
-//	log.Println("File count in zip: ", totalFiles)
-//
-//	filesRead := 0
-//
-//	// writer to show the progress
-//	writer := uilive.New()
-//	// start listening for updates and render
-//	writer.Start()
-//
-//	// Iterate through each file/dir found in zip
-//	for _, file := range zipReader.Reader.File {
-//		filesRead++
-//		if (!logsEnabled) {
-//			fmt.Fprintf(writer, "Reading files from distribution zip: (%d/%d)\n", filesRead, totalFiles)
-//			time.Sleep(time.Millisecond * 2)
-//		}
-//		log.Println("Checking file: ", file.Name)
-//
-//		//Start constructing the full path
-//		fullPath := file.Name
-//		log.Println("fullPath1:", file.Name)
-//		if file.FileInfo().IsDir() {
-//			// We only need the location of the directory. fullPath contains the directory name too. We
-//			// need to trim and remove the directory name.
-//			//string(os.PathSeparator) removed because it does not work properly in windows
-//			dir := "/" + file.FileInfo().Name() + "/"
-//
-//			log.Println("Trimming:", fullPath, "; using:", dir)
-//			fullPath = strings.TrimSuffix(fullPath, dir)
-//			log.Println("fullPath2:", file.Name)
-//		} else {
-//			// We only need the location of the file. fullPath contains the file name too. We
-//			// need to trim and remove the file name.
-//
-//			//string(os.PathSeparator) removed because it does not work properly in windows
-//			log.Println("Trimming:", fullPath, "; using:", "/" + file.FileInfo().Name())
-//			fullPath = strings.TrimSuffix(fullPath, "/" + file.FileInfo().Name())
-//			log.Println("fullPath3:", file.Name)
-//		}
-//
-//		// Add the distribution location so that the full path will look like it points to locations of the
-//		// extracted zip
-//		fullPath = distLocation + string(os.PathSeparator) + fullPath
-//		log.Println("FileName:", file.FileInfo().Name(), "; fullPath:", fullPath)
-//
-//		//Add the entries to the distEntries map
-//
-//		//Check whether the filename is already in the map
-//		_, ok := distEntries[file.FileInfo().Name()]
-//		if (ok) {
-//			//If the file is already in the map, we only need to add a new entry
-//			entry := distEntries[file.FileInfo().Name()]
-//			entry.add(fullPath)
-//		} else {
-//			//This is to identify whether the location contain a file or a directory
-//			isDir := false
-//			if file.FileInfo().IsDir() {
-//				isDir = true
-//			}
-//			//Add a new entry
-//			distEntries[file.FileInfo().Name()] = entry{
-//				map[string]bool{
-//					fullPath: isDir,
-//				},
-//			}
-//		}
-//	}
-//	// stop the writer
-//	writer.Stop()
-//	log.Println("Zip file reading finished")
-//	log.Println("Total files read: ", filesRead)
-//	//Check whether all files are read or not
-//	if totalFiles == filesRead {
-//		log.Println("All files read")
-//	} else {
-//		color.Set(color.FgRed)
-//		fmt.Println("[FAILURE] All files not read from zip file")
-//		color.Unset()
-//		os.Exit(1)
-//	}
-//}
 
 //This function unzips a zip file at given location
 func unzipAndReadDistribution(zipLocation string, logsEnabled bool) (bool, error) {
@@ -1395,7 +1322,7 @@ func unzipAndReadDistribution(zipLocation string, logsEnabled bool) (bool, error
 
 		// Add the distribution location so that the full path will look like it points to locations of the
 		// extracted zip
-		fullPath = distLocation + string(os.PathSeparator) + fullPath
+		fullPath = path.Join(distLocation, fullPath)
 		log.Println("FileName:", file.FileInfo().Name(), "; fullPath:", fullPath)
 
 		//Add the entries to the distEntries map
@@ -1433,103 +1360,3 @@ func unzipAndReadDistribution(zipLocation string, logsEnabled bool) (bool, error
 		return false, nil
 	}
 }
-////This function unzips a zip file at given location
-//func unzip(zipLocation string) (bool, error) {
-//	log.Println("Unzipping started")
-//
-//	// Create a reader out of the zip archive
-//	zipReader, err := zip.OpenReader(zipLocation)
-//
-//	if err != nil {
-//		color.Set(color.FgRed)
-//		fmt.Println(err)
-//		color.Unset()
-//		log.Fatal(err)
-//	}
-//	defer zipReader.Close()
-//
-//	totalFiles := len(zipReader.Reader.File)
-//	log.Println("File count in zip: ", totalFiles)
-//
-//	extractedFiles := 0
-//
-//	writer := uilive.New()
-//	//start listening for updates and render
-//	writer.Start()
-//
-//	targetDir := "./"
-//	if lastIndex := strings.LastIndex(zipLocation, string(os.PathSeparator)); lastIndex > -1 {
-//		targetDir = zipLocation[:lastIndex]
-//	}
-//	// Iterate through each file/dir found in
-//
-//	for _, file := range zipReader.Reader.File {
-//		extractedFiles++
-//		fmt.Fprintf(writer, "Unzipping distribution: (%d/%d) files unzipped\n", extractedFiles, totalFiles)
-//
-//		//bar.Set(extractedFiles)
-//		time.Sleep(time.Millisecond * 5)
-//
-//		// Open the file inside the zip archive
-//		// like a normal file
-//		zippedFile, err := file.Open()
-//		if err != nil {
-//			log.Println(err)
-//			return false, err
-//		}
-//
-//		// Specify what the extracted file name should be.
-//		// You can specify a full path or a prefix
-//		// to move it to a different directory.
-//		// In this case, we will extract the file from
-//		// the zip to a file of the same name.
-//		extractionPath := filepath.Join(
-//			targetDir,
-//			file.Name,
-//		)
-//		// Extract the item (or create directory)
-//		if file.FileInfo().IsDir() {
-//			// Create directories to recreate directory
-//			// structure inside the zip archive. Also
-//			// preserves permissions
-//			//log.Println("Creating directory:", extractionPath)
-//			os.MkdirAll(extractionPath, file.Mode())
-//		} else {
-//			// Extract regular file since not a directory
-//			//log.Println("Extracting file:", file.Name)
-//
-//			// Open an output file for writing
-//			outputFile, err := os.OpenFile(
-//				extractionPath,
-//				os.O_WRONLY | os.O_CREATE | os.O_TRUNC,
-//				file.Mode(),
-//			)
-//			if err != nil {
-//				log.Println(err)
-//				return false, err
-//			}
-//			if outputFile != nil {
-//				// "Extract" the file by copying zipped file
-//				// contents to the output file
-//				_, err = io.Copy(outputFile, zippedFile)
-//				outputFile.Close()
-//
-//				if err != nil {
-//					log.Println(err)
-//					return false, err
-//				}
-//			}
-//		}
-//		zippedFile.Close()
-//	}
-//	writer.Stop()
-//	log.Println("Unzipping finished")
-//	log.Println("Extracted file count: ", extractedFiles)
-//	if totalFiles == extractedFiles {
-//		log.Println("All files extracted")
-//		return true, nil
-//	} else {
-//		log.Println("All files not extracted")
-//		return false, nil
-//	}
-//}

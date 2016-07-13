@@ -68,7 +68,7 @@ const (
 )
 
 var (
-	//This contains the resource files that needs to be copied to the update zip
+	//This contains the mandatory resource files that needs to be copied to the update zip
 	_RESOURCE_FILES = []string{_LICENSE_FILE_NAME}
 
 	//These are used to store file/directory locations to later find matches. Keys of the map are file/directory
@@ -200,6 +200,9 @@ func Create(patchLocation, distributionLocation string, logsEnabled bool) {
 	log.Println("Copying resource files")
 	copyResourceFiles(patchLocation)
 	log.Println("Copying resource files finished")
+
+	updateYAML()
+
 	//Create the update zip file
 	log.Println("Creating zip file")
 	createUpdateZip()
@@ -278,6 +281,53 @@ func readDescriptor(path string) {
 
 	_UPDATE_NAME = _UPDATE_NAME_PREFIX + "-" + _KERNEL_VERSION + "-" + _UPDATE_NUMBER
 	log.Println("Patch Name: " + _UPDATE_NAME)
+}
+
+func updateYAML() {
+	data, err := yaml.Marshal(&descriptor)
+	if err != nil {
+		color.Set(color.FgRed)
+		fmt.Println("Error occurred while matshalling the descriptor:", err)
+		color.Unset()
+		os.Exit(1)
+	}
+	log.Printf("update-descriptor:\n%s\n\n", string(data))
+
+	color.Set(color.FgGreen)
+	updatedData := strings.Replace(string(data), "\"", "", 2)
+	fmt.Println("-------------------------------------------------------------------------------------------------")
+	fmt.Println(_UPDATE_DESCRIPTOR_FILE_NAME, "-\n")
+	fmt.Println(strings.TrimSpace(updatedData))
+	fmt.Println("-------------------------------------------------------------------------------------------------")
+	color.Unset()
+
+	destPath := path.Join(_TEMP_DIR_NAME, _UPDATE_DESCRIPTOR_FILE_NAME)
+	log.Println("destPath:", destPath)
+	// Open a new file for writing only
+	file, err := os.OpenFile(
+		destPath,
+		os.O_WRONLY | os.O_TRUNC | os.O_CREATE,
+		0666,
+	)
+	if err != nil {
+		color.Set(color.FgRed)
+		fmt.Println("Error occurred while opening", _UPDATE_DESCRIPTOR_FILE_NAME, ":", err)
+		color.Unset()
+		os.Exit(1)
+	}
+	defer file.Close()
+
+	// Write bytes to file
+	byteSlice := []byte(updatedData)
+	bytesWritten, err := file.Write(byteSlice)
+	if err != nil {
+		color.Set(color.FgRed)
+		fmt.Println("Error occurred while updating", _UPDATE_DESCRIPTOR_FILE_NAME, ":", err)
+		color.Unset()
+		os.Exit(1)
+	}
+	log.Printf("Wrote %d bytes.\n", bytesWritten)
+	fmt.Println(log.Flags())
 }
 
 //This method copies resource files to the
@@ -928,7 +978,14 @@ func compareDir(pathInPatch, pathInDist, patchLoc, distLoc string) {
 			fmt.Println("[WARNING] '" + strings.Replace(strings.TrimPrefix(path, string(os.PathSeparator)), "\\", "/", -1) + "' not found in '" +
 			strings.TrimPrefix(pathInDist + string(os.PathSeparator), distLoc) + "'")
 			tempDistFilePath := strings.TrimPrefix(pathInDist, distLoc)
-			fmt.Println("If this is a new file, add '" + strings.Replace(tempDistFilePath + path, "\\", "/", -1) + "' to 'added_files' " + "section in '" + _UPDATE_DESCRIPTOR_FILE_NAME + "'\n")
+
+			tempPath := strings.Replace(tempDistFilePath + path, "\\", "/", -1)
+
+			descriptor.File_changes.Added_files = append(descriptor.File_changes.Added_files, tempPath)
+
+			fmt.Println("'" + tempPath + "' path was added " +
+			"to 'added_files' " + "section in '" + _UPDATE_DESCRIPTOR_FILE_NAME + "'\n")
+
 			color.Unset()
 		}
 	}

@@ -41,20 +41,14 @@ func Validate(updateLocation, distributionLocation string, debugLogsEnabled, tra
 	//Update location should be a zip file
 	logger.Debug("Update Loc: %s", updateLocation)
 	if !isAZipFile(updateLocation) {
-		color.Set(color.FgRed)
-		fmt.Println("[FAILURE]: Update file should be a zip file.")
-		color.Unset()
-		os.Exit(1)
+		printFailureAndExit("Update file should be a zip file.")
 	}
 	//Check whether the update location exists
-	updateLocationExists := checkFile(updateLocation)
+	updateLocationExists := fileExists(updateLocation)
 	if updateLocationExists {
 		logger.Debug("Update location exists.")
 	} else {
-		color.Set(color.FgRed)
-		fmt.Println("[FAILURE]: Update location does not exist. Enter a valid file location.")
-		color.Unset()
-		os.Exit(1)
+		printFailureAndExit("Update location does not exist. Enter a valid file location.")
 	}
 
 	logger.Debug("Reading update zip...")
@@ -66,27 +60,21 @@ func Validate(updateLocation, distributionLocation string, debugLogsEnabled, tra
 	//Check whether the distribution is a zip or a directory
 	if isAZipFile(distributionLocation) {
 		//Check whether the distribution zip exists
-		zipFileExists := checkFile(distributionLocation)
+		zipFileExists := fileExists(distributionLocation)
 		if zipFileExists {
 			logger.Debug("Distribution location exists.")
 			readDistZip(distributionLocation, debugLogsEnabled || traceLogsEnabled)
 		} else {
-			color.Set(color.FgRed)
-			fmt.Println("[FAILURE]: Distribution zip does not exist. Enter a valid location.")
-			color.Unset()
-			os.Exit(1)
+			printFailureAndExit("Distribution zip does not exist. Enter a valid location.")
 		}
 	} else {
 		//Check whether the distribution location exists
-		distributionLocationExists := checkDir(distributionLocation)
+		distributionLocationExists := directoryExists(distributionLocation)
 		if distributionLocationExists {
 			logger.Debug("Distribution location exists.")
 			readDistDir(distributionLocation, debugLogsEnabled || traceLogsEnabled)
 		} else {
-			color.Set(color.FgRed)
-			fmt.Println("[FAILURE]: Distribution location does not exist. Enter a valid location.")
-			color.Unset()
-			os.Exit(1)
+			printFailureAndExit("Distribution location does not exist. Enter a valid location.")
 		}
 	}
 	//Validate files
@@ -131,10 +119,8 @@ func validate() {
 				logger.Trace("%s not found in addedFilesMap", updateLoc)
 				logger.Trace("addedFilesMap: %s", addedFilesMap)
 				color.Set(color.FgRed)
-				fmt.Println("[FAILURE]:", updateLoc, "not found in distribution and it is not a " +
-				"newly added file.")
-				fmt.Println("If it is a new file, please add an entry in", _UPDATE_DESCRIPTOR_FILE_NAME,
-					"file.")
+				printFailureAndExit(updateLoc, "not found in distribution and it is not a newly added file.")
+				fmt.Println("If it is a new file, please add an entry in", _UPDATE_DESCRIPTOR_FILE_NAME, "file.")
 				printValidationFailureMessage()
 				color.Unset()
 				os.Exit(1)
@@ -158,10 +144,7 @@ func readUpdateZip(zipLocation string, loggersEnabled bool) {
 
 	//Check whether the update name has the required prefix
 	if !strings.HasPrefix(updateName, _UPDATE_NAME_PREFIX) {
-		color.Set(color.FgRed)
-		fmt.Println("[FAILURE] Update file does not have", _UPDATE_NAME_PREFIX, "prefix")
-		color.Unset()
-		os.Exit(1)
+		printFailureAndExit("Update file does not have", _UPDATE_NAME_PREFIX, "prefix")
 	} else {
 		logger.Debug("Update file does have %s prefix", _UPDATE_NAME_PREFIX)
 	}
@@ -169,10 +152,7 @@ func readUpdateZip(zipLocation string, loggersEnabled bool) {
 	// Create a reader out of the zip archive
 	zipReader, err := zip.OpenReader(zipLocation)
 	if err != nil {
-		color.Set(color.FgRed)
-		fmt.Println("[FAILURE] Error occurred while reading zip: %s", err)
-		color.Unset()
-		os.Exit(1)
+		printFailureAndExit("Error occurred while reading zip: %s", err)
 	}
 	defer zipReader.Close()
 
@@ -199,19 +179,12 @@ func readUpdateZip(zipLocation string, loggersEnabled bool) {
 		index := strings.Index(file.Name, "/")//string(os.PathSeparator) removed because it does not work
 		// properly in windows
 		if index == -1 {
-			color.Set(color.FgRed)
-			fmt.Println("[FAILURE] Update zip file should have a root folder called", updateName)
-			color.Unset()
-			os.Exit(1)
+			printFailureAndExit("Update zip file should have a root folder called", updateName)
 		} else {
 			rootFolder := file.Name[:index]
 			logger.Trace("RootFolder: %s", rootFolder)
 			if rootFolder != updateName {
-				color.Set(color.FgRed)
-				fmt.Println("[FAILURE]", file.Name, "should be in", updateName, "root directory. But " +
-				"it is in ", rootFolder, "directory.")
-				color.Unset()
-				os.Exit(1)
+				printFailureAndExit(file.Name, "should be in", updateName, "root directory. But it is in ", rootFolder, "directory.")
 			}
 		}
 		//Check whether the file is a resource file
@@ -221,12 +194,8 @@ func readUpdateZip(zipLocation string, loggersEnabled bool) {
 			//It should be in a carbon.home folder
 			containsCarbonHome := strings.Contains(file.Name, _CARBON_HOME)
 			if (!containsCarbonHome) {
-				color.Set(color.FgRed)
 				//string(os.PathSeparator) removed because it does not work properly in windows
-				fmt.Println("[FAILURE] '" + file.Name + "' is not a known resource file. " +
-				"It should be in '" + updateName + "/" + _CARBON_HOME + "/" + "' folder")
-				color.Unset()
-				os.Exit(1)
+				printFailureAndExit("'" + file.Name + "' is not a known resource file. It should be in '" + updateName + "/" + _CARBON_HOME + "/" + "' folder")
 			}
 			logger.Debug("Have a %s folder.", _CARBON_HOME)
 			//string(os.PathSeparator) removed because it does not work properly in windows
@@ -245,10 +214,7 @@ func readUpdateZip(zipLocation string, loggersEnabled bool) {
 				//Open the file
 				yamlFile, err := file.Open()
 				if err != nil {
-					color.Set(color.FgRed)
-					fmt.Println("[FAILURE] Error occurred while reading the", _UPDATE_DESCRIPTOR_FILE_NAME, "file:",
-						err)
-					color.Unset()
+					printFailureAndExit("Error occurred while reading the", _UPDATE_DESCRIPTOR_FILE_NAME, "file:", err)
 				}
 				//Get the byte array
 				data, err := ioutil.ReadAll(yamlFile)
@@ -262,9 +228,7 @@ func readUpdateZip(zipLocation string, loggersEnabled bool) {
 				//Get the values
 				err = yaml.Unmarshal(data, &descriptor)
 				if err != nil {
-					color.Set(color.FgRed)
-					fmt.Println("[FAILURE] Error occurred while unmarshalling the yaml:", err)
-					color.Unset()
+					printFailureAndExit("Error occurred while unmarshalling the yaml:", err)
 				}
 				logger.Debug("descriptor:", descriptor)
 				//Add all files to addedFilesMap
@@ -309,13 +273,10 @@ func readUpdateZip(zipLocation string, loggersEnabled bool) {
 	// that some required files are missing
 	if (len(allResFiles) != 0) {
 		//Print the missing files
-		color.Set(color.FgRed)
-		fmt.Println("[FAILURE] Following resource file(s) were not found in the update zip: ")
+		printFailureAndExit("Following resource file(s) were not found in the update zip: ")
 		for key, _ := range allResFiles {
 			fmt.Println("\t", "-", key)
 		}
-		color.Unset()
-		os.Exit(1)
 	}
 
 	//Check whether all files are read
@@ -324,10 +285,7 @@ func readUpdateZip(zipLocation string, loggersEnabled bool) {
 	if totalFiles == fileCount {
 		logger.Debug("All files read")
 	} else {
-		color.Set(color.FgRed)
-		fmt.Println("[FAILURE] All files not read from zip file")
-		color.Unset()
-		os.Exit(1)
+		printFailureAndExit("All files not read from zip file")
 	}
 }
 
@@ -344,10 +302,7 @@ func readDistZip(zipLocation string, loggersEnabled bool) {
 	// Create a reader out of the zip archive
 	zipReader, err := zip.OpenReader(zipLocation)
 	if err != nil {
-		color.Set(color.FgRed)
-		fmt.Println("[FAILURE] Error occurred while reading zip:", err)
-		color.Unset()
-		os.Exit(1)
+		printFailureAndExit("Error occurred while reading zip:", err)
 	}
 	defer zipReader.Close()
 
@@ -386,10 +341,7 @@ func readDistZip(zipLocation string, loggersEnabled bool) {
 	if totalFiles == fileCount {
 		logger.Debug("All files read.")
 	} else {
-		color.Set(color.FgRed)
-		fmt.Println("[FAILURE] All files not read from zip file.")
-		color.Unset()
-		os.Exit(1)
+		printFailureAndExit("All files not read from zip file.")
 	}
 }
 
@@ -415,10 +367,7 @@ func readDistDir(distributionLocation string, loggersEnabled bool) {
 		return nil
 	})
 	if err != nil {
-		color.Set(color.FgRed)
-		fmt.Println("[FAILURE] Error occurred while reading the zip file: ", err)
-		os.Exit(1)
-		color.Unset()
+		printFailureAndExit("Error occurred while reading the zip file: ", err)
 	}
 	logger.Debug("Total files read: %s", fileCount)
 	//stop the writer

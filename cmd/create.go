@@ -20,9 +20,10 @@ import (
 	"path"
 	"github.com/ian-kent/go-log/log"
 	"github.com/ian-kent/go-log/levels"
+	"github.com/ian-kent/go-log/layout"
 )
 
-//struct to store location(s) in the distribution for a given file/directory
+//struct to store matching location(s) in the distribution for a given file/directory
 type entry struct {
 	locationMap map[string]bool
 }
@@ -54,14 +55,14 @@ const (
 	_INSTRUCTIONS_FILE_NAME = "instructions.txt"
 	_UPDATE_DESCRIPTOR_FILE_NAME = "update-descriptor.yaml"
 
-	//Resource directory which contains README,LICENCE and NOT_A_CONTRIBUTION files
+	//Resource directory which contains README.txt, LICENCE.txt and NOT_A_CONTRIBUTION.txt files
 	_RESOURCE_DIR = ".." + string(os.PathSeparator) + "res"
 	//Temporary directory to copy files before creating the new zip
 	_TEMP_DIR_NAME = "temp"
 	//This is used to store carbon.home string
 	_CARBON_HOME = "carbon.home"
-	//Temporary directory location including carbon.home. All patched files will be copied to this location
-	_TEMP_DIR_LOCATION = _TEMP_DIR_NAME + string(os.PathSeparator) + _CARBON_HOME
+	//Temporary directory location including carbon.home. All updated files will be copied to this location
+	_UPDATE_DIR_ROOT = _TEMP_DIR_NAME + string(os.PathSeparator) + _CARBON_HOME
 	//Prefix of the update file and the root folder of the update zip
 	_UPDATE_NAME_PREFIX = "WSO2-CARBON-UPDATE"
 	//Prefix of the JIRA urls. This is used to generate README
@@ -70,15 +71,15 @@ const (
 
 var (
 	//This contains the mandatory resource files that needs to be copied to the update zip
-	_RESOURCE_FILES = []string{_LICENSE_FILE_NAME}
+	_RESOURCE_FILES = []string{_UPDATE_DESCRIPTOR_FILE_NAME, _LICENSE_FILE_NAME}
 
 	//These are used to store file/directory locations to later find matches. Keys of the map are file/directory
 	// names and the value will be a entry which contain a slice which has locations of that file
-	patchEntries map[string]entry
-	distEntries map[string]entry
+	updateEntriesMap map[string]entry
+	distEntriesMap map[string]entry
 
 	//This is used to read the update-descriptor.yaml file
-	descriptor update_descriptor
+	updateDescriptor update_descriptor
 
 	//This holds the kernel version. This will be read from the update-descriptor.yaml
 	_KERNEL_VERSION string
@@ -92,111 +93,99 @@ var (
 	logger = log.Logger()
 )
 
-//Main entry point to create the new patch
-func Create(patchLocation, distributionLocation string, debugLogsEnabled, traceLogsEnabled bool) {
+//Main entry point to create the new update
+func Create(updateLocation, distributionLocation string, debugLogsEnabled, traceLogsEnabled bool) {
+	//Setting default time format. This will be used in loggers. Otherwise complete data, time will be printed
+	layout.DefaultTimeLayout = "15:04:05"
+	//Setting new layout for STDOUT
+	logger.Appender().SetLayout(layout.Pattern("[%d] [%p] %m"))
 	//Set the log level. If the log level is not given, set the log level to WARN
-	if (debugLogsEnabled) {
+	if debugLogsEnabled {
 		logger.SetLevel(levels.DEBUG)
-		logger.Debug("Logs enabled")
-	} else if (traceLogsEnabled) {
+		logger.Debug("Debug logs enabled")
+	} else if traceLogsEnabled {
 		logger.SetLevel(levels.TRACE)
-		logger.Debug("Logs enabled")
+		logger.Trace("Trace logs enabled")
 	} else {
 		logger.SetLevel(levels.WARN)
 	}
 	logger.Debug("create command called")
 
 	//Initialize maps
-	patchEntries = make(map[string]entry)
-	distEntries = make(map[string]entry)
+	updateEntriesMap = make(map[string]entry)
+	distEntriesMap = make(map[string]entry)
 
-	//Check whether the given patch location exists. It should be a directory.
-	patchLocationExists := checkDir(patchLocation)
-	if patchLocationExists {
-		logger.Debug("Patch location exists.")
-	} else {
-		color.Set(color.FgRed)
-		fmt.Println("[FAILURE] Patch location does not exist. Enter a valid directory.")
-		color.Unset()
-		os.Exit(1)
+	//Check whether the given update location exists. It should be a directory.
+	updateLocationExists := directoryExists(updateLocation)
+	if !updateLocationExists {
+		printFailureAndExit("Update location does not exist. Enter a valid directory.")
 	}
-	//Check whether the given distribution is a zip file.
-	if (isAZipFile(distributionLocation)) {
-		//Check whether the given distribution zip exists.
-		zipFileExists := checkFile(distributionLocation)
-		if zipFileExists {
-			logger.Debug("Distribution location exists.")
-			unzipAndReadDistribution(distributionLocation, debugLogsEnabled)
-
-			//Delete the extracted distribution directory
-			defer os.RemoveAll(strings.TrimSuffix(distributionLocation, ".zip"))
-		} else {
-			color.Set(color.FgRed)
-			fmt.Println("[FAILURE] Distribution zip does not exist. Enter a valid location.")
-			color.Unset()
-			os.Exit(1)
-		}
-	} else {
-		//If the distribution is not a zip file, we need to read the files from the distribution directory
-
-		//Check whether the given distribution directory exists.
-		distributionLocationExists := checkDir(distributionLocation)
-		if distributionLocationExists {
-			logger.Debug("Distribution location exists.")
-			//Traverse and read the distribution
-			logger.Debug("Traversing distribution location")
-			traverse(distributionLocation, distEntries, true)
-			logger.Debug("Traversing distribution location finished")
-		} else {
-			color.Set(color.FgRed)
-			fmt.Println("[FAILURE] Distribution location does not exist. Enter a valid location.")
-			color.Unset()
-			os.Exit(1)
-		}
-	}
+	logger.Debug("Update location exists.")
 
 	logger.Debug("Distribution Loc: %s", distributionLocation)
-
-	//This will have the update-descriptor.yaml file location
-	descriptorLocation := path.Join(patchLocation, _UPDATE_DESCRIPTOR_FILE_NAME)
-	logger.Debug("Descriptor Location: %s", descriptorLocation)
-
-	//Check whether the update-descriptor.yaml file exists
-	descriptorExists := checkFile(descriptorLocation);
-	logger.Debug("Descriptor Exists: %s", descriptorExists)
-	if descriptorExists {
-		readDescriptor(descriptorLocation)
+	//Check whether the given distribution is a zip file.
+	if isAZipFile(distributionLocation) {
+		//Check whether the given distribution zip exists.
+		distributionZipExists := fileExists(distributionLocation)
+		if !distributionZipExists {
+			printFailureAndExit("Distribution zip does not exist. Enter a valid location.")
+		}
+		logger.Debug("Distribution location exists.")
+		unzipAndReadDistribution(distributionLocation, debugLogsEnabled)
+		//Delete the extracted distribution directory after method finishes
+		defer os.RemoveAll(strings.TrimSuffix(distributionLocation, ".zip"))
 	} else {
-		//readPatchInfo()
-		color.Set(color.FgRed)
-		fmt.Println("[FAILURE]", _UPDATE_DESCRIPTOR_FILE_NAME + " not found at " + descriptorLocation)
-		color.Unset()
-		os.Exit(1)
+		//If the distribution is not a zip file, we need to read the files from the distribution directory. So
+		//check whether the given distribution directory exists.
+		distributionLocationExists := directoryExists(distributionLocation)
+		if !distributionLocationExists {
+			printFailureAndExit("Distribution location does not exist. Enter a valid location.")
+		}
+		logger.Debug("Distribution location exists.")
+		//Traverse and read the distribution
+		logger.Debug("Traversing distribution location")
+		traverse(distributionLocation, distEntriesMap, true)
+		logger.Debug("Traversing distribution location finished")
 	}
 
-	//Traverse and read the patch
-	logger.Debug("Traversing patch location")
-	traverse(patchLocation, patchEntries, false)
-	logger.Debug("Traversing patch location finished")
-	logger.Debug("Patch Entries: ", patchEntries)
+	//This will have the update-descriptor.yaml file location
+	updateDescriptorLocation := path.Join(updateLocation, _UPDATE_DESCRIPTOR_FILE_NAME)
+	logger.Debug("Descriptor Location: %s", updateDescriptorLocation)
+
+	//Check whether the update-descriptor.yaml file exists
+	updateDescriptorExists := fileExists(updateDescriptorLocation);
+	logger.Debug("Descriptor Exists: %s", updateDescriptorExists)
+
+	if !updateDescriptorExists {
+		printFailureAndExit(_UPDATE_DESCRIPTOR_FILE_NAME + " not found at " + updateDescriptorLocation)
+	}
+	//Read the update-descriptor
+	readDescriptor(updateDescriptorLocation)
+
+	//Traverse and read the update
+	logger.Debug("Traversing update location")
+	traverse(updateLocation, updateEntriesMap, false)
+	logger.Debug("Traversing update location finished")
+	logger.Debug("Update Entries: ", updateEntriesMap)
 
 	//Find matches
-	if (isAZipFile(distributionLocation)) {
+	if isAZipFile(distributionLocation) {
 		logger.Debug("Finding matches")
-		findMatches(patchLocation, strings.TrimSuffix(distributionLocation, ".zip"))
+		findMatches(updateLocation, strings.TrimSuffix(distributionLocation, ".zip"))
 		logger.Debug("Finding matches finished")
 	} else {
 		logger.Debug("Finding matches")
-		findMatches(patchLocation, distributionLocation)
+		findMatches(updateLocation, distributionLocation)
 		logger.Debug("Finding matches finished")
 	}
 
 	//Copy resource files to the temp location
 	logger.Debug("Copying resource files")
-	copyResourceFiles(patchLocation)
+	copyResourceFiles(updateLocation)
 	logger.Debug("Copying resource files finished")
 
-	updateYAML()
+	//Update the update-descriptor with the newly added files
+	updateDescriptor()
 
 	//Create the update zip file
 	logger.Debug("Creating zip file")
@@ -208,83 +197,59 @@ func Create(patchLocation, distributionLocation string, debugLogsEnabled, traceL
 func readDescriptor(path string) {
 	yamlFile, err := ioutil.ReadFile(path)
 	if err != nil {
-		color.Set(color.FgRed)
-		fmt.Println("[FAILURE] Error occurred while reading the descriptor: ", err)
-		color.Unset()
+		printFailureAndExit("Error occurred while reading the descriptor: ", err)
 	}
-	descriptor = update_descriptor{}
+	updateDescriptor = update_descriptor{}
 
-	err = yaml.Unmarshal(yamlFile, &descriptor)
+	//Unmarshal the update-descriptor file to updateDescriptor struct
+	err = yaml.Unmarshal(yamlFile, &updateDescriptor)
 	if err != nil {
-		color.Set(color.FgRed)
-		fmt.Println("[FAILURE] Error occurred while unmarshalling the yaml:", err)
-		color.Unset()
+		printFailureAndExit("Error occurred while unmarshalling the yaml:", err)
 	}
 
 	logger.Debug("----------------------------------------------------------------")
-	logger.Debug("update_number: %s", descriptor.Update_number)
-	logger.Debug("kernel_version: %s", descriptor.Kernel_version)
-	logger.Debug("platform_version: %s", descriptor.Platform_version)
-	logger.Debug("applies_to: %s", descriptor.Applies_to)
-	logger.Debug("bug_fixes: %s", descriptor.Bug_fixes)
-	logger.Debug("file_changes: %s", descriptor.File_changes)
-	logger.Debug("description: %s", descriptor.Description)
+	logger.Debug("update_number: %s", updateDescriptor.Update_number)
+	logger.Debug("kernel_version: %s", updateDescriptor.Kernel_version)
+	logger.Debug("platform_version: %s", updateDescriptor.Platform_version)
+	logger.Debug("applies_to: %s", updateDescriptor.Applies_to)
+	logger.Debug("bug_fixes: %s", updateDescriptor.Bug_fixes)
+	logger.Debug("file_changes: %s", updateDescriptor.File_changes)
+	logger.Debug("description: %s", updateDescriptor.Description)
 	logger.Debug("----------------------------------------------------------------")
 
-	if len(descriptor.Update_number) == 0 {
-		color.Set(color.FgRed)
-		fmt.Println("[FAILURE] 'update_number' field not found in ", _UPDATE_DESCRIPTOR_FILE_NAME)
-		color.Unset()
-		os.Exit(1)
+	if len(updateDescriptor.Update_number) == 0 {
+		printFailureAndExit("'update_number' field not found in ", _UPDATE_DESCRIPTOR_FILE_NAME)
 	}
-	if len(descriptor.Kernel_version) == 0 {
-		color.Set(color.FgRed)
-		fmt.Println("[FAILURE] 'kernel_version' field not found in ", _UPDATE_DESCRIPTOR_FILE_NAME)
-		color.Unset()
-		os.Exit(1)
+	if len(updateDescriptor.Kernel_version) == 0 {
+		printFailureAndExit("'kernel_version' field not found in ", _UPDATE_DESCRIPTOR_FILE_NAME)
 	}
-	if len(descriptor.Platform_version) == 0 {
-		color.Set(color.FgRed)
-		fmt.Println("[FAILURE] 'platform_version' field not found in ", _UPDATE_DESCRIPTOR_FILE_NAME)
-		color.Unset()
-		os.Exit(1)
+	if len(updateDescriptor.Platform_version) == 0 {
+		printFailureAndExit("'platform_version' field not found in ", _UPDATE_DESCRIPTOR_FILE_NAME)
 	}
-	if len(descriptor.Applies_to) == 0 {
-		color.Set(color.FgRed)
-		fmt.Println("[FAILURE] 'applies_to' field not found in ", _UPDATE_DESCRIPTOR_FILE_NAME)
-		color.Unset()
-		os.Exit(1)
+	if len(updateDescriptor.Applies_to) == 0 {
+		printFailureAndExit("'applies_to' field not found in ", _UPDATE_DESCRIPTOR_FILE_NAME)
 	}
-	if len(descriptor.Bug_fixes) == 0 {
-		color.Set(color.FgRed)
-		fmt.Println("[FAILURE] 'bug_fixes' field not found in ", _UPDATE_DESCRIPTOR_FILE_NAME)
-		color.Unset()
-		os.Exit(1)
+	if len(updateDescriptor.Bug_fixes) == 0 {
+		printFailureAndExit("'bug_fixes' field not found in ", _UPDATE_DESCRIPTOR_FILE_NAME)
 	}
-	if len(descriptor.Description) == 0 {
-		color.Set(color.FgRed)
-		fmt.Println("[FAILURE] 'description' field not found in ", _UPDATE_DESCRIPTOR_FILE_NAME)
-		color.Unset()
-		os.Exit(1)
+	if len(updateDescriptor.Description) == 0 {
+		printFailureAndExit("'description' field not found in ", _UPDATE_DESCRIPTOR_FILE_NAME)
 	}
 
-	_KERNEL_VERSION = descriptor.Kernel_version
+	_KERNEL_VERSION = updateDescriptor.Kernel_version
 	logger.Debug("kernel version set to: %s", _KERNEL_VERSION)
 
-	_UPDATE_NUMBER = descriptor.Update_number
+	_UPDATE_NUMBER = updateDescriptor.Update_number
 	logger.Debug("patch number set to: %s", _UPDATE_NUMBER)
 
 	_UPDATE_NAME = _UPDATE_NAME_PREFIX + "-" + _KERNEL_VERSION + "-" + _UPDATE_NUMBER
 	logger.Debug("Patch Name: %s", _UPDATE_NAME)
 }
 
-func updateYAML() {
-	data, err := yaml.Marshal(&descriptor)
+func updateDescriptor() {
+	data, err := yaml.Marshal(&updateDescriptor)
 	if err != nil {
-		color.Set(color.FgRed)
-		fmt.Println("Error occurred while matshalling the descriptor:", err)
-		color.Unset()
-		os.Exit(1)
+		printFailureAndExit("Error occurred while matshalling the descriptor:", err)
 	}
 	logger.Debug("update-descriptor:\n%s\n\n", string(data))
 
@@ -305,10 +270,7 @@ func updateYAML() {
 		0666,
 	)
 	if err != nil {
-		color.Set(color.FgRed)
-		fmt.Println("Error occurred while opening", _UPDATE_DESCRIPTOR_FILE_NAME, ":", err)
-		color.Unset()
-		os.Exit(1)
+		printFailureAndExit("Error occurred while opening", _UPDATE_DESCRIPTOR_FILE_NAME, ":", err)
 	}
 	defer file.Close()
 
@@ -316,98 +278,47 @@ func updateYAML() {
 	byteSlice := []byte(updatedData)
 	bytesWritten, err := file.Write(byteSlice)
 	if err != nil {
-		color.Set(color.FgRed)
-		fmt.Println("Error occurred while updating", _UPDATE_DESCRIPTOR_FILE_NAME, ":", err)
-		color.Unset()
-		os.Exit(1)
+		printFailureAndExit("Error occurred while updating", _UPDATE_DESCRIPTOR_FILE_NAME, ":", err)
 	}
 	logger.Trace("Wrote %d bytes.\n", bytesWritten)
 }
 
 //This method copies resource files to the
 func copyResourceFiles(patchLocation string) {
+	//Copy all mandatory resource files
 	for _, resourceFile := range _RESOURCE_FILES {
 		filePath := path.Join(_RESOURCE_DIR, resourceFile)
-		ok := checkFile(filePath)
+		ok := fileExists(filePath)
 		if !ok {
-			color.Set(color.FgRed)
-			fmt.Println("[FAILURE] Resource: ", filePath, " not found")
-			color.Unset()
-			os.Exit(1)
-		} else {
-			logger.Debug("Copying resource: %s to %s", filePath, _TEMP_DIR_NAME)
-			tempPath := path.Join(_TEMP_DIR_NAME, resourceFile)
-			err := CopyFile(filePath, tempPath)
-			if (err != nil) {
-				color.Set(color.FgRed)
-				fmt.Println("[FAILURE] Error occurred while copying the resource file: ", filePath, err)
-				color.Unset()
-			}
+			printFailureAndExit("Resource: ", filePath, " not found")
 		}
-	}
-
-	filePath := path.Join(patchLocation, _UPDATE_DESCRIPTOR_FILE_NAME)
-	ok := checkFile(filePath)
-	if !ok {
-		color.Set(color.FgRed)
-		fmt.Println("[FAILURE] Resource: ", filePath, " not found")
-		color.Unset()
-		os.Exit(1)
-	} else {
 		logger.Debug("Copying resource: %s to %s", filePath, _TEMP_DIR_NAME)
-		tempPath := path.Join(_TEMP_DIR_NAME, _UPDATE_DESCRIPTOR_FILE_NAME)
+		tempPath := path.Join(_TEMP_DIR_NAME, resourceFile)
 		err := CopyFile(filePath, tempPath)
 		if (err != nil) {
-			color.Set(color.FgRed)
-			fmt.Println("Error occurred while copying the resource file: ", filePath, err)
-			color.Unset()
+			printFailureAndExit("Error occurred while copying the resource file: ", filePath, err)
 		}
 	}
 
-	filePath = path.Join(patchLocation, _README_FILE_NAME)
-	ok = checkFile(filePath)
+	//This file is optional
+	filePath := path.Join(patchLocation, _NOT_A_CONTRIBUTION_FILE_NAME)
+	ok := fileExists(filePath)
 	if !ok {
-		color.Set(color.FgRed)
-		fmt.Println("[FAILURE] Readme: ", filePath, " not found")
-		color.Unset()
-		os.Exit(1)
-	} else {
-		logger.Debug("Copying readme: %s to %s", filePath, _TEMP_DIR_NAME)
-		tempPath := path.Join(_TEMP_DIR_NAME, _README_FILE_NAME)
-		err := CopyFile(filePath, tempPath)
-		if (err != nil) {
-			color.Set(color.FgRed)
-			fmt.Println("Error occurred while copying the resource file: ", filePath, err)
-			color.Unset()
-		}
-	}
-
-	filePath = path.Join(patchLocation, _NOT_A_CONTRIBUTION_FILE_NAME)
-	ok = checkFile(filePath)
-	if !ok {
-		color.Set(color.FgYellow)
-		fmt.Println("\n[WARNING]", _NOT_A_CONTRIBUTION_FILE_NAME, "not found in the patch directory. Make " +
-		"sure that the Apache License is in", _LICENSE_FILE_NAME, "file.\n")
-		color.Unset()
+		printWarning(_NOT_A_CONTRIBUTION_FILE_NAME, "not found in the patch directory. Make sure that the Apache License is in", _LICENSE_FILE_NAME, "file.\n")
 	} else {
 		logger.Debug("Copying NOT_A_CONTRIBUTION: %s to %s", filePath, _TEMP_DIR_NAME)
 		tempPath := path.Join(_TEMP_DIR_NAME, _README_FILE_NAME)
 		err := CopyFile(filePath, tempPath)
 		if (err != nil) {
-			color.Set(color.FgRed)
-			fmt.Println("Error occurred while copying the resource file: ", filePath, err)
-			color.Unset()
+			printFailureAndExit("Error occurred while copying the resource file: ", filePath, err)
 		}
 	}
 
+	//This file is optional
 	filePath = path.Join(patchLocation, _INSTRUCTIONS_FILE_NAME)
-	ok = checkFile(filePath)
+	ok = fileExists(filePath)
 	if !ok {
-		color.Set(color.FgYellow)
-		fmt.Print("[WARNING] ", _INSTRUCTIONS_FILE_NAME, " file not found. Do you want to add an " +
-		"'instructions.txt' file?[Y/N]: ")
-		color.Unset()
-
+		printWarning(_INSTRUCTIONS_FILE_NAME, " file not found. Do you want to add an 'instructions.txt' file?[Y/N]: ")
 		for {
 			reader := bufio.NewReader(os.Stdin)
 			preference, _ := reader.ReadString('\n')
@@ -416,10 +327,8 @@ func copyResourceFiles(patchLocation string) {
 				"directory and run the tool again.")
 				os.Exit(0)
 			} else if preference[0] == 'n' || preference[0] == 'N' {
-				color.Set(color.FgYellow)
-				fmt.Println("[WARNING] Skipping creating '" + _INSTRUCTIONS_FILE_NAME + "' file")
-				color.Unset()
-				break;
+				printWarning("Skipping creating '" + _INSTRUCTIONS_FILE_NAME + "' file")
+				break
 			} else {
 				fmt.Println("Invalid preference. Enter Y for Yes or N for No.\n")
 				fmt.Print("Do you want to add an instructions.txt file?[Y/N]: ")
@@ -430,12 +339,25 @@ func copyResourceFiles(patchLocation string) {
 		tempPath := path.Join(_TEMP_DIR_NAME, _INSTRUCTIONS_FILE_NAME)
 		err := CopyFile(filePath, tempPath)
 		if (err != nil) {
-			color.Set(color.FgRed)
-			fmt.Println("[FAILURE] Error occurred while copying the resource file: ", filePath, err)
-			color.Unset()
+			printFailureAndExit("Error occurred while copying the resource file: ", filePath, err)
 		}
 	}
 	//generateReadMe()
+
+	//Copy README.txt. This might be removed in the future. That is why this was copied separately
+	filePath = path.Join(patchLocation, _README_FILE_NAME)
+	ok = fileExists(filePath)
+	if !ok {
+		printFailureAndExit("Resource: ", filePath, " not found")
+	} else {
+		logger.Debug("Copying readme: %s to %s", filePath, _TEMP_DIR_NAME)
+		tempPath := path.Join(_TEMP_DIR_NAME, _README_FILE_NAME)
+		err := CopyFile(filePath, tempPath)
+		if (err != nil) {
+			printFailureAndExit("Error occurred while copying the resource file: ", filePath, err)
+		}
+	}
+
 }
 
 //This is used to generate README from the update-descriptor.yaml
@@ -452,23 +374,17 @@ func generateReadMe() {
 	tempPath := path.Join(_RESOURCE_DIR, _README_FILE_NAME)
 	t, err := template.ParseFiles(tempPath)
 	if err != nil {
-		color.Set(color.FgRed)
-		fmt.Println("Error occurred while reading the", _README_FILE_NAME, "template file:", err)
-		color.Unset()
-		os.Exit(1)
+		printFailureAndExit("Error occurred while reading the", _README_FILE_NAME, "template file:", err)
 	}
 
 	tempPath = path.Join(_TEMP_DIR_NAME, _README_FILE_NAME)
 	f, err := os.Create(tempPath)
 	if err != nil {
-		color.Set(color.FgRed)
-		fmt.Println("Error occurred while creating", tempPath, "file:", err)
-		color.Unset()
-		os.Exit(1)
+		printFailureAndExit("Error occurred while creating", tempPath, "file:", err)
 	}
 
 	associatedJIRAs := ""
-	for key, _ := range descriptor.Bug_fixes {
+	for key, _ := range updateDescriptor.Bug_fixes {
 		associatedJIRAs += (_JIRA_URL_PREFIX + key + ", ")
 	}
 	associatedJIRAs = strings.TrimSuffix(associatedJIRAs, ", ")
@@ -476,16 +392,14 @@ func generateReadMe() {
 
 	data := readMeData{
 		Patch_id:_UPDATE_NAME,
-		Applies_to:descriptor.Applies_to,
+		Applies_to:updateDescriptor.Applies_to,
 		Associated_jira:associatedJIRAs,
-		Description:descriptor.Description,
+		Description:updateDescriptor.Description,
 	}
 
 	err = t.Execute(f, data) //merge template ‘t’ with content of ‘p’
 	if err != nil {
-		color.Set(color.FgRed)
-		fmt.Println("[FAILURE] Error occurred while processing the README template:", err)
-		os.Exit(1)
+		printFailureAndExit("Error occurred while processing the README template:", err)
 	}
 	//f.Close()
 	//err = t.Execute(os.Stdout, data) //merge template ‘t’ with content of ‘p’
@@ -493,11 +407,6 @@ func generateReadMe() {
 	//	fmt.Println(err)
 	//	os.Exit(1)
 	//}
-}
-
-//Check whether the given path contain a zip file
-func isAZipFile(path string) bool {
-	return strings.HasSuffix(path, ".zip")
 }
 
 //This is used to find matches of files/directories in the patch from distribution
@@ -512,40 +421,32 @@ func findMatches(patchLocation, distributionLocation string) {
 	err := os.RemoveAll(_TEMP_DIR_NAME)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			color.Set(color.FgRed)
-			fmt.Println("[FAILURE] Error occurred while deleting temp directory:", err)
-			color.Unset()
-			os.Exit(1)
+			printFailureAndExit("Error occurred while deleting temp directory:", err)
 		}
 	}
 
 	//Create temp directory
-	err = os.MkdirAll(_TEMP_DIR_LOCATION, 0777)
+	err = os.MkdirAll(_UPDATE_DIR_ROOT, 0777)
 	if err != nil {
-		color.Set(color.FgRed)
-		fmt.Println("[FAILURE] Error occurred while creating temp directory:", err)
-		color.Unset()
-		os.Exit(1)
+		printFailureAndExit("Error occurred while creating temp directory:", err)
 	}
 
 	rowCount := 0
 	//Find matches for each entry in the patchEntries map
-	for patchEntryName, patchEntry := range patchEntries {
+	for patchEntryName, patchEntry := range updateEntriesMap {
 		//Find a match in distEntries
-		distEntry, ok := distEntries[patchEntryName]
+		distEntry, ok := distEntriesMap[patchEntryName]
 		//If there is a match
 		if ok {
 			logger.Trace("Match found for: %s", patchEntryName)
 			logger.Trace("Location(s) in Dist: %s", distEntry)
 			//Get the distribution path. This is later used for trimming
-			distPath := getDistPath(distributionLocation)
+			distPath := getDistributionPath(distributionLocation)
 			logger.Trace("Dist Path used for trimming: %s", distPath)
 
 			//If there are more than 1 match, we need to ask preferred locations from the user
 			if len(distEntry.locationMap) > 1 {
-				color.Set(color.FgRed)
-				fmt.Println("\n'" + patchEntryName + "' was found in multiple locations in the distribution")
-				color.Unset()
+				printWarning("'" + patchEntryName + "' was found in multiple locations in the distribution")
 				//This is used to temporary store all the locations
 				locationMap := make(map[string]string)
 				//Create the temporary table
@@ -590,7 +491,7 @@ func findMatches(patchLocation, distributionLocation string) {
 					logger.Trace("Sorted indices: %s", selectedIndices)
 
 					if selectedIndices[0] == "0" {
-						fmt.Println("0 entered. Cancelling.....")
+						fmt.Println("0 entered. Cancelling the operation and exiting.....")
 						os.Exit(0)
 					} else {
 						//This is used
@@ -616,7 +517,7 @@ func findMatches(patchLocation, distributionLocation string) {
 								selectedPathsList = append(selectedPathsList, selectedPath)
 
 								src := path.Join(patchLocation, patchEntryName)
-								destPath := path.Join(_TEMP_DIR_LOCATION + tempFilePath)
+								destPath := path.Join(_UPDATE_DIR_ROOT + tempFilePath)
 								logger.Trace("destPath: %s", destPath)
 								dest := path.Join(destPath, patchEntryName)
 
@@ -624,17 +525,14 @@ func findMatches(patchLocation, distributionLocation string) {
 								logger.Trace("dest1: %s", dest)
 
 								//If source is a file
-								if checkFile(src) {
+								if fileExists(src) {
 									logger.Debug("Copying file: %s ; To: %s", src, dest)
 									//copy source file to destination
 									copyErr := CopyFile(src, dest)
 									if copyErr != nil {
-										color.Set(color.FgRed)
-										fmt.Println("[FAILURE] Error occurred while copying file:", copyErr)
-										color.Unset()
-										os.Exit(1)
+										printFailureAndExit("Error occurred while copying file:", copyErr)
 									}
-								} else if checkDir(src) {
+								} else if directoryExists(src) {
 									//Compare the directories to identify new files
 									tempPath := path.Join(selectedPath, patchEntryName)
 									compareDir(src, tempPath, patchLocation, distributionLocation)
@@ -644,18 +542,13 @@ func findMatches(patchLocation, distributionLocation string) {
 									//copy source directory to destination
 									copyErr := CopyDir(src, dest)
 									if copyErr != nil {
-										color.Set(color.FgRed)
-										fmt.Println("[FAILURE] Error occurred while copying " +
-										"directory:", copyErr)
-										color.Unset()
-										os.Exit(1)
+										printFailureAndExit("Error occurred while copying directory:", copyErr)
 									}
 								}
 							} else {
 								//If index is invalid
 								color.Set(color.FgRed)
-								fmt.Println("[FAILURE] One or more entered indices are invalid. " +
-								"Please enter again")
+								fmt.Println("One or more entered indices are invalid. Please enter again")
 								color.Unset()
 								isOK = false
 								break
@@ -714,7 +607,7 @@ func findMatches(patchLocation, distributionLocation string) {
 							logger.Trace("tempFilePath: %s", tempFilePath)
 							//Construct the source location
 							src := path.Join(pathInPatch, patchEntryName)
-							destPath := path.Join(_TEMP_DIR_LOCATION + tempFilePath)
+							destPath := path.Join(_UPDATE_DIR_ROOT + tempFilePath)
 							logger.Trace("destPath: %s", destPath)
 							//Construct the destination location
 							dest := path.Join(destPath, patchEntryName)
@@ -727,25 +620,18 @@ func findMatches(patchLocation, distributionLocation string) {
 							// by file
 							err := os.MkdirAll(destPath, 0777)
 							if err != nil {
-								color.Set(color.FgRed)
-								fmt.Println("[FAILURE] Error occurred while creating " +
-								"directory", err)
-								color.Unset()
-								os.Exit(1)
+								printFailureAndExit("Error occurred while creating directory", err)
 							}
 
 							//If source is a file
-							if checkFile(src) {
+							if fileExists(src) {
 								logger.Debug("Copying file: %s ; To: %s", src, dest)
 								//copy source file to destination
 								copyErr := CopyFile(src, dest)
 								if copyErr != nil {
-									color.Set(color.FgRed)
-									fmt.Println("[FAILURE] Error occurred while copying file:", copyErr)
-									color.Unset()
-									os.Exit(1)
+									printFailureAndExit("Error occurred while copying file:", copyErr)
 								}
-							} else if checkDir(src) {
+							} else if directoryExists(src) {
 
 								tempPath := path.Join(pathInDist, patchEntryName)
 								//Compare the directories to identify new files
@@ -756,18 +642,14 @@ func findMatches(patchLocation, distributionLocation string) {
 								//copy source directory to destination
 								copyErr := CopyDir(src, dest)
 								if copyErr != nil {
-									color.Set(color.FgRed)
-									fmt.Println("[FAILURE] Error occurred while copying " +
-									"directory:", copyErr)
-									color.Unset()
-									os.Exit(1)
+									printFailureAndExit("Error occurred while copying directory:", copyErr)
 								}
 							}
 						} else {
 							//If file types are different(if one is a file and one is a
 							// directory), show a warning message
+							printWarning("Following locations contain", patchEntryName, "but types are different")
 							color.Set(color.FgYellow)
-							fmt.Println("\n[WARNING] Following locations contain", patchEntryName, "but types are different")
 							fmt.Println(" - ", pathInDist)
 							fmt.Println(" - ", pathInPatch)
 							fmt.Println()
@@ -784,7 +666,7 @@ func findMatches(patchLocation, distributionLocation string) {
 		} else {
 			//If there is no match
 			color.Set(color.FgYellow)
-			fmt.Println("\n[WARNING] No match found for '" + patchEntryName + "'\n")
+			printWarning("No match found for '" + patchEntryName + "'")
 
 			fmt.Print("Do you want to add this as a new file/folder?[Y/N]: ")
 
@@ -807,7 +689,7 @@ func findMatches(patchLocation, distributionLocation string) {
 					copyPath = path.Join(distributionLocation, strings.TrimSpace(copyPath))
 					logger.Trace("copyPath2: %s", copyPath)
 
-					if !checkDir(copyPath) {
+					if !directoryExists(copyPath) {
 
 						for {
 							fmt.Print("Entered relative location does not exist in the " +
@@ -837,30 +719,26 @@ func findMatches(patchLocation, distributionLocation string) {
 					}
 
 					tempFilePath := strings.TrimPrefix(copyPath, distributionLocation)
-					destPath := path.Join(_TEMP_DIR_LOCATION, tempFilePath)
+					destPath := path.Join(_UPDATE_DIR_ROOT, tempFilePath)
 					logger.Debug("destPath: %s", destPath)
 					//Construct the destination location
 					dest := path.Join(destPath, patchEntryName)
 
 					err := os.MkdirAll(destPath, 0777)
 					if err != nil {
-						color.Set(color.FgRed)
-						fmt.Println("[FAILURE] Error occurred while creating " +
-						"directory", err)
-						color.Unset()
-						os.Exit(1)
+						printFailureAndExit("Error occurred while creating directory", err)
 					}
 
 					logger.Debug("Entered location is a directory. Copying ...")
 					fileLocation := filepath.Join(patchLocation, patchEntryName)
 					tempDistPath := path.Join(_CARBON_HOME, tempFilePath) + string(os.PathSeparator)
-					if checkFile(fileLocation) {
+					if fileExists(fileLocation) {
 						logger.Trace("File found: %s", fileLocation)
 						//copyPath = path.Join(copyPath, patchEntryName)
 						logger.Debug("Copying file: %s ; To: %s", fileLocation, dest)
 						CopyFile(fileLocation, dest)
 						overallViewTable.Append([]string{patchEntryName, tempDistPath})
-					} else if checkDir(fileLocation) {
+					} else if directoryExists(fileLocation) {
 						logger.Trace("dir found: %s", fileLocation)
 						//copyPath = path.Join(copyPath, patchEntryName)
 						logger.Debug("Copying file: %s", fileLocation, "; To:", dest)
@@ -883,12 +761,12 @@ func findMatches(patchLocation, distributionLocation string) {
 			color.Unset()
 		}
 		rowCount++
-		if rowCount < len(patchEntries) {
+		if rowCount < len(updateEntriesMap) {
 			//todo: add separator
 		}
 	}
 	//Print summary
-	fmt.Println("\n# Summary\n")
+	fmt.Println("# Summary\n")
 	overallViewTable.Render()
 }
 
@@ -908,10 +786,7 @@ func compareDir(pathInPatch, pathInDist, patchLoc, distLoc string) {
 	err := filepath.Walk(pathInPatch, func(path string, fileInfo os.FileInfo, err error) error {
 		logger.Trace("Walking: %s", path)
 		if err != nil {
-			color.Set(color.FgRed)
-			fmt.Println("[FAILURE] Error occurred while traversing pathInPatch: ", err)
-			color.Unset()
-			os.Exit(1)
+			printFailureAndExit("Error occurred while traversing pathInPatch: ", err)
 		}
 		//We only want to check files
 		if !fileInfo.IsDir() {
@@ -925,20 +800,14 @@ func compareDir(pathInPatch, pathInDist, patchLoc, distLoc string) {
 		return nil
 	})
 	if err != nil {
-		color.Set(color.FgRed)
-		fmt.Println("[FAILURE] Error occurred while traversing pathInPatch:", err)
-		color.Unset()
-		os.Exit(1)
+		printFailureAndExit("Error occurred while traversing pathInPatch:", err)
 	}
 
 	//Walk the directory in the distribution
 	err = filepath.Walk(pathInDist, func(path string, fileInfo os.FileInfo, err error) error {
 		logger.Trace("Walking: %s", path)
 		if err != nil {
-			color.Set(color.FgRed)
-			fmt.Println("[FAILURE] Error occurred while traversing pathInDist: ", err)
-			color.Unset()
-			os.Exit(1)
+			printFailureAndExit("Error occurred while traversing pathInDist: ", err)
 		}
 		//We only want to check files
 		if !fileInfo.IsDir() {
@@ -950,10 +819,7 @@ func compareDir(pathInPatch, pathInDist, patchLoc, distLoc string) {
 		return nil
 	})
 	if err != nil {
-		color.Set(color.FgRed)
-		fmt.Println("[FAILURE] Error occurred while traversing pathInDist:", err)
-		color.Unset()
-		os.Exit(1)
+		printFailureAndExit("Error occurred while traversing pathInDist:", err)
 	}
 
 	//Look for match for each file in patch location
@@ -965,148 +831,27 @@ func compareDir(pathInPatch, pathInDist, patchLoc, distLoc string) {
 			logger.Debug("'%s' found in the distribution.", path)
 		} else {
 			//If no match is found, show warning message and how to add it to the update -descriptor.yaml
-			color.Set(color.FgYellow)
-			fmt.Println("[WARNING] '" + strings.Replace(strings.TrimPrefix(path, string(os.PathSeparator)), "\\", "/", -1) + "' not found in '" +
+			printWarning("'" + strings.Replace(strings.TrimPrefix(path, string(os.PathSeparator)), "\\", "/", -1) + "' not found in '" +
 			strings.TrimPrefix(pathInDist + string(os.PathSeparator), distLoc) + "'")
 			tempDistFilePath := strings.TrimPrefix(pathInDist, distLoc)
 
 			tempPath := strings.Replace(tempDistFilePath + path, "\\", "/", -1)
 
-			descriptor.File_changes.Added_files = append(descriptor.File_changes.Added_files, tempPath)
+			updateDescriptor.File_changes.Added_files = append(updateDescriptor.File_changes.Added_files, tempPath)
 
-			fmt.Println("[INFO] '" + tempPath + "' path was added to 'added_files' " + "section in '" + _UPDATE_DESCRIPTOR_FILE_NAME + "'\n")
-
-			color.Unset()
+			printInfo("'" + tempPath + "' path was added to 'added_files' " + "section in '" + _UPDATE_DESCRIPTOR_FILE_NAME + "'\n")
 		}
 	}
 }
 
 //Get the path of the distribution location. This is used to trim the prefixes
-func getDistPath(distributionLoc string) string {
+func getDistributionPath(distributionLoc string) string {
 	index := strings.LastIndex(distributionLoc, string(os.PathSeparator))
 	if index != -1 {
 		return distributionLoc[:index]
 	} else {
 		return distributionLoc
 	}
-}
-
-//Check whether the given string is in the given slice
-func stringIsInSlice(a string, list []string) bool {
-	for _, b := range list {
-		if b == a {
-			return true
-		}
-	}
-	return false
-}
-
-// Copies file source to destination dest.
-func CopyFile(source string, dest string) (err error) {
-	sf, err := os.Open(source)
-	if err != nil {
-		return err
-	}
-	defer sf.Close()
-	df, err := os.Create(dest)
-	if err != nil {
-		return err
-	}
-	defer df.Close()
-	_, err = io.Copy(df, sf)
-	if err == nil {
-		si, err := os.Stat(source)
-		if err != nil {
-			err = os.Chmod(dest, si.Mode())
-			fmt.Println("Error occurred while copying:", err)
-			os.Exit(1)
-		}
-
-	}
-	return
-}
-
-//Recursively copies a directory tree, attempting to preserve permissions.
-//Source directory must exist, destination directory must *not* exist.
-func CopyDir(source string, dest string) (err error) {
-	// get properties of source dir
-	fi, err := os.Stat(source)
-	if err != nil {
-		return err
-	}
-	if !fi.IsDir() {
-		return &CustomError{"Source is not a directory"}
-	}
-	// ensure dest dir does not already exist
-	_, err = os.Open(dest)
-	if !os.IsNotExist(err) {
-		return &CustomError{"Destination already exists"}
-	}
-	// create dest dir
-	err = os.MkdirAll(dest, fi.Mode())
-	if err != nil {
-		return err
-	}
-	entries, err := ioutil.ReadDir(source)
-	for _, entry := range entries {
-		sfp := source + "/" + entry.Name()
-		dfp := dest + "/" + entry.Name()
-		if entry.IsDir() {
-			err = CopyDir(sfp, dfp)
-			if err != nil {
-				fmt.Println("Error occurred while copying:", err)
-				os.Exit(1)
-			}
-		} else {
-			// perform copy
-			err = CopyFile(sfp, dfp)
-			if err != nil {
-				fmt.Println("Error occurred while copying:", err)
-				os.Exit(1)
-			}
-		}
-	}
-	return
-}
-
-//A struct for returning custom error messages
-type CustomError struct {
-	What string
-}
-
-//Returns the error message defined in What as a string
-func (e *CustomError) Error() string {
-	return e.What
-}
-
-//Check whether the given location points to a directory
-func checkDir(location string) bool {
-	logger.Trace("Checking Location: %s", location)
-	locationInfo, err := os.Stat(location)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return false
-		}
-	}
-	if locationInfo.IsDir() {
-		return true
-	}
-	return false
-}
-
-//Check whether the given location points to a file
-func checkFile(location string) bool {
-	logger.Trace("Checking location: %s", location)
-	locationInfo, err := os.Stat(location)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return false
-		}
-	}
-	if locationInfo.IsDir() {
-		return false
-	}
-	return true
 }
 
 //Traverse the given path and add entries to the given map
@@ -1155,9 +900,7 @@ func createUpdateZip() {
 	//Create the new zip file
 	outFile, err := os.Create(_UPDATE_NAME + ".zip")
 	if err != nil {
-		color.Set(color.FgRed)
-		logger.Debug("[FAILURE] Error occurred while creating the zip file: %s", err)
-		color.Unset()
+		printFailureAndExit("Error occurred while creating the zip file: %s", err)
 	}
 	defer outFile.Close()
 
@@ -1168,10 +911,7 @@ func createUpdateZip() {
 	err = filepath.Walk(_TEMP_DIR_NAME, func(path string, fileInfo os.FileInfo, err error) error {
 		logger.Trace("Walking: %s", path)
 		if err != nil {
-			color.Set(color.FgRed)
-			fmt.Println("[FAILURE] Error occurred while traversing the temp files: ", err)
-			color.Unset()
-			os.Exit(1)
+			printFailureAndExit("Error occurred while traversing the temp files: ", err)
 		}
 		//We only want to add the files to the zip. Corresponding directories will be auto created
 		if !fileInfo.IsDir() {
@@ -1179,10 +919,7 @@ func createUpdateZip() {
 			// the start time in go (1979)
 			header, err := zip.FileInfoHeader(fileInfo)
 			if err != nil {
-				color.Set(color.FgRed)
-				fmt.Println("[FAILURE] Error occurred while creating the zip file: ", err)
-				color.Unset()
-				os.Exit(1)
+				printFailureAndExit("Error occurred while creating the zip file: ", err)
 			}
 
 			//Construct the file path
@@ -1197,53 +934,35 @@ func createUpdateZip() {
 			//Create a Writer using the header
 			fileWriter, err := zipWriter.CreateHeader(header)
 			if err != nil {
-				color.Set(color.FgRed)
-				fmt.Println("[FAILURE] Error occurred while creating the zip file: ", err)
-				color.Unset()
-				os.Exit(1)
+				printFailureAndExit("Error occurred while creating the zip file: ", err)
 			}
 
 			//Open the file for reading
 			file, err := os.Open(path)
 			if err != nil {
-				color.Set(color.FgRed)
-				fmt.Println("[FAILURE] Error occurred when file was open to write to zip:", err)
-				color.Unset()
-				os.Exit(1)
+				printFailureAndExit("Error occurred when file was open to write to zip:", err)
 			}
 			//Convert the file to byte array
 			data, err := ioutil.ReadAll(file)
 			if err != nil {
-				color.Set(color.FgRed)
-				fmt.Println("[FAILURE] Error occurred when getting the byte array from the file", err)
-				color.Unset()
-				os.Exit(1)
+				printFailureAndExit("Error occurred when getting the byte array from the file", err)
 			}
 			//Write the bytes to zip file
 			_, err = fileWriter.Write(data)
 			if err != nil {
-				color.Set(color.FgRed)
-				fmt.Println("[FAILURE] Error occurred when writing the byte array to the zip file", err)
-				color.Unset()
-				os.Exit(1)
+				printFailureAndExit("Error occurred when writing the byte array to the zip file", err)
 			}
 		}
 		return nil
 	})
 	if err != nil {
-		color.Set(color.FgRed)
-		fmt.Println("[FAILURE] Error occurred while traversing the temp location:", err)
-		color.Unset()
-		os.Exit(1)
+		printFailureAndExit("Error occurred while traversing the temp location:", err)
 	}
 
 	// Close the zip writer
 	err = zipWriter.Close()
 	if err != nil {
-		color.Set(color.FgRed)
-		fmt.Println("[FAILURE] Error occurred when closing the zip writer", err)
-		color.Unset()
-		os.Exit(1)
+		printFailureAndExit("Error occurred when closing the zip writer", err)
 	}
 
 	logger.Trace("Directory Walk completed successfully.")
@@ -1262,10 +981,7 @@ func unzipAndReadDistribution(zipLocation string, logsEnabled bool) {
 	// Create a reader out of the zip archive
 	zipReader, err := zip.OpenReader(zipLocation)
 	if err != nil {
-		color.Set(color.FgRed)
-		fmt.Println("[FAILURE] Error occurred while reading zip:", err)
-		color.Unset()
-		os.Exit(1)
+		printFailureAndExit("Error occurred while reading zip:", err)
 	}
 	defer zipReader.Close()
 
@@ -1380,10 +1096,10 @@ func unzipAndReadDistribution(zipLocation string, logsEnabled bool) {
 		//Add the entries to the distEntries map
 
 		//Check whether the filename is already in the map
-		_, ok := distEntries[file.FileInfo().Name()]
+		_, ok := distEntriesMap[file.FileInfo().Name()]
 		if (ok) {
 			//If the file is already in the map, we only need to add a new entry
-			entry := distEntries[file.FileInfo().Name()]
+			entry := distEntriesMap[file.FileInfo().Name()]
 			entry.add(fullPath)
 		} else {
 			//This is to identify whether the location contain a file or a directory
@@ -1392,7 +1108,7 @@ func unzipAndReadDistribution(zipLocation string, logsEnabled bool) {
 				isDir = true
 			}
 			//Add a new entry
-			distEntries[file.FileInfo().Name()] = entry{
+			distEntriesMap[file.FileInfo().Name()] = entry{
 				map[string]bool{
 					fullPath: isDir,
 				},

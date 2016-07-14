@@ -146,12 +146,18 @@ func printFailureAndExit(args ...interface{}) {
 
 func printWarning(args ...interface{}) {
 	color.Set(color.FgYellow)
-	fmt.Println(append(append([]interface{}{"\n[WARNING]"}, args...), "\n")...)
+	fmt.Println(append(append([]interface{}{"[WARNING]"}, args...), "\n")...)
 	color.Unset()
 }
 
 func printInfo(args ...interface{}) {
 	color.Set(color.FgYellow)
-	fmt.Println(append(append([]interface{}{"\n[INFO]"}, args...), "\n")...)
+	fmt.Println(append(append([]interface{}{"[INFO]"}, args...), "\n")...)
+	color.Unset()
+}
+
+func printSuccess(args ...interface{}) {
+	color.Set(color.FgGreen)
+	fmt.Println(append(append([]interface{}{"[INFO]"}, args...), "\n")...)
 	color.Unset()
 }

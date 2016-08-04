@@ -84,11 +84,11 @@ func Validate(updateLocation, distributionLocation string, debugLogsEnabled, tra
 //This initializes the variables
 func initialize() {
 	allResFiles = make(map[string]bool)
-	allResFiles[_LICENSE_FILE_NAME] = true
-	allResFiles[_NOT_A_CONTRIBUTION_FILE_NAME] = true
-	allResFiles[_README_FILE_NAME] = true
-	allResFiles[_UPDATE_DESCRIPTOR_FILE_NAME] = true
-	allResFiles[_INSTRUCTIONS_FILE_NAME] = true
+	allResFiles[_LICENSE_FILE] = true
+	allResFiles[_NOT_A_CONTRIBUTION_FILE] = true
+	allResFiles[_README_FILE] = true
+	allResFiles[_UPDATE_DESCRIPTOR_FILE] = true
+	allResFiles[_INSTRUCTIONS_FILE] = true
 
 	updatedFilesMap = make(map[string]bool)
 	distFileMap = make(map[string]bool)
@@ -120,7 +120,7 @@ func validate() {
 				logger.Trace("addedFilesMap: %s", addedFilesMap)
 				color.Set(color.FgRed)
 				printFailureAndExit(updateLoc, "not found in distribution and it is not a newly added file.")
-				fmt.Println("If it is a new file, please add an entry in", _UPDATE_DESCRIPTOR_FILE_NAME, "file.")
+				fmt.Println("If it is a new file, please add an entry in", _UPDATE_DESCRIPTOR_FILE, "file.")
 				printValidationFailureMessage()
 				color.Unset()
 				os.Exit(1)
@@ -210,17 +210,17 @@ func readUpdateZip(zipLocation string, loggersEnabled bool) {
 			logger.Trace(file.FileInfo().Name(), "was removed from the map")
 			//If the file is update-descriptor.yaml file, we need to read the newly added files.
 			// Otherwise there will be no match for these files and validation will be failed
-			if file.FileInfo().Name() == _UPDATE_DESCRIPTOR_FILE_NAME {
+			if file.FileInfo().Name() == _UPDATE_DESCRIPTOR_FILE {
 				//Open the file
 				yamlFile, err := file.Open()
 				if err != nil {
-					printFailureAndExit("Error occurred while reading the", _UPDATE_DESCRIPTOR_FILE_NAME, "file:", err)
+					printFailureAndExit("Error occurred while reading the", _UPDATE_DESCRIPTOR_FILE, "file:", err)
 				}
 				//Get the byte array
 				data, err := ioutil.ReadAll(yamlFile)
 				if err != nil {
 					color.Set(color.FgRed)
-					fmt.Println("Error occurred while reading the", _UPDATE_DESCRIPTOR_FILE_NAME, "file:", err)
+					fmt.Println("Error occurred while reading the", _UPDATE_DESCRIPTOR_FILE, "file:", err)
 					color.Unset()
 					os.Exit(1)
 				}
@@ -242,31 +242,31 @@ func readUpdateZip(zipLocation string, loggersEnabled bool) {
 	writer.Stop()
 
 	//Delete instructions.txt file if it is left in the map because it is optional
-	_, found := allResFiles[_INSTRUCTIONS_FILE_NAME]
+	_, found := allResFiles[_INSTRUCTIONS_FILE]
 	if found {
-		logger.Debug("%s was not found in the zip file.", _INSTRUCTIONS_FILE_NAME)
-		delete(allResFiles, _INSTRUCTIONS_FILE_NAME)
+		logger.Debug("%s was not found in the zip file.", _INSTRUCTIONS_FILE)
+		delete(allResFiles, _INSTRUCTIONS_FILE)
 		logger.Trace("Resource map: %s", allResFiles)
 		logger.Trace(updatedFilesMap)
 		color.Set(color.FgYellow)
-		fmt.Println("[INFO]", _INSTRUCTIONS_FILE_NAME, "was not found in the zip file.")
+		fmt.Println("[INFO]", _INSTRUCTIONS_FILE, "was not found in the zip file.")
 		color.Unset()
 	} else {
-		logger.Debug("%s was found in the zip file.", _INSTRUCTIONS_FILE_NAME)
+		logger.Debug("%s was found in the zip file.", _INSTRUCTIONS_FILE)
 	}
 
 	//Delete NOT_A_CONTRIBUTION.txt file if it is left in the map because it is optional
-	_, found = allResFiles[_NOT_A_CONTRIBUTION_FILE_NAME]
+	_, found = allResFiles[_NOT_A_CONTRIBUTION_FILE]
 	if found {
-		logger.Debug("%s was not found in the zip file.", _NOT_A_CONTRIBUTION_FILE_NAME)
-		delete(allResFiles, _NOT_A_CONTRIBUTION_FILE_NAME)
+		logger.Debug("%s was not found in the zip file.", _NOT_A_CONTRIBUTION_FILE)
+		delete(allResFiles, _NOT_A_CONTRIBUTION_FILE)
 		logger.Trace("Resource map: %s", allResFiles)
 		logger.Trace(updatedFilesMap)
 		color.Set(color.FgYellow)
-		fmt.Println("[INFO]", _NOT_A_CONTRIBUTION_FILE_NAME, "was not found in the zip file.")
+		fmt.Println("[INFO]", _NOT_A_CONTRIBUTION_FILE, "was not found in the zip file.")
 		color.Unset()
 	} else {
-		logger.Debug("%s was found in the zip file.", _NOT_A_CONTRIBUTION_FILE_NAME)
+		logger.Debug("%s was found in the zip file.", _NOT_A_CONTRIBUTION_FILE)
 	}
 
 	//At this point, the size of the allResFiles should be zero. If one or more files are not found, that means

@@ -134,7 +134,7 @@ func fileExists(location string) bool {
 
 //This is used to print failure messages
 func printFailure(args ...interface{}) {
-	color.Set(color.FgRed)
+	color.Set(color.FgRed, color.Bold)
 	fmt.Println(append(append([]interface{}{"\n[FAILURE]"}, args...), "\n")...)
 	color.Unset()
 }
@@ -145,19 +145,19 @@ func printFailureAndExit(args ...interface{}) {
 }
 
 func printWarning(args ...interface{}) {
-	color.Set(color.FgYellow)
+	color.Set(color.FgYellow, color.Bold)
 	fmt.Println(append(append([]interface{}{"[WARNING]"}, args...), "\n")...)
 	color.Unset()
 }
 
 func printInfo(args ...interface{}) {
-	color.Set(color.FgYellow)
+	color.Set(color.FgYellow, color.Bold)
 	fmt.Println(append(append([]interface{}{"[INFO]"}, args...), "\n")...)
 	color.Unset()
 }
 
 func printSuccess(args ...interface{}) {
-	color.Set(color.FgGreen)
+	color.Set(color.FgGreen, color.Bold)
 	fmt.Println(append(append([]interface{}{"[INFO]"}, args...), "\n")...)
 	color.Unset()
 }

@@ -42,36 +42,15 @@ type update_descriptor struct {
 	Bug_fixes        map[string]string /*`yaml:"bug_fixes"`*/
 	Description      string            /*`yaml:"description"`*/
 	File_changes     struct {
-				 Added_files   []string /*`yaml:"added_files,flow"`*/
-				 Removed_files []string /*`yaml:"removed_files,flow"`*/
+				 Added_files    []string /*`yaml:"added_files,flow"`*/
+				 Removed_files  []string /*`yaml:"removed_files,flow"`*/
+				 Modified_files []string /*`yaml:"removed_files,flow"`*/
 			 }
 }
 
-const (
-	//constants to store resource files
-	_README_FILE_NAME = "README.txt"
-	_LICENSE_FILE_NAME = "LICENSE.txt"
-	_NOT_A_CONTRIBUTION_FILE_NAME = "NOT_A_CONTRIBUTION.txt"
-	_INSTRUCTIONS_FILE_NAME = "instructions.txt"
-	_UPDATE_DESCRIPTOR_FILE_NAME = "update-descriptor.yaml"
-
-	//Resource directory which contains README.txt, LICENCE.txt and NOT_A_CONTRIBUTION.txt files
-	_RESOURCE_DIR = ".." + string(os.PathSeparator) + "res"
-	//Temporary directory to copy files before creating the new zip
-	_TEMP_DIR = "temp"
-	//This is used to store carbon.home string
-	_CARBON_HOME = "carbon.home"
-	//Temporary directory location including carbon.home. All updated files will be copied to this location
-	_UPDATE_DIR_ROOT = _TEMP_DIR + string(os.PathSeparator) + _CARBON_HOME
-	//Prefix of the update file and the root folder of the update zip
-	_UPDATE_NAME_PREFIX = "WSO2-CARBON-UPDATE"
-	//Prefix of the JIRA urls. This is used to generate README
-	_JIRA_URL_PREFIX = "https://wso2.org/jira/browse/"
-)
-
 var (
 	//This contains the mandatory resource files that needs to be copied to the update zip
-	_RESOURCE_FILES = []string{_LICENSE_FILE_NAME}
+	_RESOURCE_FILES = []string{_LICENSE_FILE, _NOT_A_CONTRIBUTION_FILE}
 
 	//These are used to store file/directory locations to later find matches. Keys of the map are file/directory
 	// names and the value will be a entry which contain a slice which has locations of that file
@@ -149,7 +128,7 @@ func Create(updateLocation, distributionLocation string, debugLogsEnabled, trace
 	}
 
 	//This will have the update-descriptor.yaml file location
-	updateDescriptorLocation := path.Join(updateLocation, _UPDATE_DESCRIPTOR_FILE_NAME)
+	updateDescriptorLocation := path.Join(updateLocation, _UPDATE_DESCRIPTOR_FILE)
 	logger.Debug("Descriptor Location: %s", updateDescriptorLocation)
 
 	//Check whether the update-descriptor.yaml file exists
@@ -157,7 +136,7 @@ func Create(updateLocation, distributionLocation string, debugLogsEnabled, trace
 	logger.Debug("Descriptor Exists: %s", updateDescriptorExists)
 
 	if !updateDescriptorExists {
-		printFailureAndExit(_UPDATE_DESCRIPTOR_FILE_NAME + " not found at " + updateDescriptorLocation)
+		printFailureAndExit(_UPDATE_DESCRIPTOR_FILE + " not found at " + updateDescriptorLocation)
 	}
 	//Read the update-descriptor
 	readDescriptor(updateDescriptorLocation)
@@ -218,22 +197,22 @@ func readDescriptor(path string) {
 	logger.Debug("----------------------------------------------------------------")
 
 	if len(updateDescriptor.Update_number) == 0 {
-		printFailureAndExit("'update_number' field not found in ", _UPDATE_DESCRIPTOR_FILE_NAME)
+		printFailureAndExit("'update_number' field not found in ", _UPDATE_DESCRIPTOR_FILE)
 	}
 	if len(updateDescriptor.Kernel_version) == 0 {
-		printFailureAndExit("'kernel_version' field not found in ", _UPDATE_DESCRIPTOR_FILE_NAME)
+		printFailureAndExit("'kernel_version' field not found in ", _UPDATE_DESCRIPTOR_FILE)
 	}
 	if len(updateDescriptor.Platform_version) == 0 {
-		printFailureAndExit("'platform_version' field not found in ", _UPDATE_DESCRIPTOR_FILE_NAME)
+		printFailureAndExit("'platform_version' field not found in ", _UPDATE_DESCRIPTOR_FILE)
 	}
 	if len(updateDescriptor.Applies_to) == 0 {
-		printFailureAndExit("'applies_to' field not found in ", _UPDATE_DESCRIPTOR_FILE_NAME)
+		printFailureAndExit("'applies_to' field not found in ", _UPDATE_DESCRIPTOR_FILE)
 	}
 	if len(updateDescriptor.Bug_fixes) == 0 {
-		printFailureAndExit("'bug_fixes' field not found in ", _UPDATE_DESCRIPTOR_FILE_NAME)
+		printFailureAndExit("'bug_fixes' field not found in ", _UPDATE_DESCRIPTOR_FILE)
 	}
 	if len(updateDescriptor.Description) == 0 {
-		printFailureAndExit("'description' field not found in ", _UPDATE_DESCRIPTOR_FILE_NAME)
+		printFailureAndExit("'description' field not found in ", _UPDATE_DESCRIPTOR_FILE)
 	}
 
 	//Read the corresponding details
@@ -254,16 +233,16 @@ func updateNewFilesInUpdateDescriptor() {
 	}
 	logger.Debug("update-descriptor:\n%s\n\n", string(data))
 
-	//color.Set(color.FgGreen)
+	color.Set(color.FgGreen)
 	//We need to
 	updatedData := strings.Replace(string(data), "\"", "", 2)
-	//fmt.Println("-------------------------------------------------------------------------------------------------")
-	//fmt.Println(_UPDATE_DESCRIPTOR_FILE_NAME, "-\n")
-	//fmt.Println(strings.TrimSpace(updatedData))
-	//fmt.Println("-------------------------------------------------------------------------------------------------")
-	//color.Unset()
+	fmt.Println("-------------------------------------------------------------------------------------------------")
+	fmt.Println(_UPDATE_DESCRIPTOR_FILE, "-\n")
+	fmt.Println(strings.TrimSpace(updatedData))
+	fmt.Println("-------------------------------------------------------------------------------------------------")
+	color.Unset()
 
-	destPath := path.Join(_TEMP_DIR, _UPDATE_DESCRIPTOR_FILE_NAME)
+	destPath := path.Join(_TEMP_DIR, _UPDATE_DESCRIPTOR_FILE)
 	logger.Debug("destPath: %s", destPath)
 	// Open a new file for writing only
 	file, err := os.OpenFile(
@@ -272,7 +251,7 @@ func updateNewFilesInUpdateDescriptor() {
 		0666,
 	)
 	if err != nil {
-		printFailureAndExit("Error occurred while opening", _UPDATE_DESCRIPTOR_FILE_NAME, ":", err)
+		printFailureAndExit("Error occurred while opening", _UPDATE_DESCRIPTOR_FILE, ":", err)
 	}
 	defer file.Close()
 
@@ -280,7 +259,7 @@ func updateNewFilesInUpdateDescriptor() {
 	byteSlice := []byte(updatedData)
 	bytesWritten, err := file.Write(byteSlice)
 	if err != nil {
-		printFailureAndExit("Error occurred while updating", _UPDATE_DESCRIPTOR_FILE_NAME, ":", err)
+		printFailureAndExit("Error occurred while updating", _UPDATE_DESCRIPTOR_FILE, ":", err)
 	}
 	logger.Trace("Wrote %d bytes.\n", bytesWritten)
 }
@@ -303,13 +282,13 @@ func copyResourceFiles(patchLocation string) {
 	}
 
 	//Mandatory file
-	filePath := path.Join(patchLocation, _UPDATE_DESCRIPTOR_FILE_NAME)
+	filePath := path.Join(patchLocation, _UPDATE_DESCRIPTOR_FILE)
 	ok := fileExists(filePath)
 	if !ok {
-		printFailureAndExit(_UPDATE_DESCRIPTOR_FILE_NAME, ":", filePath, " not found")
+		printFailureAndExit(_UPDATE_DESCRIPTOR_FILE, ":", filePath, " not found")
 	} else {
 		logger.Debug("Copying: %s to %s", filePath, _TEMP_DIR)
-		tempPath := path.Join(_TEMP_DIR, _UPDATE_DESCRIPTOR_FILE_NAME)
+		tempPath := path.Join(_TEMP_DIR, _UPDATE_DESCRIPTOR_FILE)
 		err := CopyFile(filePath, tempPath)
 		if (err != nil) {
 			printFailureAndExit("Error occurred while copying the resource file: ", filePath, err)
@@ -317,13 +296,13 @@ func copyResourceFiles(patchLocation string) {
 	}
 
 	//This file is optional
-	filePath = path.Join(patchLocation, _NOT_A_CONTRIBUTION_FILE_NAME)
+	filePath = path.Join(patchLocation, _NOT_A_CONTRIBUTION_FILE)
 	ok = fileExists(filePath)
 	if !ok {
-		printWarning("'" + _NOT_A_CONTRIBUTION_FILE_NAME + "'", "not found in the patch directory. Make sure that the Apache License is in '" + _LICENSE_FILE_NAME + "' file.")
+		printWarning("'" + _NOT_A_CONTRIBUTION_FILE + "'", "not found in the patch directory. Make sure that the Apache License is in '" + _LICENSE_FILE + "' file.")
 	} else {
 		logger.Debug("Copying NOT_A_CONTRIBUTION: %s to %s", filePath, _TEMP_DIR)
-		tempPath := path.Join(_TEMP_DIR, _README_FILE_NAME)
+		tempPath := path.Join(_TEMP_DIR, _README_FILE)
 		err := CopyFile(filePath, tempPath)
 		if (err != nil) {
 			printFailureAndExit("Error occurred while copying the resource file: ", filePath, err)
@@ -331,10 +310,10 @@ func copyResourceFiles(patchLocation string) {
 	}
 
 	//This file is optional
-	filePath = path.Join(patchLocation, _INSTRUCTIONS_FILE_NAME)
+	filePath = path.Join(patchLocation, _INSTRUCTIONS_FILE)
 	ok = fileExists(filePath)
 	if !ok {
-		printWarning("'" + _INSTRUCTIONS_FILE_NAME + "'", "file not found.")
+		printWarning("'" + _INSTRUCTIONS_FILE + "'", "file not found.")
 		color.Set(color.FgYellow)
 		fmt.Print("Do you want to add an 'instructions.txt' file?[Y/N]: ")
 		color.Unset()
@@ -342,11 +321,11 @@ func copyResourceFiles(patchLocation string) {
 			reader := bufio.NewReader(os.Stdin)
 			preference, _ := reader.ReadString('\n')
 			if preference[0] == 'y' || preference[0] == 'Y' {
-				fmt.Println("Please create an '" + _INSTRUCTIONS_FILE_NAME + "' file in the patch " +
+				fmt.Println("Please create an '" + _INSTRUCTIONS_FILE + "' file in the patch " +
 				"directory and run the tool again.")
 				os.Exit(0)
 			} else if preference[0] == 'n' || preference[0] == 'N' {
-				printWarning("Skipping creating '" + _INSTRUCTIONS_FILE_NAME + "' file")
+				printWarning("Skipping creating '" + _INSTRUCTIONS_FILE + "' file")
 				break
 			} else {
 				fmt.Println("Invalid preference. Enter Y for Yes or N for No.\n")
@@ -355,7 +334,7 @@ func copyResourceFiles(patchLocation string) {
 		}
 	} else {
 		logger.Debug("Copying instructions: %s to %s", filePath, _TEMP_DIR)
-		tempPath := path.Join(_TEMP_DIR, _INSTRUCTIONS_FILE_NAME)
+		tempPath := path.Join(_TEMP_DIR, _INSTRUCTIONS_FILE)
 		err := CopyFile(filePath, tempPath)
 		if (err != nil) {
 			printFailureAndExit("Error occurred while copying the resource file: ", filePath, err)
@@ -365,13 +344,13 @@ func copyResourceFiles(patchLocation string) {
 	//generateReadMe()
 
 	//Copy README.txt. This might be removed in the future. That is why this is copied separately
-	filePath = path.Join(patchLocation, _README_FILE_NAME)
+	filePath = path.Join(patchLocation, _README_FILE)
 	ok = fileExists(filePath)
 	if !ok {
 		printFailureAndExit("Resource: ", filePath, " not found")
 	} else {
 		logger.Debug("Copying readme: %s to %s", filePath, _TEMP_DIR)
-		tempPath := path.Join(_TEMP_DIR, _README_FILE_NAME)
+		tempPath := path.Join(_TEMP_DIR, _README_FILE)
 		err := CopyFile(filePath, tempPath)
 		if (err != nil) {
 			printFailureAndExit("Error occurred while copying the resource file: ", filePath, err)
@@ -390,13 +369,13 @@ func generateReadMe() {
 		Instructions    string
 	}
 
-	tempPath := path.Join(_RESOURCE_DIR, _README_FILE_NAME)
+	tempPath := path.Join(_RESOURCE_DIR, _README_FILE)
 	t, err := template.ParseFiles(tempPath)
 	if err != nil {
-		printFailureAndExit("Error occurred while reading the", _README_FILE_NAME, "template file:", err)
+		printFailureAndExit("Error occurred while reading the", _README_FILE, "template file:", err)
 	}
 
-	tempPath = path.Join(_TEMP_DIR, _README_FILE_NAME)
+	tempPath = path.Join(_TEMP_DIR, _README_FILE)
 	f, err := os.Create(tempPath)
 	if err != nil {
 		printFailureAndExit("Error occurred while creating", tempPath, "file:", err)
@@ -460,7 +439,7 @@ func findMatches(patchLocation, distributionLocation string) {
 			logger.Trace("Dist Path used for trimming: %s", absoluteDistributionPath)
 			//If there are more than 1 location, we need to ask preferred location(s) from the user
 			if len(distributionEntry.locationMap) > 1 {
-				printWarning("'" + fileName + "' was found in multiple locations in the distribution")
+				printWarning("'" + fileName + "' was found in multiple locations in the distribution.")
 				//This is used to temporary store all the locations because we need to access them
 				// later. Since the data is stored in a map, there is no direct way to get the location
 				// using the user preference
@@ -510,8 +489,8 @@ func findMatches(patchLocation, distributionLocation string) {
 						printWarning("0 entered. Cancelling the operation and exiting.....")
 						os.Exit(0)
 					} else {
-						//This is used
-						selectedPathsList := make([]string, 0)
+						//This is used for ???
+						//selectedPathsList := make([]string, 0)
 
 						//This is used to identify whether the all indices are valid
 						isOK := true
@@ -532,7 +511,7 @@ func findMatches(patchLocation, distributionLocation string) {
 								tempFilePath := strings.TrimPrefix(selectedPath, distributionLocation)
 								logger.Trace("tempFilePath: %s", tempFilePath)
 
-								selectedPathsList = append(selectedPathsList, selectedPath)
+								//selectedPathsList = append(selectedPathsList, selectedPath)
 
 								src := path.Join(patchLocation, fileName)
 								destPath := path.Join(_UPDATE_DIR_ROOT + tempFilePath)
@@ -549,6 +528,9 @@ func findMatches(patchLocation, distributionLocation string) {
 									if copyErr != nil {
 										printFailureAndExit("Error occurred while copying file:", copyErr)
 									}
+									logger.Info("Adding modified file X: ", tempFilePath)
+									//add to modified file
+									updateDescriptor.File_changes.Modified_files = append(updateDescriptor.File_changes.Modified_files, path.Join(tempFilePath, fileName))
 								} else if directoryExists(src) {
 									//Compare the directories to identify new files
 									tempPath := path.Join(selectedPath, fileName)
@@ -640,6 +622,9 @@ func findMatches(patchLocation, distributionLocation string) {
 								if copyErr != nil {
 									printFailureAndExit("Error occurred while copying file:", copyErr)
 								}
+								logger.Info("Adding modified file Y: ", tempFilePath)
+								//add to modified file
+								updateDescriptor.File_changes.Modified_files = append(updateDescriptor.File_changes.Modified_files, path.Join(tempFilePath, fileName))
 							} else if directoryExists(src) {
 								tempPath := path.Join(pathInDistribution, fileName)
 								//Compare the directories to identify new files
@@ -728,7 +713,7 @@ func findMatches(patchLocation, distributionLocation string) {
 						//Add the new path to added_file section in update-descriptor.yaml
 						updateDescriptor.File_changes.Added_files = append(updateDescriptor.File_changes.Added_files, relativeLocation)
 
-						printInfo("'" + relativeLocation + "' path was added to 'added_files' " + "section in '" + _UPDATE_DESCRIPTOR_FILE_NAME + "'")
+						printInfo("'" + relativeLocation + "' path was added to 'added_files' " + "section in '" + _UPDATE_DESCRIPTOR_FILE + "'")
 
 						destPath := path.Join(_UPDATE_DIR_ROOT, tempFilePath)
 						logger.Debug("destPath: %s", destPath)
@@ -774,7 +759,8 @@ func findMatches(patchLocation, distributionLocation string) {
 		}
 		rowCount++
 		if rowCount < len(updateEntriesMap) {
-			//todo: add separator
+			//add separator
+			overallViewTable.Append([]string{" ", " "})
 		}
 	}
 	//Print summary
@@ -833,20 +819,27 @@ func compareDir(pathInPatch, pathInDist, patchLoc, distLoc string) {
 	for path, _ := range filesInPatch {
 		//Check whether distribution has a match
 		_, found := filesInDist[path]
+		logger.Trace("path: ", path)
+		logger.Trace("pathInDist: ", pathInDist)
+		logger.Trace("distLoc: ", distLoc)
+		tempDistFilePath := strings.TrimPrefix(pathInDist, distLoc)
+		logger.Trace("tempDistFilePath: ", tempDistFilePath)
+		tempPath := strings.Replace(tempDistFilePath + path, "\\", "/", -1)
+		logger.Trace("tempPath: ", tempPath)
 		if found {
-			//If a match found, logger it
+			logger.Info("Adding modified file: ", tempPath)
+			//add to modified file
+			updateDescriptor.File_changes.Modified_files = append(updateDescriptor.File_changes.Modified_files, tempPath)
+			//If a match found, log it
 			logger.Debug("'%s' found in the distribution.", path)
 		} else {
 			//If no match is found, show warning message and add file to added_file section in update-descriptor.yaml
 			printWarning("'" + strings.Replace(strings.TrimPrefix(path, string(os.PathSeparator)), "\\", "/", -1) + "' not found in '" +
 			strings.TrimPrefix(pathInDist + string(os.PathSeparator), distLoc) + "'")
-			tempDistFilePath := strings.TrimPrefix(pathInDist, distLoc)
-
-			tempPath := strings.Replace(tempDistFilePath + path, "\\", "/", -1)
 
 			updateDescriptor.File_changes.Added_files = append(updateDescriptor.File_changes.Added_files, tempPath)
 
-			printInfo("'" + tempPath + "' path was added to 'added_files' " + "section in '" + _UPDATE_DESCRIPTOR_FILE_NAME + "'")
+			printInfo("'" + tempPath + "' path was added to 'added_files' " + "section in '" + _UPDATE_DESCRIPTOR_FILE + "'")
 		}
 	}
 }
@@ -869,7 +862,7 @@ func traverse(path string, entryMap map[string]entry, isDist bool) {
 	for _, file := range files {
 		//update-descriptor, README, instructions files might be in the patch location. We don't need to find
 		// matches for them
-		if file.Name() != _UPDATE_DESCRIPTOR_FILE_NAME && file.Name() != _README_FILE_NAME && file.Name() != _INSTRUCTIONS_FILE_NAME {
+		if file.Name() != _UPDATE_DESCRIPTOR_FILE && file.Name() != _README_FILE && file.Name() != _INSTRUCTIONS_FILE {
 			logger.Trace("Checking entry: %s ; path: %s", file.Name(), path)
 			//Check whether the filename is already in the map
 			_, ok := entryMap[file.Name()]

@@ -1,19 +1,8 @@
 #!/bin/bash
 
-#test "$1" && target="$1" # .go file to build
-
-#if ! test "$target"
-#then
-#  echo "target file required"
-#  exit 1
-#fi
-
 target="uct.go"
 uctVersion="1.0.0"
 
-#platforms="darwin/386 darwin/amd64 freebsd/386 freebsd/amd64 freebsd/arm linux/386 linux/amd64 linux/arm windows/386 windows/amd64"
-#platforms="linux/amd64/linux/x64"
-#platforms="darwin/386/macosx/i586"
 platforms="darwin/386/macosx/i586 darwin/amd64/macosx/x64 linux/386/linux/i586 linux/amd64/linux/x64 windows/386/windows/i586 windows/amd64/windows/x64"
 
 for platform in ${platforms}
@@ -38,7 +27,7 @@ do
     mkdir -p $zipdir
     # cp -r "$(dirname $target)/cmd" $zipdir
     cp -r "$(dirname $target)/res" $zipdir
-    cp -r "$(dirname $target)/README.txt" $zipdir
+    cp -r "$(dirname $target)/README.md" $zipdir
     cp -r "$(dirname $target)/LICENSE.txt" $zipdir
 
     # set destination path for binary
@@ -52,5 +41,4 @@ do
     zip -r "$zipfile.zip" $zipfile > /dev/null 2>&1
     rm -rf $zipfile
     cd $pwd
-
 done

@@ -20,7 +20,7 @@ const (
 	//Temporary directory location including carbon.home. All updated files will be copied to this location
 	_UPDATE_DIR_ROOT = _TEMP_DIR + string(os.PathSeparator) + _CARBON_HOME
 	//Prefix of the update file and the root folder of the update zip
-	_UPDATE_NAME_PREFIX = "WSO2-CARBON-PATCH"
+	_UPDATE_NAME_PREFIX = "WSO2-CARBON-UPDATE"
 	//Prefix of the JIRA urls. This is used to generate README
 	_JIRA_URL_PREFIX = "https://wso2.org/jira/browse/"
 )

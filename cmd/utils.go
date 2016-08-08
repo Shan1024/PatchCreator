@@ -161,3 +161,9 @@ func printSuccess(args ...interface{}) {
 	fmt.Println(append(append([]interface{}{"[INFO]"}, args...), "\n")...)
 	color.Unset()
 }
+
+func printInYellow(args ...interface{}) {
+	color.Set(color.FgYellow, color.Bold)
+	fmt.Print(args...)
+	color.Unset()
+}

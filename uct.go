@@ -13,14 +13,14 @@ var (
 	app = kingpin.New("uct", "A command-line Update Creator Tool.")
 	//Create 'create' command
 	createCommand = app.Command("create", "Create an update zip")
-	createUpdateLoc = createCommand.Arg("update", "Update dir location").Required().String()
-	createDistLoc = createCommand.Arg("dist", "Dist dir/zip location").Required().String()
+	createUpdateLoc = createCommand.Arg("update_loc", "Update dir location").Required().String()
+	createDistLoc = createCommand.Arg("dist_loc", "Distribution dir/zip location").Required().String()
 	enableDebugLogsForCreateCommand = createCommand.Flag("debug", "Enable debug logs").Short('d').Bool()
 	enableTraceLogsForCreateCommand = createCommand.Flag("trace", "Enable debug logs").Short('t').Bool()
 	//Create 'validate' command
 	validateCommand = app.Command("validate", "Validates an update zip")
-	validateUpdateLoc = validateCommand.Arg("update", "Update zip location").Required().String()
-	validateDistLoc = validateCommand.Arg("dist", "Dist dir/zip location").Required().String()
+	validateUpdateLoc = validateCommand.Arg("update_loc", "Update zip location").Required().String()
+	validateDistLoc = validateCommand.Arg("dist_loc", "Distribution dir/zip location").Required().String()
 	enableDebugLogsForValidateCommand = validateCommand.Flag("debug", "Enable debug logs").Short('d').Bool()
 	enableTraceLogsForValidateCommand = validateCommand.Flag("trace", "Enable debug logs").Short('t').Bool()
 	//set the default version

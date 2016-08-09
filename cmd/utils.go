@@ -58,17 +58,16 @@ func CopyDir(source string, dest string) (err error) {
 		return err
 	}
 	if !fi.IsDir() {
-		return &CustomError{"Source is not a directory"}
+		return &CustomError{What: "Source is not a directory"}
 	}
-	// ensure dest dir does not already exist
+	//Create the destination folder if it does not exist
 	_, err = os.Open(dest)
-	if !os.IsNotExist(err) {
-		return &CustomError{"Destination already exists"}
-	}
-	// create dest dir
-	err = os.MkdirAll(dest, fi.Mode())
-	if err != nil {
-		return err
+	if os.IsNotExist(err) {
+		// create dest dir
+		err = os.MkdirAll(dest, fi.Mode())
+		if err != nil {
+			return &CustomError{What: err.Error()}
+		}
 	}
 	entries, err := ioutil.ReadDir(source)
 	for _, entry := range entries {
@@ -164,6 +163,12 @@ func printSuccess(args ...interface{}) {
 
 func printInYellow(args ...interface{}) {
 	color.Set(color.FgYellow, color.Bold)
+	fmt.Print(args...)
+	color.Unset()
+}
+
+func printInRed(args ...interface{}) {
+	color.Set(color.FgRed, color.Bold)
 	fmt.Print(args...)
 	color.Unset()
 }

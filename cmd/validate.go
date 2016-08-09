@@ -99,7 +99,7 @@ func initialize() {
 func validate() {
 	//Iterate through all the files in the update. All files should be in the distribution unless they are newly
 	// added files
-	for updateLoc, _ := range updatedFilesMap {
+	for updateLoc := range updatedFilesMap {
 		logger.Trace("Checking location: %s", updateLoc)
 		//Check whether the distribution has a file with the same name
 		_, found := distFileMap[updateLoc]
@@ -118,11 +118,9 @@ func validate() {
 				//If it is not a newly added file, print an error
 				logger.Trace("%s not found in addedFilesMap", updateLoc)
 				logger.Trace("addedFilesMap: %s", addedFilesMap)
-				color.Set(color.FgRed)
-				printFailureAndExit(updateLoc, "not found in distribution and it is not a newly added file.")
+				printFailure(updateLoc, "not found in distribution and it is not a newly added file.")
 				fmt.Println("If it is a new file, please add an entry in", _UPDATE_DESCRIPTOR_FILE, "file.")
 				printValidationFailureMessage()
-				color.Unset()
 				os.Exit(1)
 			}
 		}
@@ -219,10 +217,7 @@ func readUpdateZip(zipLocation string, loggersEnabled bool) {
 				//Get the byte array
 				data, err := ioutil.ReadAll(yamlFile)
 				if err != nil {
-					color.Set(color.FgRed)
-					fmt.Println("Error occurred while reading the", _UPDATE_DESCRIPTOR_FILE, "file:", err)
-					color.Unset()
-					os.Exit(1)
+					printFailureAndExit("Error occurred while reading the", _UPDATE_DESCRIPTOR_FILE, "file:", err)
 				}
 				descriptor := update_descriptor{}
 				//Get the values
@@ -274,7 +269,7 @@ func readUpdateZip(zipLocation string, loggersEnabled bool) {
 	if (len(allResFiles) != 0) {
 		//Print the missing files
 		printFailureAndExit("Following resource file(s) were not found in the update zip: ")
-		for key, _ := range allResFiles {
+		for key := range allResFiles {
 			fmt.Println("\t", "-", key)
 		}
 	}
@@ -375,5 +370,5 @@ func readDistDir(distributionLocation string, loggersEnabled bool) {
 }
 
 func printValidationFailureMessage() {
-	fmt.Println("\nValidation FAILED\n")
+	printInRed("\nValidation FAILED\n")
 }

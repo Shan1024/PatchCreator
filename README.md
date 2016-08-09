@@ -40,13 +40,13 @@ Optional Files -
 
 You need to have the distribution locally as well. This is used to compare files and create the proper file structure in the update zip. The distribution location can be either the zip file or the extracted directory. Lets call this file/location **DIST_LOCATION**.
 
-*create* command looks like this.
+#### create command
 
 ```
-./uct create <update> <dist> [<flags>]
+./uct create <update_loc> <dist_loc> [<flags>]
 
-<update> - Location of the patched files.
-<dist> - Location of the distribution. This can either be a zip file or a directory.
+<update_loc> - Location of the patched files.
+<dist_loc> - Location of the distribution. This can either be a zip file or a directory.
 <flags> - Flags for the tool. Currently, supported flags are -d and -t which will print debug and trace logs.
 ```
 
@@ -62,13 +62,13 @@ If the *UPDATE_LOCATION* contained the update 0001, by running this command, you
 
 After we create a update, we might want to unzip it and add more detail to the *update-descriptor.yaml* or the *README.txt*. After we do these changes, we can create a zip using the files again. We can use this validation command to verify that the file structure of the zip is is the same as the distribution.
 
-*validation* command looks like this.
+##### validation command
 
 ```
-./uct validate <update> <dist> [<flags>]
+./uct validate <update_loc> <dist_loc> [<flags>]
 
-<update> - Is the location of the update. This should be a zip file.
-<dist> - Location of the distribution. This can either be a zip file or a directory.
+<update_loc> - Location of the update. This should be a zip file.
+<dist_loc> - Location of the distribution. This can either be a zip file or a directory.
 <flags> - Flags for the tool. Currently, supported flags are -d and -t which will print debug and trace logs.
 ```
 

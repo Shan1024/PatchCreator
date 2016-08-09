@@ -20,11 +20,12 @@ import (
 	"github.com/ian-kent/go-log/log"
 	"github.com/ian-kent/go-log/levels"
 	"github.com/ian-kent/go-log/layout"
+	"github.com/spf13/cobra"
 )
 
 //struct to store location(s) in the distribution for a given file/directory. The keys would be the file locations.
-//And the value would be a boolean which will indicate whether this is a directory or a file. If it is a directory, the
-//value will be true
+//And the value would be a boolean which will indicate whether this is a directory or a file. If it is a directory,
+//the value will be true.
 type entry struct {
 	locationMap map[string]bool
 }
@@ -69,75 +70,101 @@ var (
 	logger = log.Logger()
 )
 
-//Main entry point to create the new update
-func Create(updateDirectory, distributionLocation string, debugLogsEnabled, traceLogsEnabled bool) {
+// createCmd represents the create command
+var createCmd = &cobra.Command{
+	Use:   "create <update_loc> <dist_loc>",
+	Short: "A brief description of your command",
+	Long: `A longer description that spans multiple lines and likely contains examples
+		and usage of using your command. For example:
+
+		Cobra is a CLI library for Go that empowers applications.
+		This application is a tool to generate the needed files
+		to quickly create a Cobra application.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		if len(args) < 2 || len(args) > 2 {
+			printFailureAndExit("Invalid number of argumants. Run with --help for more details about the argumants")
+		}
+		startCreation(args[0], args[1], enableDebugLogsForCreateCommand, enableTraceLogsForCreateCommand)
+	},
+}
+
+var enableDebugLogsForCreateCommand bool
+var enableTraceLogsForCreateCommand bool
+
+func init() {
+	RootCmd.AddCommand(createCmd)
+	createCmd.Flags().BoolVarP(&enableDebugLogsForCreateCommand, "debug", "d", false, "Enable debug logs")
+	createCmd.Flags().BoolVarP(&enableTraceLogsForCreateCommand, "trace", "t", false, "Enable trace logs")
+}
+
+func startCreation(updateDirectory, distributionPath string, debugLogsEnabled, traceLogsEnabled bool) {
 
 	//set debug level
 	setLogLevel(debugLogsEnabled, traceLogsEnabled)
 	logger.Debug("create command called")
 
+	//Flow
+	//1) Check update directory
+	//2) Read update-descriptor.yaml
+	//3) Read distribution
+	//If one step fails, print error message and exit
+
 	//Check whether the given update directory exists
-	updateLocationExists := directoryExists(updateDirectory)
-	if !updateLocationExists {
+	if !directoryExists(updateDirectory) {
 		printFailureAndExit("Update directory(" + updateDirectory + ") does not exist. Enter a valid directory.")
 	}
 	logger.Debug("Update directory(" + updateDirectory + ") exists.")
 
+	//Construct the update-descriptor.yaml file location
+	updateDescriptorPath := path.Join(updateDirectory, _UPDATE_DESCRIPTOR_FILE)
+	//Check whether the update-descriptor.yaml file exists
+	if !fileExists(updateDescriptorPath) {
+		printFailureAndExit(_UPDATE_DESCRIPTOR_FILE, " not found at ", updateDescriptorPath)
+	}
+	logger.Debug("Descriptor Exists. Location %s", updateDescriptorPath)
+
+	//Read the update-descriptor.yaml
+	readDescriptor(&updateDescriptor, updateDescriptorPath)
+	//Set the update name which will be used when creating the update zip file.
+	setUpdateName(&updateDescriptor)
+
 	//Check whether the distribution is a zip file.
-	if isAZipFile(distributionLocation) {
+	if isAZipFile(distributionPath) {
 		//Check whether the distribution zip exists.
-		distributionZipExists := fileExists(distributionLocation)
-		if !distributionZipExists {
-			printFailureAndExit("Distribution zip does not exist. Enter a valid location.")
+		if !fileExists(distributionPath) {
+			printFailureAndExit("Distribution zip(" + distributionPath + ") does not exist. Enter a valid location.")
 		}
-		logger.Debug("Distribution location exists.")
-		unzipAndReadDistribution(distributionLocation, &distEntriesMap, (debugLogsEnabled || traceLogsEnabled))
-		//Delete the extracted distribution directory after method finishes
-		defer os.RemoveAll(strings.TrimSuffix(distributionLocation, ".zip"))
+		logger.Debug("Distribution location(" + distributionPath + ") exists.")
+		unzipAndReadDistribution(distributionPath, &distEntriesMap, (debugLogsEnabled || traceLogsEnabled))
+		//Delete the extracted distribution directory after function is finished
+		defer os.RemoveAll(strings.TrimSuffix(distributionPath, ".zip"))
 	} else {
 		//If the distribution is not a zip file, we need to read the files from the distribution directory. So
 		//check whether the given distribution directory exists.
-		distributionLocationExists := directoryExists(distributionLocation)
-		if !distributionLocationExists {
-			printFailureAndExit("Distribution location does not exist. Enter a valid location.")
+		if !directoryExists(distributionPath) {
+			printFailureAndExit("Distribution location(" + distributionPath + ") does not exist. Enter a valid location.")
 		}
-		logger.Debug("Distribution location exists.")
+		logger.Debug("Distribution location(" + distributionPath + ") exists.")
 		//Traverse and read the distribution
 		logger.Debug("Traversing distribution location")
-		traverse(distributionLocation, &distEntriesMap, true)
+		traverseAndRead(distributionPath, &distEntriesMap, true)
 		logger.Debug("Traversing distribution location finished")
 	}
 
-	//This will have the update-descriptor.yaml file location
-	updateDescriptorLocation := path.Join(updateDirectory, _UPDATE_DESCRIPTOR_FILE)
-	logger.Debug("Descriptor Location: %s", updateDescriptorLocation)
-
-	//Check whether the update-descriptor.yaml file exists
-	updateDescriptorExists := fileExists(updateDescriptorLocation);
-	logger.Debug("Descriptor Exists: %s", updateDescriptorExists)
-	if !updateDescriptorExists {
-		printFailureAndExit(_UPDATE_DESCRIPTOR_FILE, " not found at ", updateDescriptorLocation)
-	}
-
-	//Read the update-descriptor
-	readDescriptor(&updateDescriptor, updateDescriptorLocation)
-	//Set the update name which will be used when creating the zip file.
-	setUpdateName(&updateDescriptor)
-
 	//Traverse and read the update
 	logger.Debug("Traversing update location")
-	traverse(updateDirectory, &updateEntriesMap, false)
+	traverseAndRead(updateDirectory, &updateEntriesMap, false)
 	logger.Debug("Traversing update location finished")
 	logger.Debug("Update Entries: ", updateEntriesMap)
 
 	//Find matches
-	if isAZipFile(distributionLocation) {
+	if isAZipFile(distributionPath) {
 		logger.Debug("Finding matches")
-		findMatches(&updateEntriesMap, &distEntriesMap, &updateDescriptor, updateDirectory, strings.TrimSuffix(distributionLocation, ".zip"))
+		findMatches(&updateEntriesMap, &distEntriesMap, &updateDescriptor, updateDirectory, strings.TrimSuffix(distributionPath, ".zip"))
 		logger.Debug("Finding matches finished")
 	} else {
 		logger.Debug("Finding matches")
-		findMatches(&updateEntriesMap, &distEntriesMap, &updateDescriptor, updateDirectory, distributionLocation)
+		findMatches(&updateEntriesMap, &distEntriesMap, &updateDescriptor, updateDirectory, distributionPath)
 		logger.Debug("Finding matches finished")
 	}
 
@@ -165,9 +192,9 @@ func Create(updateDirectory, distributionLocation string, debugLogsEnabled, trac
 
 //This function will set log level
 func setLogLevel(debugLogsEnabled, traceLogsEnabled bool) {
-	//Setting default time format. This will be used in loggers. Otherwise complete data, time will be printed
+	//Setting default time format. This will be used in loggers. Otherwise complete date and time will be printed
 	layout.DefaultTimeLayout = "15:04:05"
-	//Setting new layout for STDOUT
+	//Setting new STDOUT layout to logger
 	logger.Appender().SetLayout(layout.Pattern("[%d] [%p] %m"))
 	//Set the log level. If the log level is not given, set the log level to WARN
 	if debugLogsEnabled {
@@ -188,7 +215,7 @@ func readDescriptor(updateDescriptor *update_descriptor, path string) {
 		printFailureAndExit("Error occurred while reading the descriptor: ", err)
 	}
 
-	//Unmarshal the update-descriptor file to updateDescriptor struct
+	//Un marshal the update-descriptor file to updateDescriptor struct
 	err = yaml.Unmarshal(yamlFile, &updateDescriptor)
 	if err != nil {
 		printFailureAndExit("Error occurred while unmarshalling the yaml:", err)
@@ -697,7 +724,7 @@ func findMatches(updateEntriesMap, distEntriesMap *map[string]entry, updateDescr
 					overallViewTable.Append([]string{fileName, " - "})
 					break
 				} else {
-					fmt.Println("Invalid preference. Try again.\n")
+					printInRed("Invalid preference. Try again.\n")
 				}
 			}
 			color.Unset()
@@ -709,7 +736,7 @@ func findMatches(updateEntriesMap, distEntriesMap *map[string]entry, updateDescr
 		}
 	}
 	//Print summary
-	fmt.Println("\n# Summary\n")
+	printInYellow("\n# Summary\n")
 	overallViewTable.Render()
 	fmt.Println()
 }
@@ -800,41 +827,46 @@ func getDistributionPath(distributionLoc string) string {
 }
 
 //Traverse the given path and add entries to the given map
-func traverse(path string, entryMap *map[string]entry, isDist bool) {
+func traverseAndRead(path string, entryMap *map[string]entry, isDist bool) {
 	//Get all the files/directories
 	files, _ := ioutil.ReadDir(path)
+
+	//update-descriptor.yaml, README, instructions files might be in the update directory. We don't need
+	//to find matches for them. We store them in a map and later check using file names.
+	ignoredFilesMap := make(map[string]bool)
+	ignoredFilesMap[_UPDATE_DESCRIPTOR_FILE] = true
+	ignoredFilesMap[_README_FILE] = true
+	ignoredFilesMap[_INSTRUCTIONS_FILE] = true
+	ignoredFilesMap[_LICENSE_FILE] = true
+	ignoredFilesMap[_NOT_A_CONTRIBUTION_FILE] = true
+
 	//Iterate through all files
 	for _, file := range files {
-		//update-descriptor, README, instructions files might be in the update directory. We don't need to find
-		// matches for them
-		if file.Name() != _UPDATE_DESCRIPTOR_FILE && file.Name() != _README_FILE && file.Name() != _INSTRUCTIONS_FILE && file.Name() != _LICENSE_FILE && file.Name() != _NOT_A_CONTRIBUTION_FILE {
+		//Check whether the current file is a ignored file
+		_, isInIgnoredMap := ignoredFilesMap[file.Name()]
+		//If not an ignored file, process the file
+		if !isInIgnoredMap {
 			logger.Trace("Checking entry: %s ; path: %s", file.Name(), path)
 			//Check whether the filename is already in the map
-			_, ok := (*entryMap)[file.Name()]
-			isDir := false
-			if file.IsDir() {
-				isDir = true
-			}
-			if (ok) {
+			_, isAlreadyInTheMap := (*entryMap)[file.Name()]
+			if isAlreadyInTheMap {
 				//If the file is already in the map, we only need to add a new entry
 				entry := (*entryMap)[file.Name()]
-				entry.add(path, isDir)
+				entry.add(path, file.IsDir())
 			} else {
-				//This is to identify whether the location contain a file or a directory
-
 				//Add a new entry
 				(*entryMap)[file.Name()] = entry{
 					locationMap: map[string]bool{
-						path: isDir,
+						path: file.IsDir(),
 					},
 				}
 			}
 			// This function is used to read both update location and distribution location. We only want
 			// to get the 1st level files/directories in the update. So we don't recursively traverse in
 			// the update location.isDist is used to identify whether this is used to read update or
-			// distribution. If this is the distribution, recursively iterate
+			// distribution. If this is the distribution, recursively iterate through all directories
 			if file.IsDir() && isDist {
-				traverse(path + string(os.PathSeparator) + file.Name(), entryMap, isDist)
+				traverseAndRead(filepath.Join(path, file.Name()), entryMap, isDist)
 			}
 		}
 	}
@@ -915,34 +947,41 @@ func createUpdateZip(updateName string) {
 //This function unzips a zip file at given location
 func unzipAndReadDistribution(zipLocation string, distEntriesMap *map[string]entry, logsEnabled bool) {
 	logger.Debug("Unzipping started.")
-	//Get the location of the zip file. This is later used to create the full path of a file
+	//Get the parent directory of the zip file. This is later used to create the absolute paths of files
 	index := strings.LastIndex(zipLocation, string(os.PathSeparator))
-	distLocation := zipLocation[:index]
-	logger.Debug("distLocation: %s", distLocation)
+	parentDirectory := zipLocation[:index]
+	logger.Debug("parentDirectory: %s", parentDirectory)
+
 	// Create a reader out of the zip archive
 	zipReader, err := zip.OpenReader(zipLocation)
 	if err != nil {
-		printFailureAndExit("Error occurred while reading zip:", err)
+		printFailureAndExit("Error occurred while reading distribution zip:", err)
 	}
+	//Close the zipReader after the function ends
 	defer zipReader.Close()
 
-	totalFiles := len(zipReader.Reader.File)
-	logger.Debug("File count in zip: %s", totalFiles)
+	//Get the total number of files in the zip
+	fileCount := len(zipReader.Reader.File)
+	logger.Debug("File count in zip: %s", fileCount)
 
-	filesRead := 0
-	// writer to show the progress
+	//We need to make sure all files are extracted. So we keep count of how many files are extracted
+	extractedFileCount := 0
+	//writer to show the progress
 	writer := uilive.New()
-	// start listening for updates and render
+	//start listening for updates and render
 	writer.Start()
+
+	//Set the target directory to extract
 	targetDir := "./"
 	if lastIndex := strings.LastIndex(zipLocation, string(os.PathSeparator)); lastIndex > -1 {
 		targetDir = zipLocation[:lastIndex]
 	}
+
 	// Iterate through each file/dir found in
 	for _, file := range zipReader.Reader.File {
-		filesRead++
+		extractedFileCount++
 		if (!logsEnabled) {
-			fmt.Fprintf(writer, "Extracting and reading files from distribution zip: (%d/%d)\n", filesRead, totalFiles)
+			fmt.Fprintf(writer, "Extracting and reading files from distribution zip: (%d/%d)\n", extractedFileCount, fileCount)
 			time.Sleep(time.Millisecond * 2)
 		}
 		logger.Trace("Checking file: %s", file.Name)
@@ -1008,7 +1047,7 @@ func unzipAndReadDistribution(zipLocation string, distEntriesMap *map[string]ent
 		}
 		// Add the distribution location so that the full path will look like it points to locations of the
 		// extracted zip
-		fullPath = path.Join(distLocation, fullPath)
+		fullPath = path.Join(parentDirectory, fullPath)
 		logger.Trace("FileName: %s ; fullPath: %s", file.FileInfo().Name(), fullPath)
 
 		//Add the entries to the distEntries map
@@ -1019,12 +1058,12 @@ func unzipAndReadDistribution(zipLocation string, distEntriesMap *map[string]ent
 	}
 	writer.Stop()
 	logger.Debug("Unzipping finished")
-	logger.Debug("Extracted file count: ", filesRead)
-	if totalFiles == filesRead {
+	logger.Debug("Extracted file count: ", extractedFileCount)
+	if fileCount == extractedFileCount {
 		logger.Debug("All files extracted")
 	} else {
 		logger.Debug("All files not extracted")
-		printFailureAndExit("All files were not extracted. Total files: %s ; Extracted: %s", totalFiles, filesRead)
+		printFailureAndExit("All files were not extracted. Total files: %s ; Extracted: %s", fileCount, extractedFileCount)
 	}
 }
 

@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"io/ioutil"
 	"os"
 	"fmt"
 	"archive/zip"
@@ -10,8 +9,10 @@ import (
 	"strings"
 	"github.com/fatih/color"
 	"path/filepath"
-	"gopkg.in/yaml.v2"
 	"github.com/ian-kent/go-log/levels"
+	"io/ioutil"
+	"gopkg.in/yaml.v2"
+	"github.com/spf13/cobra"
 )
 
 var (
@@ -21,8 +22,35 @@ var (
 	addedFilesMap map[string]bool
 )
 
+// validateCmd represents the validate command
+var validateCmd = &cobra.Command{
+	Use:   "validate <update_loc> <dist_loc>",
+	Short: "A brief description of your command",
+	Long: `A longer description that spans multiple lines and likely contains examples
+and usage of using your command. For example:
+
+Cobra is a CLI library for Go that empowers applications.
+This application is a tool to generate the needed files
+to quickly create a Cobra application.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		if len(args) < 2 || len(args) > 2 {
+			printFailureAndExit("Invalid number of argumants. Run with --help for more details about the argumants")
+		}
+		startValidation(args[0], args[1], enableDebugLogsForValidateCommand, enableTraceLogsForValidateCommand)
+	},
+}
+
+var enableDebugLogsForValidateCommand bool
+var enableTraceLogsForValidateCommand bool
+
+func init() {
+	RootCmd.AddCommand(validateCmd)
+	validateCmd.Flags().BoolVarP(&enableDebugLogsForValidateCommand, "debug", "d", false, "Enable debug logs")
+	validateCmd.Flags().BoolVarP(&enableTraceLogsForValidateCommand, "trace", "t", false, "Enable trace logs")
+}
+
 //Entry point of the validate command
-func Validate(updateLocation, distributionLocation string, debugLogsEnabled, traceLogsEnabled bool) {
+func startValidation(updateLocation, distributionLocation string, debugLogsEnabled, traceLogsEnabled bool) {
 	//Set the logger level. If the logger level is not given, set the logger level to WARN
 	if (debugLogsEnabled) {
 		logger.SetLevel(levels.DEBUG)
@@ -163,6 +191,7 @@ func readUpdateZip(zipLocation string, loggersEnabled bool) {
 	//start listening for updates and render
 	writer.Start()
 
+	//todo: check for folders
 	// Iterate through each file/dir found in the zip
 	for _, file := range zipReader.Reader.File {
 		fileCount++
@@ -170,8 +199,12 @@ func readUpdateZip(zipLocation string, loggersEnabled bool) {
 			fmt.Fprintf(writer, "Reading files from update zip: (%d/%d)\n", fileCount, totalFiles)
 			time.Sleep(time.Millisecond * 2)
 		}
-
 		logger.Trace("Checking file: %s", file.Name)
+
+		//ignore folders
+		if strings.HasSuffix(file.Name, "/") {
+			continue
+		}
 
 		//Every file should be in a root folder. Check for the os.PathSeparator character to identify this
 		index := strings.Index(file.Name, "/")//string(os.PathSeparator) removed because it does not work

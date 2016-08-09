@@ -137,36 +137,43 @@ func printFailure(args ...interface{}) {
 	fmt.Println(append(append([]interface{}{"\n[FAILURE]"}, args...), "\n")...)
 	color.Unset()
 }
+
 //This is used to print failure messages and exit
 func printFailureAndExit(args ...interface{}) {
+	//call the printFailure method and exit
 	printFailure(args...)
 	os.Exit(1)
 }
 
+//This is used to print warning messages
 func printWarning(args ...interface{}) {
 	color.Set(color.FgYellow, color.Bold)
 	fmt.Println(append(append([]interface{}{"[WARNING]"}, args...), "\n")...)
 	color.Unset()
 }
 
+//This is used to print info messages
 func printInfo(args ...interface{}) {
 	color.Set(color.FgYellow, color.Bold)
 	fmt.Println(append(append([]interface{}{"[INFO]"}, args...), "\n")...)
 	color.Unset()
 }
 
+//This is used to print success messages
 func printSuccess(args ...interface{}) {
 	color.Set(color.FgGreen, color.Bold)
 	fmt.Println(append(append([]interface{}{"[INFO]"}, args...), "\n")...)
 	color.Unset()
 }
 
+//This is used to print messages in Yellow color
 func printInYellow(args ...interface{}) {
 	color.Set(color.FgYellow, color.Bold)
 	fmt.Print(args...)
 	color.Unset()
 }
 
+//This is used to print messages in Red color
 func printInRed(args ...interface{}) {
 	color.Set(color.FgRed, color.Bold)
 	fmt.Print(args...)

@@ -22,42 +22,44 @@ import (
 	"github.com/ian-kent/go-log/layout"
 )
 
-//struct to store matching location(s) in the distribution for a given file/directory
+//struct to store location(s) in the distribution for a given file/directory. The keys would be the file locations.
+//And the value would be a boolean which will indicate whether this is a directory or a file. If it is a directory, the
+//value will be true
 type entry struct {
 	locationMap map[string]bool
 }
 
 //function used to add locations in distribution of a given file/directory
-func (entry *entry) add(path string) {
-	entry.locationMap[path] = true
+func (entry *entry) add(path string, isDir bool) {
+	entry.locationMap[path] = isDir
 }
 
-//struct that is used to read update-descriptor.yaml
+//struct which is used to read update-descriptor.yaml
 type update_descriptor struct {
-	Update_number    string            /*`yaml:"update_number"`*/
-	Platform_version string            /*`yaml:"kernel_version"`*/
-	Platform_name    string            /*`yaml:"platform_version"`*/
-	Applies_to       string            /*`yaml:"applies_to"`*/
-	Bug_fixes        map[string]string /*`yaml:"bug_fixes"`*/
-	Description      string            /*`yaml:"description"`*/
+	Update_number    string
+	Platform_version string
+	Platform_name    string
+	Applies_to       string
+	Bug_fixes        map[string]string
+	Description      string
 	File_changes     struct {
-				 Added_files    []string /*`yaml:"added_files,flow"`*/
-				 Removed_files  []string /*`yaml:"removed_files,flow"`*/
-				 Modified_files []string /*`yaml:"removed_files,flow"`*/
+				 Added_files    []string
+				 Removed_files  []string
+				 Modified_files []string
 			 }
 }
 
 var (
 	//This contains the mandatory resource files that needs to be copied to the update zip
-	//_RESOURCE_FILES = []string{_LICENSE_FILE}
+	_MANDATORY_RESOURCE_FILES = []string{_UPDATE_DESCRIPTOR_FILE, _LICENSE_FILE}
 
 	//These are used to store file/directory locations to later find matches. Keys of the map are file/directory
 	// names and the value will be a entry which contain a slice which has locations of that file
-	updateEntriesMap map[string]entry
-	distEntriesMap map[string]entry
+	updateEntriesMap = make(map[string]entry)
+	distEntriesMap = make(map[string]entry)
 
 	//This is used to read the update-descriptor.yaml file
-	updateDescriptor update_descriptor
+	updateDescriptor = update_descriptor{}
 
 	//This holds the complete name of the update zip file/root folder of the zip. This will be a combination of
 	// few other variables
@@ -68,37 +70,19 @@ var (
 )
 
 //Main entry point to create the new update
-func Create(updateLocation, distributionLocation string, debugLogsEnabled, traceLogsEnabled bool) {
-	//Setting default time format. This will be used in loggers. Otherwise complete data, time will be printed
-	layout.DefaultTimeLayout = "15:04:05"
-	//Setting new layout for STDOUT
-	logger.Appender().SetLayout(layout.Pattern("[%d] [%p] %m"))
-	//Set the log level. If the log level is not given, set the log level to WARN
-	if debugLogsEnabled {
-		logger.SetLevel(levels.DEBUG)
-		logger.Debug("Debug logs enabled")
-	} else if traceLogsEnabled {
-		logger.SetLevel(levels.TRACE)
-		logger.Trace("Trace logs enabled")
-	} else {
-		logger.SetLevel(levels.WARN)
-	}
+func Create(updateDirectory, distributionLocation string, debugLogsEnabled, traceLogsEnabled bool) {
+
+	//set debug level
+	setLogLevel(debugLogsEnabled, traceLogsEnabled)
 	logger.Debug("create command called")
 
-	//Initialize maps
-	updateEntriesMap = make(map[string]entry)
-	distEntriesMap = make(map[string]entry)
-
-	updateDescriptor = update_descriptor{}
-
-	//Check whether the given update location is a directory.
-	updateLocationExists := directoryExists(updateLocation)
+	//Check whether the given update directory exists
+	updateLocationExists := directoryExists(updateDirectory)
 	if !updateLocationExists {
-		printFailureAndExit("Update location does not exist. Enter a valid directory.")
+		printFailureAndExit("Update directory(" + updateDirectory + ") does not exist. Enter a valid directory.")
 	}
-	logger.Debug("Update location exists.")
+	logger.Debug("Update directory(" + updateDirectory + ") exists.")
 
-	logger.Debug("Distribution Loc: %s", distributionLocation)
 	//Check whether the distribution is a zip file.
 	if isAZipFile(distributionLocation) {
 		//Check whether the distribution zip exists.
@@ -107,7 +91,7 @@ func Create(updateLocation, distributionLocation string, debugLogsEnabled, trace
 			printFailureAndExit("Distribution zip does not exist. Enter a valid location.")
 		}
 		logger.Debug("Distribution location exists.")
-		unzipAndReadDistribution(distributionLocation, &distEntriesMap, debugLogsEnabled)
+		unzipAndReadDistribution(distributionLocation, &distEntriesMap, (debugLogsEnabled || traceLogsEnabled))
 		//Delete the extracted distribution directory after method finishes
 		defer os.RemoveAll(strings.TrimSuffix(distributionLocation, ".zip"))
 	} else {
@@ -125,39 +109,41 @@ func Create(updateLocation, distributionLocation string, debugLogsEnabled, trace
 	}
 
 	//This will have the update-descriptor.yaml file location
-	updateDescriptorLocation := path.Join(updateLocation, _UPDATE_DESCRIPTOR_FILE)
+	updateDescriptorLocation := path.Join(updateDirectory, _UPDATE_DESCRIPTOR_FILE)
 	logger.Debug("Descriptor Location: %s", updateDescriptorLocation)
 
 	//Check whether the update-descriptor.yaml file exists
 	updateDescriptorExists := fileExists(updateDescriptorLocation);
 	logger.Debug("Descriptor Exists: %s", updateDescriptorExists)
-
 	if !updateDescriptorExists {
 		printFailureAndExit(_UPDATE_DESCRIPTOR_FILE, " not found at ", updateDescriptorLocation)
 	}
+
 	//Read the update-descriptor
 	readDescriptor(&updateDescriptor, updateDescriptorLocation)
+	//Set the update name which will be used when creating the zip file.
+	setUpdateName(&updateDescriptor)
 
 	//Traverse and read the update
 	logger.Debug("Traversing update location")
-	traverse(updateLocation, &updateEntriesMap, false)
+	traverse(updateDirectory, &updateEntriesMap, false)
 	logger.Debug("Traversing update location finished")
 	logger.Debug("Update Entries: ", updateEntriesMap)
 
 	//Find matches
 	if isAZipFile(distributionLocation) {
 		logger.Debug("Finding matches")
-		findMatches(&updateEntriesMap, &distEntriesMap, &updateDescriptor, updateLocation, strings.TrimSuffix(distributionLocation, ".zip"))
+		findMatches(&updateEntriesMap, &distEntriesMap, &updateDescriptor, updateDirectory, strings.TrimSuffix(distributionLocation, ".zip"))
 		logger.Debug("Finding matches finished")
 	} else {
 		logger.Debug("Finding matches")
-		findMatches(&updateEntriesMap, &distEntriesMap, &updateDescriptor, updateLocation, distributionLocation)
+		findMatches(&updateEntriesMap, &distEntriesMap, &updateDescriptor, updateDirectory, distributionLocation)
 		logger.Debug("Finding matches finished")
 	}
 
 	//Copy resource files to the temp location
 	logger.Debug("Copying resource files")
-	copyResourceFiles(updateLocation)
+	copyResourceFiles(updateDirectory)
 	logger.Debug("Copying resource files finished")
 
 	//Update the update-descriptor with the newly added files
@@ -167,9 +153,35 @@ func Create(updateLocation, distributionLocation string, debugLogsEnabled, trace
 	logger.Debug("Creating zip file")
 	createUpdateZip(_UPDATE_NAME)
 	logger.Debug("Creating zip file finished")
+
+	//Remove the temp directory
+	err := os.RemoveAll(_TEMP_DIR)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			printFailureAndExit("Error occurred while deleting temp directory:", err)
+		}
+	}
 }
 
-//This is used to read update-descriptor.yaml
+//This function will set log level
+func setLogLevel(debugLogsEnabled, traceLogsEnabled bool) {
+	//Setting default time format. This will be used in loggers. Otherwise complete data, time will be printed
+	layout.DefaultTimeLayout = "15:04:05"
+	//Setting new layout for STDOUT
+	logger.Appender().SetLayout(layout.Pattern("[%d] [%p] %m"))
+	//Set the log level. If the log level is not given, set the log level to WARN
+	if debugLogsEnabled {
+		logger.SetLevel(levels.DEBUG)
+		logger.Debug("Debug logs enabled")
+	} else if traceLogsEnabled {
+		logger.SetLevel(levels.TRACE)
+		logger.Trace("Trace logs enabled")
+	} else {
+		logger.SetLevel(levels.WARN)
+	}
+}
+
+//This function will read update-descriptor.yaml
 func readDescriptor(updateDescriptor *update_descriptor, path string) {
 	yamlFile, err := ioutil.ReadFile(path)
 	if err != nil {
@@ -210,11 +222,10 @@ func readDescriptor(updateDescriptor *update_descriptor, path string) {
 	if len(updateDescriptor.Description) == 0 {
 		printFailureAndExit("'description' field not found in ", _UPDATE_DESCRIPTOR_FILE)
 	}
-
-	updateData(updateDescriptor)
 }
 
-func updateData(updateDescriptor *update_descriptor) {
+//This function will set the update name which will be used when creating the update zip
+func setUpdateName(updateDescriptor *update_descriptor) {
 	//Read the corresponding details
 	platformVersion := updateDescriptor.Platform_version
 	logger.Debug("Platform version set to: %s", platformVersion)
@@ -226,6 +237,7 @@ func updateData(updateDescriptor *update_descriptor) {
 	logger.Debug("Update name: %s", _UPDATE_NAME)
 }
 
+//
 func updateNewFilesInUpdateDescriptor(updateDescriptor *update_descriptor) {
 	data, err := yaml.Marshal(&updateDescriptor)
 	if err != nil {
@@ -234,21 +246,25 @@ func updateNewFilesInUpdateDescriptor(updateDescriptor *update_descriptor) {
 	logger.Debug("update-descriptor:\n%s\n\n", string(data))
 
 	color.Set(color.FgGreen)
-	//We need to
+	//We need to replace the "" (which will be added when marshalling) enclosing the update number
 	updatedData := strings.Replace(string(data), "\"", "", 2)
-	fmt.Println("-------------------------------------------------------------------------------------------------")
-	fmt.Println(_UPDATE_DESCRIPTOR_FILE, "-\n")
-	fmt.Println(strings.TrimSpace(updatedData))
-	fmt.Println("-------------------------------------------------------------------------------------------------")
+	log.Debug("-------------------------------------------------------------------------------------------------")
+	log.Debug(_UPDATE_DESCRIPTOR_FILE, "-\n")
+	log.Debug(strings.TrimSpace(updatedData))
+	log.Debug("-------------------------------------------------------------------------------------------------")
 	color.Unset()
 
 	destPath := path.Join(_TEMP_DIR, _UPDATE_DESCRIPTOR_FILE)
 	logger.Debug("destPath: %s", destPath)
+	saveUpdateDescriptor(updatedData, destPath)
+}
+
+func saveUpdateDescriptor(data, destPath string) {
 	// Open a new file for writing only
 	file, err := os.OpenFile(
 		destPath,
 		os.O_WRONLY | os.O_TRUNC | os.O_CREATE,
-		0666,
+		0777,
 	)
 	if err != nil {
 		printFailureAndExit("Error occurred while opening", _UPDATE_DESCRIPTOR_FILE, ":", err)
@@ -256,7 +272,7 @@ func updateNewFilesInUpdateDescriptor(updateDescriptor *update_descriptor) {
 	defer file.Close()
 
 	// Write bytes to file
-	byteSlice := []byte(updatedData)
+	byteSlice := []byte(data)
 	bytesWritten, err := file.Write(byteSlice)
 	if err != nil {
 		printFailureAndExit("Error occurred while updating", _UPDATE_DESCRIPTOR_FILE, ":", err)
@@ -265,44 +281,16 @@ func updateNewFilesInUpdateDescriptor(updateDescriptor *update_descriptor) {
 }
 
 //This method copies resource files to the
-func copyResourceFiles(patchLocation string) {
-	////Copy all mandatory resource files
-	//for _, resourceFile := range _RESOURCE_FILES {
-	//	filePath := path.Join(_RESOURCE_DIR, resourceFile)
-	//	ok := fileExists(filePath)
-	//	if !ok {
-	//		printFailureAndExit("Resource: ", filePath, " not found")
-	//	}
-	//	logger.Debug("Copying resource: %s to %s", filePath, _TEMP_DIR)
-	//	tempPath := path.Join(_TEMP_DIR, resourceFile)
-	//	err := CopyFile(filePath, tempPath)
-	//	if (err != nil) {
-	//		printFailureAndExit("Error occurred while copying the resource file: ", filePath, err)
-	//	}
-	//}
-
-	//Mandatory file
-	filePath := path.Join(patchLocation, _UPDATE_DESCRIPTOR_FILE)
-	ok := fileExists(filePath)
-	if !ok {
-		printFailureAndExit(_UPDATE_DESCRIPTOR_FILE, ":", filePath, " not found")
-	} else {
-		logger.Debug("Copying: %s to %s", filePath, _TEMP_DIR)
-		tempPath := path.Join(_TEMP_DIR, _UPDATE_DESCRIPTOR_FILE)
-		err := CopyFile(filePath, tempPath)
-		if (err != nil) {
-			printFailureAndExit("Error occurred while copying the resource file: ", filePath, err)
+func copyResourceFiles(updateLocation string) {
+	//Copy all mandatory resource files
+	for _, resourceFile := range _MANDATORY_RESOURCE_FILES {
+		filePath := path.Join(updateLocation, resourceFile)
+		ok := fileExists(filePath)
+		if !ok {
+			printFailureAndExit("Resource: ", filePath, " not found")
 		}
-	}
-
-	//Mandatory file
-	filePath = path.Join(patchLocation, _LICENSE_FILE)
-	ok = fileExists(filePath)
-	if !ok {
-		printFailureAndExit(_LICENSE_FILE, ":", filePath, " not found")
-	} else {
-		logger.Debug("Copying: %s to %s", filePath, _TEMP_DIR)
-		tempPath := path.Join(_TEMP_DIR, _LICENSE_FILE)
+		logger.Debug("Copying resource: %s to %s", filePath, _TEMP_DIR)
+		tempPath := path.Join(_TEMP_DIR, resourceFile)
 		err := CopyFile(filePath, tempPath)
 		if (err != nil) {
 			printFailureAndExit("Error occurred while copying the resource file: ", filePath, err)
@@ -310,10 +298,10 @@ func copyResourceFiles(patchLocation string) {
 	}
 
 	//This file is optional
-	filePath = path.Join(patchLocation, _NOT_A_CONTRIBUTION_FILE)
-	ok = fileExists(filePath)
+	filePath := path.Join(updateLocation, _NOT_A_CONTRIBUTION_FILE)
+	ok := fileExists(filePath)
 	if !ok {
-		printWarning("'" + _NOT_A_CONTRIBUTION_FILE + "'", "not found in the patch directory. Make sure that the Apache License is in '" + _LICENSE_FILE + "' file.")
+		printWarning("'" + _NOT_A_CONTRIBUTION_FILE + "'", "not found in the update directory. Make sure that the Apache License is in '" + _LICENSE_FILE + "' file.")
 	} else {
 		logger.Debug("Copying NOT_A_CONTRIBUTION: %s to %s", filePath, _TEMP_DIR)
 		tempPath := path.Join(_TEMP_DIR, _NOT_A_CONTRIBUTION_FILE)
@@ -324,7 +312,7 @@ func copyResourceFiles(patchLocation string) {
 	}
 
 	//This file is optional
-	filePath = path.Join(patchLocation, _INSTRUCTIONS_FILE)
+	filePath = path.Join(updateLocation, _INSTRUCTIONS_FILE)
 	ok = fileExists(filePath)
 	if !ok {
 		printWarning("'" + _INSTRUCTIONS_FILE + "'", "file not found.")
@@ -334,7 +322,7 @@ func copyResourceFiles(patchLocation string) {
 			preference, _ := reader.ReadString('\n')
 
 			if preference[0] == 'y' || preference[0] == 'Y' {
-				printInfo("\nPlease create an '" + _INSTRUCTIONS_FILE + "' file in the patch directory and run the tool again.")
+				printInfo("\nPlease create an '" + _INSTRUCTIONS_FILE + "' file in the update directory and run the tool again.")
 				os.Exit(0)
 			} else if preference[0] == 'n' || preference[0] == 'N' {
 				printWarning("\nSkipping creating '" + _INSTRUCTIONS_FILE + "' file")
@@ -354,7 +342,7 @@ func copyResourceFiles(patchLocation string) {
 	}
 
 	//Copy README.txt. This might be removed in the future. That is why this is copied separately
-	filePath = path.Join(patchLocation, _README_FILE)
+	filePath = path.Join(updateLocation, _README_FILE)
 	ok = fileExists(filePath)
 	if !ok {
 		printFailureAndExit("Resource: ", filePath, " not found")
@@ -368,13 +356,13 @@ func copyResourceFiles(patchLocation string) {
 	}
 }
 
-//This is used to find matches of files/directories in the patch from distribution
-func findMatches(updateEntriesMap, distEntriesMap *map[string]entry, updateDescriptor *update_descriptor, patchLocation, distributionLocation string) {
+//This is used to find matches of files/directories in the update from distribution
+func findMatches(updateEntriesMap, distEntriesMap *map[string]entry, updateDescriptor *update_descriptor, updateLocation, distributionLocation string) {
 	//Create a new table to display summary
 	overallViewTable := tablewriter.NewWriter(os.Stdout)
 	overallViewTable.SetAlignment(tablewriter.ALIGN_LEFT)
 	overallViewTable.SetHeader([]string{"File/Folder", "Copied To"})
-	//Delete temp directory
+	//Delete temp directory if it exists before proceeding
 	err := os.RemoveAll(_TEMP_DIR)
 	if err != nil {
 		if !os.IsNotExist(err) {
@@ -411,10 +399,10 @@ func findMatches(updateEntriesMap, distEntriesMap *map[string]entry, updateDescr
 				//Add locations to the table. Index will be used to get the user preference
 				index := 1
 				for pathInDist, isDirInDist := range distributionEntry.locationMap {
-					for _, isDirInPatch := range locationInUpdate.locationMap {
+					for _, isDirInUpdate := range locationInUpdate.locationMap {
 						//We only need to show the files with the same type. (Folder/Folder or
 						// File/File)
-						if isDirInDist == isDirInPatch {
+						if isDirInDist == isDirInUpdate {
 							//Add the location to the map. Use the index as the key. This
 							// will allow us to get the user selected locations easier.
 							// Otherwise there is no direct way to get the location from the preference
@@ -474,7 +462,7 @@ func findMatches(updateEntriesMap, distEntriesMap *map[string]entry, updateDescr
 
 								//selectedPathsList = append(selectedPathsList, selectedPath)
 
-								src := path.Join(patchLocation, fileName)
+								src := path.Join(updateLocation, fileName)
 								destPath := path.Join(_UPDATE_DIR_ROOT + tempFilePath)
 								logger.Trace("destPath: %s", destPath)
 								dest := path.Join(destPath, fileName)
@@ -495,7 +483,7 @@ func findMatches(updateEntriesMap, distEntriesMap *map[string]entry, updateDescr
 								} else if directoryExists(src) {
 									//Compare the directories to identify new files
 									tempPath := path.Join(selectedPath, fileName)
-									compareDir(updateDescriptor, src, tempPath, patchLocation, distributionLocation)
+									compareDir(updateDescriptor, src, tempPath, updateLocation, distributionLocation)
 
 									//If source is a directory
 									logger.Debug("Copying directory: %s ; To: %s", src, dest)
@@ -544,10 +532,10 @@ func findMatches(updateEntriesMap, distEntriesMap *map[string]entry, updateDescr
 				//Get the location in the distribution (we can use distEntry.locationMap[0] after a
 				// nil check as well)
 				for pathInDistribution, isDirInDist := range distributionEntry.locationMap {
-					//Get the location in the patch file
-					for pathInPatch, isDirInPatch := range locationInUpdate.locationMap {
+					//Get the location in the update file
+					for pathInUpdate, isDirInUpdate := range locationInUpdate.locationMap {
 						//Check whether both locations contain same type (files or directories)
-						if isDirInDist == isDirInPatch {
+						if isDirInDist == isDirInUpdate {
 							//Add an entry to the table
 							logger.Trace("Both locations contain same type.")
 							logger.Trace("pathInDist: %s", pathInDistribution)
@@ -559,7 +547,7 @@ func findMatches(updateEntriesMap, distEntriesMap *map[string]entry, updateDescr
 							tempFilePath := strings.TrimPrefix(pathInDistribution, distributionLocation)
 							logger.Trace("tempFilePath: %s", tempFilePath)
 							//Construct the source location
-							src := path.Join(pathInPatch, fileName)
+							src := path.Join(pathInUpdate, fileName)
 							destPath := path.Join(_UPDATE_DIR_ROOT + tempFilePath)
 							logger.Trace("destPath: %s", destPath)
 							//Construct the destination location
@@ -587,7 +575,7 @@ func findMatches(updateEntriesMap, distEntriesMap *map[string]entry, updateDescr
 							} else if directoryExists(src) {
 								tempPath := path.Join(pathInDistribution, fileName)
 								//Compare the directories to identify new files
-								compareDir(updateDescriptor, src, tempPath, patchLocation, distributionLocation)
+								compareDir(updateDescriptor, src, tempPath, updateLocation, distributionLocation)
 								//If source is a directory
 								logger.Debug("Copying directory: %s ; To: %s", src, dest)
 								//copy source directory to destination
@@ -604,11 +592,11 @@ func findMatches(updateEntriesMap, distEntriesMap *map[string]entry, updateDescr
 							printWarning("Following locations contain", fileName, "but types are different")
 							color.Set(color.FgYellow, color.Bold)
 							fmt.Println(" - ", pathInDistribution)
-							fmt.Println(" - ", pathInPatch)
+							fmt.Println(" - ", pathInUpdate)
 							fmt.Println()
 							color.Unset()
 							typePostfix := " (file)"
-							if isDirInPatch {
+							if isDirInUpdate {
 								typePostfix = " (dir)"
 							}
 							overallViewTable.Append([]string{fileName + typePostfix, " - "})
@@ -659,7 +647,7 @@ func findMatches(updateEntriesMap, distEntriesMap *map[string]entry, updateDescr
 									logger.Debug("Re-enter selected.")
 									continue skipCopy
 								} else {
-									fmt.Println("Invalid preference. Try again.\n")
+									printFailure("Invalid preference. Enter Y for Yes, No for No and R to Re-enter a new relative path.")
 									continue
 								}
 							}
@@ -683,18 +671,16 @@ func findMatches(updateEntriesMap, distEntriesMap *map[string]entry, updateDescr
 							printFailureAndExit("Error occurred while creating directory", err)
 						}
 						logger.Debug("Entered location is a directory. Copying ...")
-						fileLocation := filepath.Join(patchLocation, fileName)
+						fileLocation := filepath.Join(updateLocation, fileName)
 						tempDistPath := path.Join(_CARBON_HOME, tempFilePath) + string(os.PathSeparator)
 						//Check for file/folder and copy
 						if fileExists(fileLocation) {
 							logger.Trace("File found: %s", fileLocation)
-							//copyPath = path.Join(copyPath, patchEntryName)
 							logger.Debug("Copying file: %s ; To: %s", fileLocation, dest)
 							CopyFile(fileLocation, dest)
 							overallViewTable.Append([]string{fileName, tempDistPath})
 						} else if directoryExists(fileLocation) {
 							logger.Trace("dir found: %s", fileLocation)
-							//copyPath = path.Join(copyPath, patchEntryName)
 							logger.Debug("Copying file: %s", fileLocation, "; To:", dest)
 							CopyDir(fileLocation, dest)
 							overallViewTable.Append([]string{fileName, tempDistPath})
@@ -707,7 +693,7 @@ func findMatches(updateEntriesMap, distEntriesMap *map[string]entry, updateDescr
 					break
 				} else if enteredPreferences[0] == 'N' || enteredPreferences[0] == 'n' {
 					logger.Debug("Not copying file.")
-					logger.Trace("Location(s) in Patch: %s", locationInUpdate)
+					logger.Trace("Location(s) in update: %s", locationInUpdate)
 					overallViewTable.Append([]string{fileName, " - "})
 					break
 				} else {
@@ -728,33 +714,33 @@ func findMatches(updateEntriesMap, distEntriesMap *map[string]entry, updateDescr
 	fmt.Println()
 }
 
-//This will compare and print warnings for new files when copying directories from patch to temp directory
-func compareDir(updateDescriptor *update_descriptor, pathInPatch, pathInDist, patchLoc, distLoc string) {
-	logger.Debug("patchLoc: %s", patchLoc)
+//This will compare and print warnings for new files when copying directories from update to temp directory
+func compareDir(updateDescriptor *update_descriptor, pathInUpdate, pathInDist, updateLoc, distLoc string) {
+	logger.Debug("updateLoc: %s", updateLoc)
 	logger.Debug("distLoc: %s", distLoc)
 	//Create maps to store the file details
-	filesInPatch := make(map[string]bool)
+	filesInUpdate := make(map[string]bool)
 	filesInDist := make(map[string]bool)
-	logger.Debug("Comparing: %s ; %s", pathInPatch, pathInDist)
-	//Walk the directory in the patch
-	err := filepath.Walk(pathInPatch, func(path string, fileInfo os.FileInfo, err error) error {
+	logger.Debug("Comparing: %s ; %s", pathInUpdate, pathInDist)
+	//Walk the directory in the update
+	err := filepath.Walk(pathInUpdate, func(path string, fileInfo os.FileInfo, err error) error {
 		logger.Trace("Walking: %s", path)
 		if err != nil {
-			printFailureAndExit("Error occurred while traversing pathInPatch: ", err)
+			printFailureAndExit("Error occurred while traversing pathInUpdate: ", err)
 		}
 		//We only want to check files
 		if !fileInfo.IsDir() {
-			logger.Trace("File in patch: %s", path)
+			logger.Trace("File in update: %s", path)
 			//construct the relative path in the distribution
-			tempPatchFilePath := strings.TrimPrefix(path, pathInPatch)
-			logger.Trace("tempPath: %s", tempPatchFilePath)
+			tempUpdateFilePath := strings.TrimPrefix(path, pathInUpdate)
+			logger.Trace("tempPath: %s", tempUpdateFilePath)
 			//Add the entry
-			filesInPatch[tempPatchFilePath] = true
+			filesInUpdate[tempUpdateFilePath] = true
 		}
 		return nil
 	})
 	if err != nil {
-		printFailureAndExit("Error occurred while traversing pathInPatch:", err)
+		printFailureAndExit("Error occurred while traversing pathInUpdate:", err)
 	}
 	//Walk the directory in the distribution
 	err = filepath.Walk(pathInDist, func(path string, fileInfo os.FileInfo, err error) error {
@@ -774,8 +760,8 @@ func compareDir(updateDescriptor *update_descriptor, pathInPatch, pathInDist, pa
 	if err != nil {
 		printFailureAndExit("Error occurred while traversing pathInDist:", err)
 	}
-	//Look for match for each file in patch location
-	for path := range filesInPatch {
+	//Look for match for each file in update location
+	for path := range filesInUpdate {
 		//Check whether distribution has a match
 		_, found := filesInDist[path]
 		logger.Trace("path: ", path)
@@ -819,22 +805,23 @@ func traverse(path string, entryMap *map[string]entry, isDist bool) {
 	files, _ := ioutil.ReadDir(path)
 	//Iterate through all files
 	for _, file := range files {
-		//update-descriptor, README, instructions files might be in the patch location. We don't need to find
+		//update-descriptor, README, instructions files might be in the update directory. We don't need to find
 		// matches for them
 		if file.Name() != _UPDATE_DESCRIPTOR_FILE && file.Name() != _README_FILE && file.Name() != _INSTRUCTIONS_FILE && file.Name() != _LICENSE_FILE && file.Name() != _NOT_A_CONTRIBUTION_FILE {
 			logger.Trace("Checking entry: %s ; path: %s", file.Name(), path)
 			//Check whether the filename is already in the map
 			_, ok := (*entryMap)[file.Name()]
+			isDir := false
+			if file.IsDir() {
+				isDir = true
+			}
 			if (ok) {
 				//If the file is already in the map, we only need to add a new entry
 				entry := (*entryMap)[file.Name()]
-				entry.add(path)
+				entry.add(path, isDir)
 			} else {
 				//This is to identify whether the location contain a file or a directory
-				isDir := false
-				if file.IsDir() {
-					isDir = true
-				}
+
 				//Add a new entry
 				(*entryMap)[file.Name()] = entry{
 					locationMap: map[string]bool{
@@ -842,9 +829,9 @@ func traverse(path string, entryMap *map[string]entry, isDist bool) {
 					},
 				}
 			}
-			// This function is used to read both patch location and distribution location. We only want
-			// to get the 1st level files/directories in the patch. So we don't recursively traverse in
-			// the patch location.isDist is used to identify whether this is used to read patch or
+			// This function is used to read both update location and distribution location. We only want
+			// to get the 1st level files/directories in the update. So we don't recursively traverse in
+			// the update location.isDist is used to identify whether this is used to read update or
 			// distribution. If this is the distribution, recursively iterate
 			if file.IsDir() && isDist {
 				traverse(path + string(os.PathSeparator) + file.Name(), entryMap, isDist)
@@ -853,9 +840,9 @@ func traverse(path string, entryMap *map[string]entry, isDist bool) {
 	}
 }
 
-//This function creates the patch zip file
+//This function creates the update zip file
 func createUpdateZip(updateName string) {
-	logger.Debug("Creating patch zip file: %s.zip", updateName)
+	logger.Debug("Creating update zip file: %s.zip", updateName)
 	//Create the new zip file
 	outFile, err := os.Create(updateName + ".zip")
 	if err != nil {
@@ -966,22 +953,18 @@ func unzipAndReadDistribution(zipLocation string, distEntriesMap *map[string]ent
 		// like a normal file
 		zippedFile, err := file.Open()
 		if err != nil {
-			printFailureAndExit("Error occuured while opening the file:", file, "; Error:", err)
+			printFailureAndExit("Error occurred while opening the file:", file, "; Error:", err)
 		}
 		// Specify what the extracted file name should be. You can specify a full path or a prefix to move it
 		// to a different directory. In this case, we will extract the file from the zip to a file of the same
 		// name.
-		extractionPath := filepath.Join(
-			targetDir,
-			file.Name,
-		)
+		extractionPath := filepath.Join(targetDir, file.Name)
 		// Extract the item (or create directory)
 		if file.FileInfo().IsDir() {
 			logger.Trace("Is a directory")
-			// Create directories to recreate directory
-			// structure inside the zip archive. Also
+			// Create directories to recreate directory structure inside the zip archive. Also
 			// preserves permissions
-			//logger.Debug("Creating directory:", extractionPath)
+			logger.Trace("Creating directory: ", extractionPath)
 			os.MkdirAll(extractionPath, file.Mode())
 
 			// We only need the location of the directory. fullPath contains the directory name too. We
@@ -1029,7 +1012,7 @@ func unzipAndReadDistribution(zipLocation string, distEntriesMap *map[string]ent
 		logger.Trace("FileName: %s ; fullPath: %s", file.FileInfo().Name(), fullPath)
 
 		//Add the entries to the distEntries map
-		addToDistEntryMap(distEntriesMap, file, fullPath)
+		addToDistEntryMap(distEntriesMap, file.FileInfo().Name(), file.FileInfo().IsDir(), fullPath)
 
 		//We need to close the file. Otherwise an error will occur because large number of files are open
 		zippedFile.Close()
@@ -1045,21 +1028,22 @@ func unzipAndReadDistribution(zipLocation string, distEntriesMap *map[string]ent
 	}
 }
 
-func addToDistEntryMap(distEntriesMap *map[string]entry, file *zip.File, fullPath string) {
+func addToDistEntryMap(distEntriesMap *map[string]entry, fileName string, isADir bool, fullPath string) {
 	//Check whether the filename is already in the map
-	_, ok := (*distEntriesMap)[(*file).FileInfo().Name()]
+	_, ok := (*distEntriesMap)[fileName]
+
+	//This is to identify whether the location contain a file or a directory
+	isDir := false
+	if isADir {
+		isDir = true
+	}
 	if (ok) {
 		//If the file is already in the map, we only need to add a new entry
-		entry := (*distEntriesMap)[file.FileInfo().Name()]
-		entry.add(fullPath)
+		entry := (*distEntriesMap)[fileName]
+		entry.add(fullPath, isDir)
 	} else {
-		//This is to identify whether the location contain a file or a directory
-		isDir := false
-		if (*file).FileInfo().IsDir() {
-			isDir = true
-		}
 		//Add a new entry
-		(*distEntriesMap)[(*file).FileInfo().Name()] = entry{
+		(*distEntriesMap)[fileName] = entry{
 			locationMap: map[string]bool{
 				fullPath: isDir,
 			},

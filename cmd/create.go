@@ -194,8 +194,18 @@ func create(updateDirectory, distributionPath string, debugLogsEnabled, traceLog
 	//logger.Debug("Traversing update location finished")
 	//logger.Debug("Update Entries: ", updateEntriesMap)
 
-	//6) Traverse and read distribution
+	ignoredFiles := getIgnoredFilesInUpdate()
 
+	updateMap := LocationMap{
+		nameLocationMap: make(map[string]Locations),
+	}
+	err = readDirectoryStructure(updateDirectory, &updateMap, ignoredFiles)
+	if err != nil {
+		printFailureAndExit(err)
+	}
+	fmt.Println(updateMap)
+
+	//6) Traverse and read distribution
 	distributionMap := LocationMap{
 		nameLocationMap: make(map[string]Locations),
 	}
@@ -216,7 +226,7 @@ func create(updateDirectory, distributionPath string, debugLogsEnabled, traceLog
 		log.Debug("distributionRoot: %s", distributionRoot)
 		viper.Set(_DISTRIBUTION_ROOT, distributionRoot)
 
-		err = readDirectoryStructure(distributionRoot, &distributionMap)
+		err = readDirectoryStructure(distributionRoot, &distributionMap, nil)
 		if err != nil {
 			printFailureAndExit(err)
 		}
@@ -228,18 +238,18 @@ func create(updateDirectory, distributionPath string, debugLogsEnabled, traceLog
 		viper.Set(_DISTRIBUTION_ROOT, distributionPath)
 		log.Debug("distributionRoot: %s", distributionPath)
 
-		err = readDirectoryStructure(distributionPath, &distributionMap)
+		err = readDirectoryStructure(distributionPath, &distributionMap, nil)
 		if err != nil {
 			printFailureAndExit(err)
 		}
 
-		fmt.Println(distributionMap)
+
 
 		//logger.Debug("Traversing distribution location")
 		//traverseAndRead(distributionPath, &distEntriesMap, true)
 		//logger.Debug("Traversing distribution location finished")
 	}
-
+	fmt.Println(distributionMap)
 	////7) Find matches
 	//if hasZipExtension(distributionPath) {
 	//	logger.Debug("Finding matches")
@@ -271,6 +281,15 @@ func create(updateDirectory, distributionPath string, debugLogsEnabled, traceLog
 	}
 }
 
+func getIgnoredFilesInUpdate() map[string]bool {
+	return map[string]bool{
+		_UPDATE_DESCRIPTOR_FILE:true,
+		_LICENSE_FILE:true,
+		_README_FILE:true,
+		_NOT_A_CONTRIBUTION_FILE:true,
+		_INSTRUCTIONS_FILE:true,
+	}
+}
 //func isUpdateDirectoryExists(updateDirectory string) (bool, error) {
 //	dirExists, err := isDirectoryExists(updateDirectory)
 //	if err != nil {
@@ -331,11 +350,24 @@ func getDistributionRoot(path string) string {
 	return path[:lastIndex]
 }
 
-func readDirectoryStructure(root string, locationMap *LocationMap) error {
+func readDirectoryStructure(root string, locationMap *LocationMap, ignoredFiles map[string]bool) error {
+	root = strings.TrimSuffix(root, string(os.PathSeparator))
 	return filepath.Walk(root, func(absolutePath string, fileInfo os.FileInfo, err error) error {
-		logger.Trace("Walking: %s", absolutePath)
+		logger.Debug("Walking: %s", absolutePath)
 		if err != nil {
 			return err
+		}
+
+		if root == absolutePath {
+			return nil
+		}
+
+		//check in ignored files. This is useful to ignore update-descriptor.yaml, etc in update directory
+		if len(ignoredFiles) > 0 {
+			_, found := ignoredFiles[fileInfo.Name()]
+			if found {
+				return nil
+			}
 		}
 
 		parentDirectory := strings.TrimSuffix(absolutePath, fileInfo.Name())

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-target="uct.go"
+target="wum-uc.go"
 uctVersion="1.0.0"
 
 platforms="darwin/386/macosx/i586 darwin/amd64/macosx/x64 linux/386/linux/i586 linux/amd64/linux/x64 windows/386/windows/i586 windows/amd64/windows/x64"

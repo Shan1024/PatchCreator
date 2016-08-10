@@ -62,7 +62,7 @@ If the *UPDATE_LOCATION* contained the update 0001, by running this command, you
 
 After we create a update, we might want to unzip it and add more detail to the *update-descriptor.yaml* or the *README.txt*. After we do these changes, we can create a zip using the files again. We can use this validation command to verify that the file structure of the zip is is the same as the distribution.
 
-##### validation command
+#### validation command
 
 ```
 ./uct validate <update_loc> <dist_loc> [<flags>]

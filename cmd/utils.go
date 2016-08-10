@@ -7,11 +7,27 @@ import (
 	"fmt"
 	"io/ioutil"
 	"github.com/fatih/color"
+	"archive/zip"
 )
 
-//Check whether the given path contain a zip file
-func isAZipFile(path string) bool {
+func hasZipExtension(path string) bool {
 	return strings.HasSuffix(path, ".zip")
+}
+
+func getParentDirectory(path string) string {
+	parentDirectory := "./"
+	if lastIndex := strings.LastIndex(path, string(os.PathSeparator)); lastIndex > -1 {
+		parentDirectory = path[:lastIndex]
+	}
+	return parentDirectory
+}
+
+func deleteDir(path string) error {
+	return os.RemoveAll(path)
+}
+
+func createDir(path string) error {
+	return os.MkdirAll(path, 0777)
 }
 
 //Check whether the given string is in the given slice
@@ -40,9 +56,7 @@ func CopyFile(source string, dest string) (err error) {
 	if err == nil {
 		si, err := os.Stat(source)
 		if err != nil {
-			err = os.Chmod(dest, si.Mode())
-			fmt.Println("Error occurred while copying:", err)
-			os.Exit(1)
+			return os.Chmod(dest, si.Mode())
 		}
 
 	}
@@ -76,15 +90,13 @@ func CopyDir(source string, dest string) (err error) {
 		if entry.IsDir() {
 			err = CopyDir(sfp, dfp)
 			if err != nil {
-				fmt.Println("Error occurred while copying:", err)
-				os.Exit(1)
+				return err
 			}
 		} else {
 			// perform copy
 			err = CopyFile(sfp, dfp)
 			if err != nil {
-				fmt.Println("Error occurred while copying:", err)
-				os.Exit(1)
+				return err
 			}
 		}
 	}
@@ -102,33 +114,29 @@ func (e *CustomError) Error() string {
 }
 
 //Check whether the given location points to a directory
-func directoryExists(location string) bool {
-	logger.Trace("Checking Location: %s", location)
+func isDirectoryExists(location string) (bool, error) {
 	locationInfo, err := os.Stat(location)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return false
-		}
+		return false, err
 	}
 	if locationInfo.IsDir() {
-		return true
+		return true, nil
+	} else {
+		return false, nil
 	}
-	return false
 }
 
 //Check whether the given location points to a file
-func fileExists(location string) bool {
-	logger.Trace("Checking location: %s", location)
+func isFileExists(location string) (bool, error) {
 	locationInfo, err := os.Stat(location)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return false
-		}
+		return false, err
 	}
 	if locationInfo.IsDir() {
-		return false
+		return false, nil
+	} else {
+		return true, nil
 	}
-	return true
 }
 
 //This is used to print failure messages
@@ -179,3 +187,116 @@ func printInRed(args ...interface{}) {
 	fmt.Print(args...)
 	color.Unset()
 }
+
+func zipDirectory(filename string, directory string) error {
+	// Create a file to write the archive buffer to
+	// Could also use an in memory buffer.
+	outFile, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer outFile.Close()
+
+	// Create a zip writer on top of the file writer
+	zipWriter := zip.NewWriter(outFile)
+
+
+	//todo: write walk function
+	// Add files to archive
+	// We use some hard coded data to demonstrate,
+	// but you could iterate through all the files
+	// in a directory and pass the name and contents
+	// of each file, or you can take data from your
+	// program and write it write in to the archive
+	// without
+	var filesToArchive = []struct {
+		Name, Body string
+	}{
+		{"test.txt", "String contents of file"},
+		{"test2.txt", "\x61\x62\x63\n"},
+	}
+
+	// Create and write files to the archive, which in turn
+	// are getting written to the underlying writer to the
+	// .zip file we created at the beginning
+	for _, file := range filesToArchive {
+		fileWriter, err := zipWriter.Create(file.Name)
+		if err != nil {
+			return err
+		}
+		_, err = fileWriter.Write([]byte(file.Body))
+		if err != nil {
+			return err
+		}
+	}
+
+	// Clean up
+	err = zipWriter.Close()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+//func unzip(zipFileName, targetDir string) error {
+//	// Create a reader out of the zip archive
+//	zipReader, err := zip.OpenReader(zipFileName)
+//	if err != nil {
+//		return err
+//	}
+//	defer zipReader.Close()
+//
+//	// Iterate through each file/dir found in
+//	for _, file := range zipReader.Reader.File {
+//
+//		logger.Debug("File: %s", file.Name)
+//		// Open the file inside the zip archive
+//		// like a normal file
+//		zippedFile, err := file.Open()
+//		if err != nil {
+//			return err
+//		}
+//
+//		// Specify what the extracted file name should be.
+//		// You can specify a full path or a prefix
+//		// to move it to a different directory.
+//		// In this case, we will extract the file from
+//		// the zip to a file of the same name.
+//		extractedFilePath := filepath.Join(
+//			targetDir,
+//			file.Name,
+//		)
+//
+//		// Extract the item (or create directory)
+//		if file.FileInfo().IsDir() {
+//			// Create directories to recreate directory
+//			// structure inside the zip archive. Also
+//			// preserves permissions
+//			logger.Debug("Creating directory:", extractedFilePath)
+//			os.MkdirAll(extractedFilePath, file.Mode())
+//		} else {
+//			// Extract regular file since not a directory
+//			logger.Debug("Extracting file:", file.Name)
+//
+//			// Open an output file for writing
+//			outputFile, err := os.OpenFile(
+//				extractedFilePath,
+//				os.O_CREATE,
+//				file.Mode(),
+//			)
+//			if err != nil {
+//				return err
+//			}
+//			outputFile.Close()
+//
+//			// "Extract" the file by copying zipped file
+//			// contents to the output file
+//			_, err = io.Copy(outputFile, zippedFile)
+//			if err != nil {
+//				return err
+//			}
+//		}
+//		zippedFile.Close()
+//	}
+//	return nil
+//}

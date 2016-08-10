@@ -9,7 +9,7 @@ import (
 	"strings"
 	"github.com/fatih/color"
 	"path/filepath"
-	"github.com/ian-kent/go-log/levels"
+	//"github.com/ian-kent/go-log/levels"
 	"io/ioutil"
 	"gopkg.in/yaml.v2"
 	"github.com/spf13/cobra"
@@ -51,62 +51,62 @@ func init() {
 
 //Entry point of the validate command
 func startValidation(updateLocation, distributionLocation string, debugLogsEnabled, traceLogsEnabled bool) {
-	//Set the logger level. If the logger level is not given, set the logger level to WARN
-	if (debugLogsEnabled) {
-		logger.SetLevel(levels.DEBUG)
-		logger.Debug("loggers enabled")
-	} else if (traceLogsEnabled) {
-		logger.SetLevel(levels.TRACE)
-		logger.Debug("loggers enabled")
-	} else {
-		logger.SetLevel(levels.WARN)
-	}
-	logger.Debug("validate command called")
-
-	//Initialize variables
-	initialize()
-
-	//Update location should be a zip file
-	logger.Debug("Update Loc: %s", updateLocation)
-	if !isAZipFile(updateLocation) {
-		printFailureAndExit("Update file should be a zip file.")
-	}
-	//Check whether the update location exists
-	updateLocationExists := fileExists(updateLocation)
-	if updateLocationExists {
-		logger.Debug("Update location exists.")
-	} else {
-		printFailureAndExit("Update location does not exist. Enter a valid file location.")
-	}
-
-	logger.Debug("Reading update zip...")
-	readUpdateZip(updateLocation, debugLogsEnabled || traceLogsEnabled)
-	logger.Debug("Update zip successfully read.")
-	logger.Debug("Entries in update zip: %s", updatedFilesMap)
-
-	logger.Debug("Distribution Loc: " + distributionLocation)
-	//Check whether the distribution is a zip or a directory
-	if isAZipFile(distributionLocation) {
-		//Check whether the distribution zip exists
-		zipFileExists := fileExists(distributionLocation)
-		if zipFileExists {
-			logger.Debug("Distribution location exists.")
-			readDistZip(distributionLocation, debugLogsEnabled || traceLogsEnabled)
-		} else {
-			printFailureAndExit("Distribution zip does not exist. Enter a valid location.")
-		}
-	} else {
-		//Check whether the distribution location exists
-		distributionLocationExists := directoryExists(distributionLocation)
-		if distributionLocationExists {
-			logger.Debug("Distribution location exists.")
-			readDistDir(distributionLocation, debugLogsEnabled || traceLogsEnabled)
-		} else {
-			printFailureAndExit("Distribution location does not exist. Enter a valid location.")
-		}
-	}
-	//Validate files
-	validate()
+	////Set the logger level. If the logger level is not given, set the logger level to WARN
+	//if (debugLogsEnabled) {
+	//	logger.SetLevel(levels.DEBUG)
+	//	logger.Debug("loggers enabled")
+	//} else if (traceLogsEnabled) {
+	//	logger.SetLevel(levels.TRACE)
+	//	logger.Debug("loggers enabled")
+	//} else {
+	//	logger.SetLevel(levels.WARN)
+	//}
+	//logger.Debug("validate command called")
+	//
+	////Initialize variables
+	//initialize()
+	//
+	////Update location should be a zip file
+	//logger.Debug("Update Loc: %s", updateLocation)
+	//if !isAZipFile(updateLocation) {
+	//	printFailureAndExit("Update file should be a zip file.")
+	//}
+	////Check whether the update location exists
+	//updateLocationExists := isFileExists(updateLocation)
+	//if updateLocationExists {
+	//	logger.Debug("Update location exists.")
+	//} else {
+	//	printFailureAndExit("Update location does not exist. Enter a valid file location.")
+	//}
+	//
+	//logger.Debug("Reading update zip...")
+	//readUpdateZip(updateLocation, debugLogsEnabled || traceLogsEnabled)
+	//logger.Debug("Update zip successfully read.")
+	//logger.Debug("Entries in update zip: %s", updatedFilesMap)
+	//
+	//logger.Debug("Distribution Loc: " + distributionLocation)
+	////Check whether the distribution is a zip or a directory
+	//if isAZipFile(distributionLocation) {
+	//	//Check whether the distribution zip exists
+	//	zipFileExists := isFileExists(distributionLocation)
+	//	if zipFileExists {
+	//		logger.Debug("Distribution location exists.")
+	//		readDistZip(distributionLocation, debugLogsEnabled || traceLogsEnabled)
+	//	} else {
+	//		printFailureAndExit("Distribution zip does not exist. Enter a valid location.")
+	//	}
+	//} else {
+	//	//Check whether the distribution location exists
+	//	distributionLocationExists := isDirectoryExists(distributionLocation)
+	//	if distributionLocationExists {
+	//		logger.Debug("Distribution location exists.")
+	//		readDistDir(distributionLocation, debugLogsEnabled || traceLogsEnabled)
+	//	} else {
+	//		printFailureAndExit("Distribution location does not exist. Enter a valid location.")
+	//	}
+	//}
+	////Validate files
+	//validate()
 }
 
 //This initializes the variables
@@ -191,7 +191,6 @@ func readUpdateZip(zipLocation string, loggersEnabled bool) {
 	//start listening for updates and render
 	writer.Start()
 
-	//todo: check for folders
 	// Iterate through each file/dir found in the zip
 	for _, file := range zipReader.Reader.File {
 		fileCount++
@@ -201,14 +200,13 @@ func readUpdateZip(zipLocation string, loggersEnabled bool) {
 		}
 		logger.Trace("Checking file: %s", file.Name)
 
-		//ignore folders
+		//Ignore directories. Directories will also be listed here if the update zip is unzipped and zipped again
 		if strings.HasSuffix(file.Name, "/") {
 			continue
 		}
 
 		//Every file should be in a root folder. Check for the os.PathSeparator character to identify this
-		index := strings.Index(file.Name, "/")//string(os.PathSeparator) removed because it does not work
-		// properly in windows
+		index := strings.Index(file.Name, "/")//string(os.PathSeparator) removed because it does not work properly in windows
 		if index == -1 {
 			printFailureAndExit("Update zip file should have a root folder called", updateName)
 		} else {
@@ -218,15 +216,17 @@ func readUpdateZip(zipLocation string, loggersEnabled bool) {
 				printFailureAndExit(file.Name, "should be in", updateName, "root directory. But it is in ", rootFolder, "directory.")
 			}
 		}
+
+		//todo: rearrange the flow
 		//Check whether the file is a resource file
 		_, found := allResFiles[file.FileInfo().Name()]
 		//If it is not a resource file
 		if !found {
-			//It should be in a carbon.home folder
-			containsCarbonHome := strings.Contains(file.Name, _CARBON_HOME)
-			if (!containsCarbonHome) {
+			//It should have a PATCH_NAME/carbon.home prefix
+			pathPrefix := updateName + "/" + _CARBON_HOME
+			if !strings.Contains(file.Name, pathPrefix) {
 				//string(os.PathSeparator) removed because it does not work properly in windows
-				printFailureAndExit("'" + file.Name + "' is not a known resource file. It should be in '" + updateName + "/" + _CARBON_HOME + "/" + "' folder")
+				printFailureAndExit("'" + file.Name + "' is not a known resource file. It should be in '" + pathPrefix + "/" + "' folder")
 			}
 			logger.Debug("Have a %s folder.", _CARBON_HOME)
 			//string(os.PathSeparator) removed because it does not work properly in windows

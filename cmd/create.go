@@ -10,7 +10,55 @@ import (
 	"github.com/ian-kent/go-log/layout"
 	"github.com/spf13/cobra"
 	"github.com/mholt/archiver"
+	"github.com/spf13/viper"
+	"strings"
+	"fmt"
+	"crypto/md5"
+	"os"
+	"io"
+	"encoding/hex"
 )
+
+type Info struct {
+	isDir bool
+	md5   string
+}
+
+func (i Info) String() string {
+	return fmt.Sprintf("{isDir: %v md5: %s}", i.isDir, i.md5)
+}
+
+//key- filePath, value- Info
+type Locations struct {
+	locationInfoMap map[string]Info
+}
+
+func (l *Locations) Add(location string, isDir bool, md5 string) {
+	info := Info{
+		isDir:isDir,
+		md5:md5,
+	}
+	l.locationInfoMap[location] = info
+}
+
+//key- filename, value- Locations
+type LocationMap struct {
+	nameLocationMap map[string]Locations
+}
+
+func (l *LocationMap) Add(filename string, location string, isDir bool, md5 string) {
+	locationMap, found := l.nameLocationMap[filename]
+	if found {
+		locationMap.Add(location, isDir, md5)
+	} else {
+		newLocation := Locations{
+			locationInfoMap: make(map[string]Info),
+		}
+		newLocation.Add(location, isDir, md5)
+		l.nameLocationMap[filename] = newLocation
+	}
+}
+
 
 //struct to store location(s) in the distribution for a given file/directory. The keys would be the file locations.
 //And the value would be a boolean which will indicate whether this is a directory or a file. If it is a directory,
@@ -64,7 +112,7 @@ var (
 
 // createCmd represents the create command
 var createCmd = &cobra.Command{
-	Use:   "create <update_loc> <dist_loc>",
+	Use:   "create <update_dir> <dist_loc>",
 	Short: "A brief description of your command",
 	Long: `A longer description that spans multiple lines and likely contains examples
 		and usage of using your command. For example:
@@ -91,6 +139,14 @@ func create(updateDirectory, distributionPath string, debugLogsEnabled, traceLog
 	//set debug level
 	setLogLevel(debugLogsEnabled, traceLogsEnabled)
 	logger.Debug("create command called")
+
+	//data := []byte("These pretzels are making me thirsty.")
+	//file := fileData{
+	//	name:"test.jar",
+	//	path: "/abc/def",
+	//	md5: md5.Sum(data),
+	//}
+	//fmt.Println(file)
 
 	//Flow - First check whether the given locations exists and required files exists. Then start processing.
 	//If one step fails, print error message and exit.
@@ -139,17 +195,46 @@ func create(updateDirectory, distributionPath string, debugLogsEnabled, traceLog
 	//logger.Debug("Update Entries: ", updateEntriesMap)
 
 	//6) Traverse and read distribution
-	unzipDirectory := getParentDirectory(distributionPath)
-	logger.Debug("unzipDirectory: %s", unzipDirectory)
+
+	distributionMap := LocationMap{
+		nameLocationMap: make(map[string]Locations),
+	}
+
 	if hasZipExtension(distributionPath) {
+
+		unzipDirectory := getParentDirectory(distributionPath)
+		logger.Debug("unzipDirectory: %s", unzipDirectory)
+
+		printInfo("Extracting zip file. Please wait...")
 		err := archiver.Unzip(distributionPath, unzipDirectory)
 		if err != nil {
 			printFailureAndExit("Error occurred while extracting the zip: ", err)
 		}
+		printInfo("Extracting zip file finished successfully.")
+
+		distributionRoot := getDistributionRoot(distributionPath)
+		log.Debug("distributionRoot: %s", distributionRoot)
+		viper.Set(_DISTRIBUTION_ROOT, distributionRoot)
+
+		err = readDirectoryStructure(distributionRoot, &distributionMap)
+		if err != nil {
+			printFailureAndExit(err)
+		}
+
 		//unzipAndReadDistribution(distributionPath, &distEntriesMap, (debugLogsEnabled || traceLogsEnabled))
 		//Delete the extracted distribution directory after function is finished
 		//defer os.RemoveAll(strings.TrimSuffix(distributionPath, ".zip")) //todo: add
 	} else {
+		viper.Set(_DISTRIBUTION_ROOT, distributionPath)
+		log.Debug("distributionRoot: %s", distributionPath)
+
+		err = readDirectoryStructure(distributionPath, &distributionMap)
+		if err != nil {
+			printFailureAndExit(err)
+		}
+
+		fmt.Println(distributionMap)
+
 		//logger.Debug("Traversing distribution location")
 		//traverseAndRead(distributionPath, &distEntriesMap, true)
 		//logger.Debug("Traversing distribution location finished")
@@ -239,6 +324,51 @@ func setLogLevel(debugLogsEnabled, traceLogsEnabled bool) {
 	} else {
 		logger.SetLevel(levels.WARN)
 	}
+}
+
+func getDistributionRoot(path string) string {
+	lastIndex := strings.LastIndex(path, ".")
+	return path[:lastIndex]
+}
+
+func readDirectoryStructure(root string, locationMap *LocationMap) error {
+	return filepath.Walk(root, func(absolutePath string, fileInfo os.FileInfo, err error) error {
+		logger.Trace("Walking: %s", absolutePath)
+		if err != nil {
+			return err
+		}
+
+		parentDirectory := strings.TrimSuffix(absolutePath, fileInfo.Name())
+
+		if !fileInfo.IsDir() {
+			md5, err := getMD5(absolutePath)
+			if err != nil {
+				return err
+			}
+			logger.Debug(absolutePath + " : " + fileInfo.Name() + ": " + md5)
+			locationMap.Add(fileInfo.Name(), parentDirectory, fileInfo.IsDir(), md5)
+
+		} else {
+			logger.Debug(absolutePath + " : " + fileInfo.Name())
+			locationMap.Add(fileInfo.Name(), parentDirectory, fileInfo.IsDir(), "")
+		}
+		return nil
+	})
+}
+
+func getMD5(filePath string) (string, error) {
+	var result []byte
+	file, err := os.Open(filePath)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	hash := md5.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(hash.Sum(result)), nil
 }
 
 //This function will read update-descriptor.yaml

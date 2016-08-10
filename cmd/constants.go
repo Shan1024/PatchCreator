@@ -18,4 +18,7 @@ const (
 	_UPDATE_DIR_ROOT = _TEMP_DIR + string(os.PathSeparator) + _CARBON_HOME
 	//Prefix of the update file and the root folder of the update zip
 	_UPDATE_NAME_PREFIX = "WSO2-CARBON-UPDATE"
+
+	_UNZIP_DIRECTORY = "_UNZIP_DIRECTORY"
+	_DISTRIBUTION_ROOT = "_DISTRIBUTION_ROOT"
 )

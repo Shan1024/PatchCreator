@@ -2,15 +2,15 @@ package cmd
 
 import (
 	"crypto/md5"
-	"gopkg.in/yaml.v2"
+	"encoding/hex"
 	"fmt"
+	"gopkg.in/yaml.v2"
 	"io"
 	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
-	"encoding/hex"
 
 	"github.com/ian-kent/go-log/log"
 	"github.com/ian-kent/go-log/levels"
@@ -132,6 +132,9 @@ var (
 	logger = log.Logger()
 )
 
+var isDebugLogsEnabled bool
+var isTraceLogsEnabled bool
+
 // createCmd represents the create command
 var createCmd = &cobra.Command{
 	Use:   "create <update_dir> <dist_loc>",
@@ -146,18 +149,16 @@ var createCmd = &cobra.Command{
 		if len(args) < 2 || len(args) > 2 {
 			util.PrintErrorAndExit("Invalid number of argumants. Run with --help for more details about the argumants")
 		}
+		viper.Set(constant.IS_DEBUG_LOGS_ENABLED, isDebugLogsEnabled)
+		viper.Set(constant.IS_TRACE_LOGS_ENABLED, isTraceLogsEnabled)
 		createUpdate(args[0], args[1])
 	},
 }
 
 func init() {
 	RootCmd.AddCommand(createCmd)
-	var isDebugLogsEnabled bool
-	var isTraceLogsEnabled bool
 	createCmd.Flags().BoolVarP(&isDebugLogsEnabled, "debug", "d", false, "Enable debug logs")
 	createCmd.Flags().BoolVarP(&isTraceLogsEnabled, "trace", "t", false, "Enable trace logs")
-	viper.Set(constant.IS_DEBUG_LOGS_ENABLED, isDebugLogsEnabled)
-	viper.Set(constant.IS_TRACE_LOGS_ENABLED, isTraceLogsEnabled)
 }
 
 func createUpdate(updateDirectoryPath, distributionPath string) {
@@ -303,7 +304,7 @@ func getDiff(updateLocationMap, distributionLocationMap *FileLocationInfo) (*Dif
 	distributionRoot := viper.GetString(constant.DISTRIBUTION_ROOT)
 
 	for filename, updateFileLocationInfo := range updateLocationMap.nameLocationInfoMap {
-		fmt.Println("[UPDATE]:", filename, ":", updateFileLocationInfo)
+		logger.Debug("[UPDATE FILE INFO]:", filename, ":", updateFileLocationInfo)
 
 		//Check for duplicate filename. A File and A Directory might have same name(it is highly unlikely). But this is not possible in Ubuntu
 		if len(updateFileLocationInfo.filepathInfoMap) > 1 {
@@ -317,13 +318,13 @@ func getDiff(updateLocationMap, distributionLocationMap *FileLocationInfo) (*Dif
 			updateFileInfo = locationInfo
 		}
 
-		logger.Trace("updateFilePath:", updateFilePath)
-		logger.Trace("updateFileInfo:", updateFileInfo)
+		logger.Trace("[UPDATE FILE INFO] updateFilePath:", updateFilePath)
+		logger.Trace("[UPDATE FILE INFO] updateFileInfo:", updateFileInfo)
 
 		distributionLocationInfo, foundMatchInDistribution := distributionLocationMap.nameLocationInfoMap[filename]
 
 		if foundMatchInDistribution {
-			fmt.Println("found in: ", distributionLocationInfo)
+			logger.Debug("[MATCH] Match found in distribution: ", distributionLocationInfo)
 
 			locationData := LocationData{
 				locationsInUpdate:make(map[string]bool),
@@ -334,7 +335,7 @@ func getDiff(updateLocationMap, distributionLocationMap *FileLocationInfo) (*Dif
 
 			for filepath, info := range distributionLocationInfo.filepathInfoMap {
 				//append(locationData.locationsInUpdate, info)
-				fmt.Println("[DIST] filepath:", filepath, ",Info:", info)
+				logger.Trace("[DIST FILE INFO] filepath:", filepath, ",Info:", info)
 
 				if updateFileInfo.md5 == info.md5 {
 					message := filename + " found in both update, distribution locations. But have the same md5 hash(" + info.md5 + ")" +
@@ -351,8 +352,9 @@ func getDiff(updateLocationMap, distributionLocationMap *FileLocationInfo) (*Dif
 				}
 			}
 
-			fmt.Println("locationData:", locationData)
-
+			log.Trace("[LOCATION DATA] locationData:", locationData)
+		} else {
+			logger.Debug("[404] No match found in distribution.")
 		}
 
 	}
@@ -403,6 +405,7 @@ func setLogLevel() {
 	} else {
 		logger.SetLevel(constant.DEFAULT_LOG_LEVEL)
 	}
+	fmt.Println("[LOG LEVEL]", logger.Level())
 }
 
 func getDistributionRootDirectory(distributionZipPath string) string {
@@ -414,7 +417,7 @@ func readDirectoryStructure(root string, locationMap *FileLocationInfo, ignoredF
 	//Remove the / or \ at the end of the path if it exists/ Otherwise the root directory wont be ignored
 	//root = strings.TrimSuffix(root, string(os.PathSeparator))
 	return filepath.Walk(root, func(absolutePath string, fileInfo os.FileInfo, err error) error {
-		logger.Trace("Walking: %s", absolutePath)
+		logger.Trace("[WALK] %s", absolutePath)
 		if err != nil {
 			return err
 		}

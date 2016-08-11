@@ -20,18 +20,16 @@ var initCmd = &cobra.Command{
 		if len(args) < 1 || len(args) > 1 {
 			util.PrintErrorAndExit("Invalid number of argumants. Run with --help for more details about the argumants")
 		}
+		viper.Set(constant.IS_DEBUG_LOGS_ENABLED, isDebugLogsEnabled)
+		viper.Set(constant.IS_TRACE_LOGS_ENABLED, isTraceLogsEnabled)
 		startInit(args[0])
 	},
 }
 
 func init() {
 	RootCmd.AddCommand(initCmd)
-	var isDebugLogsEnabled bool
-	var isTraceLogsEnabled bool
 	RootCmd.Flags().BoolVarP(&isDebugLogsEnabled, "debug", "d", false, "Enable debug logs")
 	RootCmd.Flags().BoolVarP(&isTraceLogsEnabled, "trace", "t", false, "Enable trace logs")
-	viper.Set(constant.IS_DEBUG_LOGS_ENABLED, isDebugLogsEnabled)
-	viper.Set(constant.IS_TRACE_LOGS_ENABLED, isTraceLogsEnabled)
 }
 
 func startInit(filepath string) {

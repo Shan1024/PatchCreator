@@ -28,18 +28,16 @@ to quickly create a Cobra application.`,
 		if len(args) < 2 || len(args) > 2 {
 			util.PrintErrorAndExit("Invalid number of argumants. Run with --help for more details about the argumants")
 		}
+		viper.Set(constant.IS_DEBUG_LOGS_ENABLED, isDebugLogsEnabled)
+		viper.Set(constant.IS_TRACE_LOGS_ENABLED, isTraceLogsEnabled)
 		startValidation(args[0], args[1])
 	},
 }
 
 func init() {
 	RootCmd.AddCommand(validateCmd)
-	var isDebugLogsEnabled bool
-	var isTraceLogsEnabled bool
 	validateCmd.Flags().BoolVarP(&isDebugLogsEnabled, "debug", "d", false, "Enable debug logs")
 	validateCmd.Flags().BoolVarP(&isTraceLogsEnabled, "trace", "t", false, "Enable trace logs")
-	viper.Set(constant.IS_DEBUG_LOGS_ENABLED, isDebugLogsEnabled)
-	viper.Set(constant.IS_TRACE_LOGS_ENABLED, isTraceLogsEnabled)
 }
 
 //Entry point of the validate command

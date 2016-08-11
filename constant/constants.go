@@ -8,6 +8,8 @@ import (
 const (
 	DEFAULT_LOG_LEVEL = levels.WARN
 
+	PLUGINS_DIRECTORY = "repository" + string(os.PathSeparator) + "components" + string(os.PathSeparator) + "plugins" + string(os.PathSeparator)
+
 	//constants to store resource files
 	README_FILE = "README.txt"
 	LICENSE_FILE = "LICENSE.txt"

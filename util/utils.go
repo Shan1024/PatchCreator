@@ -13,7 +13,9 @@ import (
 func HasZipExtension(path string) bool {
 	return strings.HasSuffix(path, ".zip")
 }
-
+func HasJarExtension(path string) bool {
+	return strings.HasSuffix(path, ".jar")
+}
 func GetParentDirectory(filepath string) string {
 	parentDirectory := "./"
 	if lastIndex := strings.LastIndex(filepath, string(os.PathSeparator)); lastIndex > -1 {

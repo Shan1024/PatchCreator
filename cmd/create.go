@@ -250,8 +250,7 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 		util.HandleError(err, "")
 	}
 
-	//fmt.Println(distributionLocationInfo)
-
+	fmt.Println(distributionLocationInfo)
 
 	_, err = getDiff(&updateLocationInfo, &distributionLocationInfo)
 	util.HandleError(err, "Error occurred while getting the diff.")
@@ -444,6 +443,16 @@ func readDirectoryStructure(root string, locationMap *FileLocationInfo, ignoredF
 			}
 			logger.Debug(absolutePath + " : " + fileInfo.Name() + ": " + md5)
 			locationMap.Add(fileInfo.Name(), parentDirectory, fileInfo.IsDir(), md5)
+			logger.Trace("[COMPARE]", root + constant.PLUGINS_DIRECTORY + fileInfo.Name(), " ; ", absolutePath)
+			if (root + constant.PLUGINS_DIRECTORY + fileInfo.Name() == absolutePath) && util.HasJarExtension(absolutePath) {
+				logger.Debug("[PLUGIN] FilePath:", absolutePath)
+				newFileName := strings.Replace(fileInfo.Name(), "_", "-", 1)
+				logger.Debug("[PLUGIN] New Name:", newFileName)
+				if index := strings.Index(newFileName, "_"); index != -1 {
+					return &util.CustomError{What: fileInfo.Name() + " is in " + constant.PLUGINS_DIRECTORY + ". But it has multiple _ in its name. Only one _ is expected." }
+				}
+				locationMap.Add(newFileName, parentDirectory, fileInfo.IsDir(), md5)
+			}
 		} else {
 			logger.Debug(absolutePath + " : " + fileInfo.Name())
 			locationMap.Add(fileInfo.Name(), parentDirectory, fileInfo.IsDir(), "")

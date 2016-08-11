@@ -31,35 +31,58 @@ func (i Info) String() string {
 	return fmt.Sprintf("{isDir: %v md5: %s}", i.isDir, i.md5)
 }
 
-//key- filePath, value- Info
-type Locations struct {
-	locationInfoMap map[string]Info
+//key - filePath, value - Info
+type LocationInfo struct {
+	filepathInfoMap map[string]Info
 }
 
-func (l *Locations) Add(location string, isDir bool, md5 string) {
+func (l *LocationInfo) Add(location string, isDir bool, md5 string) {
 	info := Info{
 		isDir:isDir,
 		md5:md5,
 	}
-	l.locationInfoMap[location] = info
+	l.filepathInfoMap[location] = info
 }
 
-//key- filename, value- Locations
-type LocationMap struct {
-	nameLocationMap map[string]Locations
+//key - filename, value - Locations
+type FileLocationInfo struct {
+	nameLocationInfoMap map[string]LocationInfo
 }
 
-func (l *LocationMap) Add(filename string, location string, isDir bool, md5 string) {
-	locationMap, found := l.nameLocationMap[filename]
+//func (f *FileLocationInfo) Init() FileLocationInfo {
+//	f.nameLocationMap = make(map[string]LocationInfo)
+//	return f
+//}
+
+func (f *FileLocationInfo) Add(filename string, location string, isDir bool, md5 string) {
+	locationMap, found := f.nameLocationInfoMap[filename]
 	if found {
 		locationMap.Add(location, isDir, md5)
 	} else {
-		newLocation := Locations{
-			locationInfoMap: make(map[string]Info),
+		newLocation := LocationInfo{
+			filepathInfoMap: make(map[string]Info),
 		}
 		newLocation.Add(location, isDir, md5)
-		l.nameLocationMap[filename] = newLocation
+		f.nameLocationInfoMap[filename] = newLocation
 	}
+}
+
+type LocationData struct {
+	locationsInUpdate       map[string]bool
+	locationsInDistribution map[string]bool
+}
+//key - filename , value - FileLocation
+type Diff struct {
+	files map[string]LocationData
+}
+
+//func (d *Diff) Init() Diff {
+//	d.files = make(map[string]LocationData)
+//	return *d
+//}
+
+func (d *Diff) Add(filename string, locationData LocationData) {
+	d.files[filename] = locationData
 }
 
 
@@ -91,26 +114,22 @@ type update_descriptor struct {
 }
 
 var (
-	//This contains the mandatory resource files that needs to be copied to the update zip
-	_MANDATORY_RESOURCE_FILES = []string{constant.UPDATE_DESCRIPTOR_FILE, constant.LICENSE_FILE}
-
-	//These are used to store file/directory locations to later find matches. Keys of the map are file/directory
-	// names and the value will be a entry which contain a slice which has locations of that file
-	updateEntriesMap = make(map[string]entry)
-	distEntriesMap = make(map[string]entry)
-
-	//This is used to read the update-descriptor.yaml file
-	updateDescriptor = update_descriptor{}
-
-	//This holds the complete name of the update zip file/root folder of the zip. This will be a combination of
-	// few other variables
-	//_UPDATE_NAME string
+	////This contains the mandatory resource files that needs to be copied to the update zip
+	//_MANDATORY_RESOURCE_FILES = []string{constant.UPDATE_DESCRIPTOR_FILE, constant.LICENSE_FILE}
+	//
+	////These are used to store file/directory locations to later find matches. Keys of the map are file/directory
+	//// names and the value will be a entry which contain a slice which has locations of that file
+	//updateEntriesMap = make(map[string]entry)
+	//distEntriesMap = make(map[string]entry)
+	//
+	//
+	//
+	////This holds the complete name of the update zip file/root folder of the zip. This will be a combination of
+	//// few other variables
+	////_UPDATE_NAME string
 
 	//Create the logger
 	logger = log.Logger()
-
-	enableDebugLogsForCreateCommand bool
-	enableTraceLogsForCreateCommand bool
 )
 
 // createCmd represents the create command
@@ -127,20 +146,24 @@ var createCmd = &cobra.Command{
 		if len(args) < 2 || len(args) > 2 {
 			util.PrintErrorAndExit("Invalid number of argumants. Run with --help for more details about the argumants")
 		}
-		createUpdate(args[0], args[1], enableDebugLogsForCreateCommand, enableTraceLogsForCreateCommand)
+		createUpdate(args[0], args[1])
 	},
 }
 
 func init() {
 	RootCmd.AddCommand(createCmd)
-	createCmd.Flags().BoolVarP(&enableDebugLogsForCreateCommand, "debug", "d", false, "Enable debug logs")
-	createCmd.Flags().BoolVarP(&enableTraceLogsForCreateCommand, "trace", "t", false, "Enable trace logs")
+	var isDebugLogsEnabled bool
+	var isTraceLogsEnabled bool
+	createCmd.Flags().BoolVarP(&isDebugLogsEnabled, "debug", "d", false, "Enable debug logs")
+	createCmd.Flags().BoolVarP(&isTraceLogsEnabled, "trace", "t", false, "Enable trace logs")
+	viper.Set(constant.IS_DEBUG_LOGS_ENABLED, isDebugLogsEnabled)
+	viper.Set(constant.IS_TRACE_LOGS_ENABLED, isTraceLogsEnabled)
 }
 
-func createUpdate(updateDirectoryPath, distributionPath string, isDebugLogsEnabled, isTraceLogsEnabled bool) {
+func createUpdate(updateDirectoryPath, distributionPath string) {
 
 	//set debug level
-	setLogLevel(isDebugLogsEnabled, isTraceLogsEnabled)
+	setLogLevel()
 	logger.Debug("create command called")
 
 	//Flow - First check whether the given locations exists and required files exists. Then start processing.
@@ -152,6 +175,10 @@ func createUpdate(updateDirectoryPath, distributionPath string, isDebugLogsEnabl
 	if !exists {
 		util.PrintErrorAndExit("Update Directory does not exist at %s.", updateDirectoryPath)
 	}
+	updateRoot := strings.TrimSuffix(updateDirectoryPath, "/")
+	updateRoot = strings.TrimSuffix(updateRoot, "\\")
+	log.Debug("updateRoot: %s", updateRoot)
+	viper.Set(constant.UPDATE_ROOT, updateRoot)
 
 	//2) Check whether the update-descriptor.yaml file exists
 	//Construct the update-descriptor.yaml file location
@@ -171,29 +198,26 @@ func createUpdate(updateDirectoryPath, distributionPath string, isDebugLogsEnabl
 	}
 
 	//4) Read update-descriptor.yaml and set the update name which will be used when creating the update zip file.
+	//This is used to read the update-descriptor.yaml file
+	updateDescriptor := update_descriptor{}
 	err = readDescriptor(&updateDescriptor, updateDirectoryPath)
 	util.HandleError(err, "")
 	//set the update name
 	setUpdateName(&updateDescriptor)
 
 	//5) Traverse and read the update
-	//logger.Debug("Traversing update location")
-	//err = traverseAndRead(updateDirectory, &updateEntriesMap, false)
-	//logger.Debug("Traversing update location finished")
-	//logger.Debug("Update Entries: ", updateEntriesMap)
-
 	ignoredFiles := getIgnoredFilesInUpdate()
-	updateMap := LocationMap{
-		nameLocationMap: make(map[string]Locations),
+	updateLocationInfo := FileLocationInfo{
+		nameLocationInfoMap: make(map[string]LocationInfo),
 	}
-	err = readDirectoryStructure(updateDirectoryPath, &updateMap, ignoredFiles)
+	err = readDirectoryStructure(updateDirectoryPath, &updateLocationInfo, ignoredFiles)
 	util.HandleError(err, "")
 
-	fmt.Println(updateMap)
+	//fmt.Println(updateLocationInfo)
 
 	//6) Traverse and read distribution
-	distributionMap := LocationMap{
-		nameLocationMap: make(map[string]Locations),
+	distributionLocationInfo := FileLocationInfo{
+		nameLocationInfoMap: make(map[string]LocationInfo),
 	}
 
 	if util.HasZipExtension(distributionPath) {
@@ -211,26 +235,27 @@ func createUpdate(updateDirectoryPath, distributionPath string, isDebugLogsEnabl
 		log.Debug("distributionRoot: %s", distributionRoot)
 		viper.Set(constant.DISTRIBUTION_ROOT, distributionRoot)
 
-		err = readDirectoryStructure(distributionRoot, &distributionMap, nil)
+		err = readDirectoryStructure(distributionRoot, &distributionLocationInfo, nil)
 		util.HandleError(err, "")
 
-		//unzipAndReadDistribution(distributionPath, &distEntriesMap, (debugLogsEnabled || traceLogsEnabled))
 		//Delete the extracted distribution directory after function is finished
 		//defer os.RemoveAll(strings.TrimSuffix(distributionPath, ".zip")) //todo: add
 	} else {
-		viper.Set(constant.DISTRIBUTION_ROOT, distributionPath)
-		log.Debug("distributionRoot: %s", distributionPath)
+		distributionRoot := strings.TrimSuffix(distributionPath, "/")
+		distributionRoot = strings.TrimSuffix(distributionRoot, "\\")
+		log.Debug("distributionRoot: %s", distributionRoot)
+		viper.Set(constant.DISTRIBUTION_ROOT, distributionRoot)
 
-		err = readDirectoryStructure(distributionPath, &distributionMap, nil)
+		err = readDirectoryStructure(distributionPath, &distributionLocationInfo, nil)
 		util.HandleError(err, "")
-
-
-
-		//logger.Debug("Traversing distribution location")
-		//traverseAndRead(distributionPath, &distEntriesMap, true)
-		//logger.Debug("Traversing distribution location finished")
 	}
-	fmt.Println(distributionMap)
+
+	//fmt.Println(distributionLocationInfo)
+
+
+	_, err = getDiff(&updateLocationInfo, &distributionLocationInfo)
+	util.HandleError(err, "Error occurred while getting the diff.")
+
 	////7) Find matches
 	//if hasZipExtension(distributionPath) {
 	//	logger.Debug("Finding matches")
@@ -269,17 +294,74 @@ func getIgnoredFilesInUpdate() map[string]bool {
 		constant.INSTRUCTIONS_FILE: true,
 	}
 }
-//func isUpdateDirectoryExists(updateDirectory string) (bool, error) {
-//	dirExists, err := isDirectoryExists(updateDirectory)
-//	if err != nil {
-//		return false, err
-//	}
-//	if !dirExists {
-//		return false, &CustomError{What: "Update directory(" + updateDirectory + ") does not exist. Enter a valid directory."}
-//	}
-//	logger.Debug("Update directory(%s) exists.", updateDirectory)
-//	return true, nil
-//}
+
+func getDiff(updateLocationMap, distributionLocationMap *FileLocationInfo) (*Diff, error) {
+	diff := Diff{
+		files: make(map[string]LocationData),
+	}
+
+	//updateDirectory := viper.Get(constant.UPDATE_ROOT)
+	distributionRoot := viper.GetString(constant.DISTRIBUTION_ROOT)
+
+	for filename, updateFileLocationInfo := range updateLocationMap.nameLocationInfoMap {
+		fmt.Println("[UPDATE]:", filename, ":", updateFileLocationInfo)
+
+		//Check for duplicate filename. A File and A Directory might have same name(it is highly unlikely). But this is not possible in Ubuntu
+		if len(updateFileLocationInfo.filepathInfoMap) > 1 {
+			return nil, &util.CustomError{What: "Duplicate files found in the update directory.Possible reason for this error is that there are a file and a directory with the same name."}
+		}
+
+		var updateFilePath string
+		var updateFileInfo Info
+		for filepath, locationInfo := range updateFileLocationInfo.filepathInfoMap {
+			updateFilePath = filepath
+			updateFileInfo = locationInfo
+		}
+
+		logger.Trace("updateFilePath:", updateFilePath)
+		logger.Trace("updateFileInfo:", updateFileInfo)
+
+		distributionLocationInfo, foundMatchInDistribution := distributionLocationMap.nameLocationInfoMap[filename]
+
+		if foundMatchInDistribution {
+			fmt.Println("found in: ", distributionLocationInfo)
+
+			locationData := LocationData{
+				locationsInUpdate:make(map[string]bool),
+				locationsInDistribution:make(map[string]bool),
+			}
+			//Add
+			locationData.locationsInUpdate[updateFilePath] = updateFileInfo.isDir
+
+			for filepath, info := range distributionLocationInfo.filepathInfoMap {
+				//append(locationData.locationsInUpdate, info)
+				fmt.Println("[DIST] filepath:", filepath, ",Info:", info)
+
+				if updateFileInfo.md5 == info.md5 {
+					message := filename + " found in both update, distribution locations. But have the same md5 hash(" + info.md5 + ")" +
+						"\n\tLocation in update: " + updateFilePath + filename +
+						"\n\tLocation in dist  : CARBON_HOME" + strings.TrimPrefix(filepath, distributionRoot) + filename +
+						"\nIt is possible that the old file was copied to the update location instead of the new file."
+					return nil, &util.CustomError{What: message }
+				} else if updateFileInfo.isDir != info.isDir {
+					//Has same type, but different types. Ignore these paths
+					continue
+				} else {
+					//Add
+					locationData.locationsInDistribution[filepath] = info.isDir
+				}
+			}
+
+			fmt.Println("locationData:", locationData)
+
+		}
+
+	}
+	//for filename, locationInfo := range distributionLocationMap.nameLocationMap {
+	//	fmt.Println(filename, ":", locationInfo)
+	//}
+	return &diff, nil
+}
 
 func isDistributionExists(distributionPath string) (bool, error) {
 	if util.HasZipExtension(distributionPath) {
@@ -307,20 +389,20 @@ func isDistributionExists(distributionPath string) (bool, error) {
 }
 
 //This function will set log level
-func setLogLevel(debugLogsEnabled, traceLogsEnabled bool) {
+func setLogLevel() {
 	//Setting default time format. This will be used in loggers. Otherwise complete date and time will be printed
 	layout.DefaultTimeLayout = "15:04:05"
 	//Setting new STDOUT layout to logger
 	logger.Appender().SetLayout(layout.Pattern("[%d] [%p] %m"))
 	//Set the log level. If the log level is not given, set the log level to WARN
-	if debugLogsEnabled {
+	if viper.GetBool(constant.IS_DEBUG_LOGS_ENABLED) {
 		logger.SetLevel(levels.DEBUG)
 		logger.Debug("Debug logs enabled")
-	} else if traceLogsEnabled {
+	} else if viper.GetBool(constant.IS_TRACE_LOGS_ENABLED) {
 		logger.SetLevel(levels.TRACE)
 		logger.Trace("Trace logs enabled")
 	} else {
-		logger.SetLevel(levels.WARN)
+		logger.SetLevel(constant.DEFAULT_LOG_LEVEL)
 	}
 }
 
@@ -329,7 +411,7 @@ func getDistributionRootDirectory(distributionZipPath string) string {
 	return distributionZipPath[:lastIndex]
 }
 
-func readDirectoryStructure(root string, locationMap *LocationMap, ignoredFiles map[string]bool) error {
+func readDirectoryStructure(root string, locationMap *FileLocationInfo, ignoredFiles map[string]bool) error {
 	//Remove the / or \ at the end of the path if it exists/ Otherwise the root directory wont be ignored
 	//root = strings.TrimSuffix(root, string(os.PathSeparator))
 	return filepath.Walk(root, func(absolutePath string, fileInfo os.FileInfo, err error) error {

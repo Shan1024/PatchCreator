@@ -1,8 +1,10 @@
 package cmd
 
 import (
-	"github.com/shan1024/wum-uc/util"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
+	"github.com/shan1024/wum-uc/constant"
+	"github.com/shan1024/wum-uc/util"
 )
 
 var initCmd = &cobra.Command{
@@ -18,16 +20,20 @@ var initCmd = &cobra.Command{
 		if len(args) < 1 || len(args) > 1 {
 			util.PrintErrorAndExit("Invalid number of argumants. Run with --help for more details about the argumants")
 		}
-		createUpdate(args[0], args[1], enableDebugLogsForCreateCommand, enableTraceLogsForCreateCommand)
+		startInit(args[0])
 	},
 }
 
 func init() {
 	RootCmd.AddCommand(initCmd)
-	RootCmd.Flags().BoolVarP(&enableDebugLogsForCreateCommand, "debug", "d", false, "Enable debug logs")
-	RootCmd.Flags().BoolVarP(&enableTraceLogsForCreateCommand, "trace", "t", false, "Enable trace logs")
+	var isDebugLogsEnabled bool
+	var isTraceLogsEnabled bool
+	RootCmd.Flags().BoolVarP(&isDebugLogsEnabled, "debug", "d", false, "Enable debug logs")
+	RootCmd.Flags().BoolVarP(&isTraceLogsEnabled, "trace", "t", false, "Enable trace logs")
+	viper.Set(constant.IS_DEBUG_LOGS_ENABLED, isDebugLogsEnabled)
+	viper.Set(constant.IS_TRACE_LOGS_ENABLED, isTraceLogsEnabled)
 }
 
-func startInit() {
+func startInit(filepath string) {
 
 }

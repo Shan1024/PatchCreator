@@ -1,10 +1,11 @@
 package util
 
 import (
-	"strings"
-	"os"
-	"io"
 	"fmt"
+	"io"
+	"os"
+	"strings"
+
 	"io/ioutil"
 	"github.com/fatih/color"
 )

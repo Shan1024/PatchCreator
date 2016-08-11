@@ -1,8 +1,13 @@
 package constant
 
-import "os"
+import (
+	"os"
+	"github.com/ian-kent/go-log/levels"
+)
 
 const (
+	DEFAULT_LOG_LEVEL = levels.WARN
+
 	//constants to store resource files
 	README_FILE = "README.txt"
 	LICENSE_FILE = "LICENSE.txt"
@@ -21,5 +26,9 @@ const (
 
 	UNZIP_DIRECTORY = "_UNZIP_DIRECTORY"
 	DISTRIBUTION_ROOT = "_DISTRIBUTION_ROOT"
+	UPDATE_ROOT = "UPDATE_ROOT"
 	UPDATE_NAME = "_UPDATE_NAME"
+
+	IS_DEBUG_LOGS_ENABLED = "IS_DEBUG_LOGS_ENABLED"
+	IS_TRACE_LOGS_ENABLED = "IS_TRACE_LOGS_ENABLED"
 )

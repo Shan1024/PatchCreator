@@ -32,6 +32,27 @@ func CreateDirectory(path string) error {
 	return os.MkdirAll(path, 0700)
 }
 
+func IsYes(preference string) bool {
+	if strings.ToLower(preference) == "yes" || (len(preference) == 1 && strings.ToLower(preference) == "y" ) {
+		return true
+	}
+	return false
+}
+
+func IsNo(preference string) bool {
+	if strings.ToLower(preference) == "no" || (len(preference) == 1 && strings.ToLower(preference) == "n" ) {
+		return true
+	}
+	return false
+}
+
+func IsReenter(preference string) bool {
+	if strings.ToLower(preference) == "reenter" || (len(preference) == 1 && strings.ToLower(preference) == "r" ) {
+		return true
+	}
+	return false
+}
+
 func HandleError(err error, customMessage ...interface{}) {
 	if err != nil {
 		PrintErrorAndExit(append(customMessage, "Error Message: '" + err.Error() + "'")...)

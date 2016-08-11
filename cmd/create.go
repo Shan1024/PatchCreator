@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bufio"
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
@@ -48,11 +49,6 @@ func (l *LocationInfo) Add(location string, isDir bool, md5 string) {
 type FileLocationInfo struct {
 	nameLocationInfoMap map[string]LocationInfo
 }
-
-//func (f *FileLocationInfo) Init() FileLocationInfo {
-//	f.nameLocationMap = make(map[string]LocationInfo)
-//	return f
-//}
 
 func (f *FileLocationInfo) Add(filename string, location string, isDir bool, md5 string) {
 	locationMap, found := f.nameLocationInfoMap[filename]
@@ -114,20 +110,6 @@ type update_descriptor struct {
 }
 
 var (
-	////This contains the mandatory resource files that needs to be copied to the update zip
-	//_MANDATORY_RESOURCE_FILES = []string{constant.UPDATE_DESCRIPTOR_FILE, constant.LICENSE_FILE}
-	//
-	////These are used to store file/directory locations to later find matches. Keys of the map are file/directory
-	//// names and the value will be a entry which contain a slice which has locations of that file
-	//updateEntriesMap = make(map[string]entry)
-	//distEntriesMap = make(map[string]entry)
-	//
-	//
-	//
-	////This holds the complete name of the update zip file/root folder of the zip. This will be a combination of
-	//// few other variables
-	////_UPDATE_NAME string
-
 	//Create the logger
 	logger = log.Logger()
 )
@@ -149,8 +131,6 @@ var createCmd = &cobra.Command{
 		if len(args) < 2 || len(args) > 2 {
 			util.PrintErrorAndExit("Invalid number of argumants. Run with --help for more details about the argumants")
 		}
-		viper.Set(constant.IS_DEBUG_LOGS_ENABLED, isDebugLogsEnabled)
-		viper.Set(constant.IS_TRACE_LOGS_ENABLED, isTraceLogsEnabled)
 		createUpdate(args[0], args[1])
 	},
 }
@@ -164,7 +144,7 @@ func init() {
 func createUpdate(updateDirectoryPath, distributionPath string) {
 
 	//set debug level
-	setLogLevel()
+	SetLogLevel()
 	logger.Debug("create command called")
 
 	//Flow - First check whether the given locations exists and required files exists. Then start processing.
@@ -181,6 +161,7 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 	log.Debug("updateRoot: %s", updateRoot)
 	viper.Set(constant.UPDATE_ROOT, updateRoot)
 
+	//todo: break into two parts. Reading and verifying the structure of yaml file
 	//2) Check whether the update-descriptor.yaml file exists
 	//Construct the update-descriptor.yaml file location
 	updateDescriptorPath := path.Join(updateDirectoryPath, constant.UPDATE_DESCRIPTOR_FILE)
@@ -253,8 +234,15 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 
 	fmt.Println(distributionLocationInfo)
 
-	_, err = getDiff(&updateLocationInfo, &distributionLocationInfo)
+	diff, err := getDiff(&updateLocationInfo, &distributionLocationInfo)
 	util.HandleError(err, "Error occurred while getting the diff.")
+
+	fmt.Println("diff: ", diff)
+
+	err = createFolderStructure(diff)
+	util.HandleError(err, "Error occurred while creating the folder structure.")
+
+
 
 	////7) Find matches
 	//if hasZipExtension(distributionPath) {
@@ -306,33 +294,22 @@ func getDiff(updateLocationMap, distributionLocationMap *FileLocationInfo) (*Dif
 	for filename, updateFileLocationInfo := range updateLocationMap.nameLocationInfoMap {
 		logger.Debug("[UPDATE FILE INFO]:", filename, ":", updateFileLocationInfo)
 
-		//Check for duplicate filename. A File and A Directory might have same name(it is highly unlikely). But this is not possible in Ubuntu
-		if len(updateFileLocationInfo.filepathInfoMap) > 1 {
-			return nil, &util.CustomError{What: "Duplicate files found in the update directory.Possible reason for this error is that there are a file and a directory with the same name."}
-		}
-
-		var updateFilePath string
-		var updateFileInfo Info
-		for filepath, locationInfo := range updateFileLocationInfo.filepathInfoMap {
-			updateFilePath = filepath
-			updateFileInfo = locationInfo
-		}
-
+		updateFilePath, updateFileInfo, err := getUpdateFilePathAndInfo(&updateFileLocationInfo)
+		util.HandleError(err, "Error occurred while getting location of a file in update directory.")
 		logger.Trace("[UPDATE FILE INFO] updateFilePath:", updateFilePath)
 		logger.Trace("[UPDATE FILE INFO] updateFileInfo:", updateFileInfo)
 
 		distributionLocationInfo, foundMatchInDistribution := distributionLocationMap.nameLocationInfoMap[filename]
 
+		locationData := LocationData{
+			locationsInUpdate:make(map[string]bool),
+			locationsInDistribution:make(map[string]bool),
+		}
 		if foundMatchInDistribution {
 			logger.Debug("[MATCH] Match found in distribution: ", distributionLocationInfo)
 
-			locationData := LocationData{
-				locationsInUpdate:make(map[string]bool),
-				locationsInDistribution:make(map[string]bool),
-			}
 			//Add
 			locationData.locationsInUpdate[updateFilePath] = updateFileInfo.isDir
-
 			for filepath, info := range distributionLocationInfo.filepathInfoMap {
 				//append(locationData.locationsInUpdate, info)
 				logger.Trace("[DIST FILE INFO] filepath:", filepath, ",Info:", info)
@@ -351,17 +328,204 @@ func getDiff(updateLocationMap, distributionLocationMap *FileLocationInfo) (*Dif
 					locationData.locationsInDistribution[filepath] = info.isDir
 				}
 			}
-
 			log.Trace("[LOCATION DATA] locationData:", locationData)
 		} else {
 			logger.Debug("[404] No match found in distribution.")
-		}
 
+			//Add only the location in the update directory. This will be considered as a new file. Later we can check the locations in the distribution to identify new files.
+			locationData.locationsInUpdate[updateFilePath] = updateFileInfo.isDir
+		}
+		diff.Add(filename, locationData)
 	}
 	//for filename, locationInfo := range distributionLocationMap.nameLocationMap {
 	//	fmt.Println(filename, ":", locationInfo)
 	//}
 	return &diff, nil
+}
+func getUpdateFilePathAndInfo(updateFileLocationInfo *LocationInfo) (string, *Info, error) {
+	//Check for duplicate filename. A File and A Directory in the root level of the update directory might have same name(it is highly unlikely). But this is not possible in Ubuntu. Need to check on other OSs
+	if len(updateFileLocationInfo.filepathInfoMap) > 1 {
+		return "", nil, &util.CustomError{What: "Duplicate files found in the update directory.Possible reason for this error is that there are a file and a directory with the same name."}
+	}
+
+	var filepath string
+	var locationInfo Info
+	for filepath, locationInfo = range updateFileLocationInfo.filepathInfoMap {
+		//do nothing
+	}
+	return filepath, &locationInfo, nil
+}
+
+func createFolderStructure(diff *Diff) error {
+
+	for filename, locationData := range diff.files {
+		fmt.Println("filename:", filename)
+		fmt.Println("locationData:", locationData)
+
+		switch len(locationData.locationsInDistribution) {
+		case 0:
+			err := handleNoMatch(filename, &locationData, false, "")
+			util.HandleError(err)
+		case 1:
+			err := handleSingleMatch(filename, &locationData)
+			util.HandleError(err)
+		default:
+			err := handleMultipleMatches(filename, &locationData)
+			util.HandleError(err)
+		}
+	}
+
+	return nil
+}
+
+func handleNoMatch(filename string, locationData *LocationData, skipUserInput bool, defaultCopyLocation string) error {
+	fmt.Println("[NO MATCH]", filename)
+
+	if skipUserInput {
+		if len(defaultCopyLocation) > 0 {
+
+		} else {
+
+		}
+	} else {
+		fmt.Print(filename + " not found in distribution. ")
+		for {
+			fmt.Print("Do you want to add it as a new file? [(Y)es/(N)o]: ")
+			preference, err := GetUserInput()
+			util.HandleError(err, "Error occurred while getting input from the user.")
+
+			if util.IsYes(preference) {
+				err = handleNewFile(filename, locationData)
+				util.HandleError(err)
+				//If no error, return nil
+				return nil
+			} else if util.IsNo(preference) {
+				util.PrintWarning("Skipping copying", filename)
+				return nil
+			} else {
+				util.PrintError("Invalid preference. Enter Y for Yes or N for No.")
+			}
+		}
+	}
+	return nil
+}
+
+func handleNewFile(filename string, locationData *LocationData) error {
+
+	locationInUpdate, isDir, err := getLocationFromMap(locationData.locationsInUpdate)
+	util.HandleError(err)
+	fmt.Println("[HANDLE NEW] Update:", locationInUpdate, ";", isDir)
+
+	readDestinationLoop:
+	for {
+		fmt.Print("Enter destination directory relative to CARBON_HOME: ")
+		relativePath, err := GetUserInput()
+		util.HandleError(err, "Error occurred while getting input from the user.")
+		fmt.Println("relativePath:", relativePath)
+
+		fullPath := filepath.Join(viper.GetString(constant.DISTRIBUTION_ROOT), relativePath)
+		fmt.Println("fullPath:", fullPath)
+
+		//Ignore error because we are only checking whether the given path exists or not
+		exists, _ := util.IsDirectoryExists(fullPath)
+		if exists {
+			err = copyFile(filename, isDir, locationInUpdate, relativePath)
+			util.HandleError(err)
+			break
+		} else {
+			fmt.Print("Entered relative path does not exist in the distribution. ")
+			for {
+				fmt.Print("Copy anyway? [(Y)es/(N)o/(R)e-enter]: ")
+				preference, err := GetUserInput()
+				util.HandleError(err, "Error occurred while getting input from the user.")
+
+				if util.IsYes(preference) {
+					err = copyFile(filename, isDir, locationInUpdate, relativePath)
+					util.HandleError(err)
+					break readDestinationLoop
+				} else if util.IsNo(preference) {
+					util.PrintWarning("Skipping copying", filename)
+					return nil
+				} else if util.IsReenter(preference) {
+					break
+				} else {
+					util.PrintError("Invalid preference. Enter Y for Yes or N for No or R for Re-enter.")
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func handleSingleMatch(filename string, locationData *LocationData) error {
+	fmt.Println("[SINGLE MATCH]", filename)
+	locationInUpdate, isDir, err := getLocationFromMap(locationData.locationsInUpdate)
+	util.HandleError(err)
+	fmt.Println("[SINGLE MATCH] Update:", locationInUpdate)
+
+	locationInDistribution, _, err := getLocationFromMap(locationData.locationsInDistribution)
+	util.HandleError(err)
+	fmt.Println("[SINGLE MATCH] Distribution:", locationInDistribution)
+
+	//if isDirInUpdate == isDirInDistribution {
+	//
+	//} else {
+	//	message := "Match for '" + filename + "' found in distribution. But types are different." +
+	//		"\n\tLocation in update      : " + locationInUpdate + " ; Is a directory: " + strconv.FormatBool(isDirInUpdate) +
+	//		"\n\tLocation in distribution: " + locationInDistribution + " ; Is a directory: " + strconv.FormatBool(isDirInDistribution)
+	//	util.PrintWarning(message)
+	//}
+
+	err = copyFile(filename, isDir, locationInUpdate, locationInDistribution)
+	util.HandleError(err)
+	return nil
+}
+
+func copyFile(filename string, isDir bool, locationInUpdate, relativeLocationInTemp string) error {
+	fmt.Println("Copying: Name:", filename, "; IsDir:", isDir, "; From:", locationInUpdate, "; To:", relativeLocationInTemp)
+	//todo
+	//check type
+	//if file, check path matches /plugin path
+	//else dir, check files in the directory for matches
+	return nil
+}
+
+//todo: complete
+func isABundle(filename, location string) (bool, error) {
+	return false, nil
+}
+
+//todo: complete
+func constructBundleName(filename string) string {
+	return ""
+}
+
+func getLocationFromMap(locationMap map[string]bool) (string, bool, error) {
+	//Can only have single entry
+	if len(locationMap) > 1 {
+		return "", false, &util.CustomError{What: "Multiple matches found."}
+	}
+	var location string
+	var isDir bool
+	for location, isDir = range locationMap {
+		//do nothing
+	}
+	return location, isDir, nil
+}
+
+func handleMultipleMatches(filename string, locationData *LocationData) error {
+	fmt.Println("[MULTIPLE MATCHES]", filename)
+	return nil
+}
+
+func GetUserInput() (string, error) {
+	reader := bufio.NewReader(os.Stdin)
+	preference, err := reader.ReadString('\n')
+	if err != nil {
+		return "", err
+	}
+	logger.Debug("[INPUT] User input:", preference)
+	return strings.TrimSpace(preference), nil
 }
 
 func isDistributionExists(distributionPath string) (bool, error) {
@@ -390,16 +554,16 @@ func isDistributionExists(distributionPath string) (bool, error) {
 }
 
 //This function will set log level
-func setLogLevel() {
+func SetLogLevel() {
 	//Setting default time format. This will be used in loggers. Otherwise complete date and time will be printed
 	layout.DefaultTimeLayout = "15:04:05"
 	//Setting new STDOUT layout to logger
 	logger.Appender().SetLayout(layout.Pattern("[%d] [%p] %m"))
-	//Set the log level. If the log level is not given, set the log level to WARN
-	if viper.GetBool(constant.IS_DEBUG_LOGS_ENABLED) {
+	//Set the log level. If the log level is not given, set the log level to default level
+	if isDebugLogsEnabled {
 		logger.SetLevel(levels.DEBUG)
 		logger.Debug("Debug logs enabled")
-	} else if viper.GetBool(constant.IS_TRACE_LOGS_ENABLED) {
+	} else if isTraceLogsEnabled {
 		logger.SetLevel(levels.TRACE)
 		logger.Trace("Trace logs enabled")
 	} else {
@@ -446,6 +610,8 @@ func readDirectoryStructure(root string, locationMap *FileLocationInfo, ignoredF
 			}
 			logger.Debug(absolutePath + " : " + fileInfo.Name() + ": " + md5)
 			locationMap.Add(fileInfo.Name(), parentDirectory, fileInfo.IsDir(), md5)
+
+			//todo: use path.Join
 			logger.Trace("[COMPARE]", root + constant.PLUGINS_DIRECTORY + fileInfo.Name(), " ; ", absolutePath)
 			if (root + constant.PLUGINS_DIRECTORY + fileInfo.Name() == absolutePath) && util.HasJarExtension(absolutePath) {
 				logger.Debug("[PLUGIN] FilePath:", absolutePath)

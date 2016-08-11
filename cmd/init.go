@@ -2,8 +2,6 @@ package cmd
 
 import (
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
-	"github.com/shan1024/wum-uc/constant"
 	"github.com/shan1024/wum-uc/util"
 )
 
@@ -20,8 +18,6 @@ var initCmd = &cobra.Command{
 		if len(args) < 1 || len(args) > 1 {
 			util.PrintErrorAndExit("Invalid number of argumants. Run with --help for more details about the argumants")
 		}
-		viper.Set(constant.IS_DEBUG_LOGS_ENABLED, isDebugLogsEnabled)
-		viper.Set(constant.IS_TRACE_LOGS_ENABLED, isTraceLogsEnabled)
 		startInit(args[0])
 	},
 }

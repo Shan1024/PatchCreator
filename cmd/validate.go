@@ -1,17 +1,19 @@
 package cmd
 
 import (
-	"os"
-	"fmt"
 	"archive/zip"
-	"github.com/gosuri/uilive"
-	"time"
-	"strings"
-	"github.com/fatih/color"
-	"path/filepath"
-	//"github.com/ian-kent/go-log/levels"
+	"fmt"
 	"io/ioutil"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
 	"gopkg.in/yaml.v2"
+	"github.com/fatih/color"
+	"github.com/gosuri/uilive"
+	"github.com/shan1024/wum-uc/util"
+	"github.com/shan1024/wum-uc/constant"
 	"github.com/spf13/cobra"
 )
 
@@ -34,7 +36,7 @@ This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(args) < 2 || len(args) > 2 {
-			printFailureAndExit("Invalid number of argumants. Run with --help for more details about the argumants")
+			util.PrintErrorAndExit("Invalid number of argumants. Run with --help for more details about the argumants")
 		}
 		startValidation(args[0], args[1], enableDebugLogsForValidateCommand, enableTraceLogsForValidateCommand)
 	},
@@ -112,11 +114,11 @@ func startValidation(updateLocation, distributionLocation string, debugLogsEnabl
 //This initializes the variables
 func initialize() {
 	allResFiles = make(map[string]bool)
-	allResFiles[_LICENSE_FILE] = true
-	allResFiles[_NOT_A_CONTRIBUTION_FILE] = true
-	allResFiles[_README_FILE] = true
-	allResFiles[_UPDATE_DESCRIPTOR_FILE] = true
-	allResFiles[_INSTRUCTIONS_FILE] = true
+	allResFiles[constant.LICENSE_FILE] = true
+	allResFiles[constant.NOT_A_CONTRIBUTION_FILE] = true
+	allResFiles[constant.README_FILE] = true
+	allResFiles[constant.UPDATE_DESCRIPTOR_FILE] = true
+	allResFiles[constant.INSTRUCTIONS_FILE] = true
 
 	updatedFilesMap = make(map[string]bool)
 	distFileMap = make(map[string]bool)
@@ -146,8 +148,8 @@ func validate() {
 				//If it is not a newly added file, print an error
 				logger.Trace("%s not found in addedFilesMap", updateLoc)
 				logger.Trace("addedFilesMap: %s", addedFilesMap)
-				printFailure(updateLoc, "not found in distribution and it is not a newly added file.")
-				fmt.Println("If it is a new file, please add an entry in", _UPDATE_DESCRIPTOR_FILE, "file.")
+				util.PrintError(updateLoc, "not found in distribution and it is not a newly added file.")
+				fmt.Println("If it is a new file, please add an entry in", constant.UPDATE_DESCRIPTOR_FILE, "file.")
 				printValidationFailureMessage()
 				os.Exit(1)
 			}
@@ -169,16 +171,16 @@ func readUpdateZip(zipLocation string, loggersEnabled bool) {
 	logger.Debug("Update name: %s", updateName)
 
 	//Check whether the update name has the required prefix
-	if !strings.HasPrefix(updateName, _UPDATE_NAME_PREFIX) {
-		printFailureAndExit("Update file does not have", _UPDATE_NAME_PREFIX, "prefix")
+	if !strings.HasPrefix(updateName, constant.UPDATE_NAME_PREFIX) {
+		util.PrintErrorAndExit("Update file does not have", constant.UPDATE_NAME_PREFIX, "prefix")
 	} else {
-		logger.Debug("Update file does have %s prefix", _UPDATE_NAME_PREFIX)
+		logger.Debug("Update file does have %s prefix", constant.UPDATE_NAME_PREFIX)
 	}
 
 	// Create a reader out of the zip archive
 	zipReader, err := zip.OpenReader(zipLocation)
 	if err != nil {
-		printFailureAndExit("Error occurred while reading zip: %s", err)
+		util.PrintErrorAndExit("Error occurred while reading zip: %s", err)
 	}
 	defer zipReader.Close()
 
@@ -208,12 +210,12 @@ func readUpdateZip(zipLocation string, loggersEnabled bool) {
 		//Every file should be in a root folder. Check for the os.PathSeparator character to identify this
 		index := strings.Index(file.Name, "/")//string(os.PathSeparator) removed because it does not work properly in windows
 		if index == -1 {
-			printFailureAndExit("Update zip file should have a root folder called", updateName)
+			util.PrintErrorAndExit("Update zip file should have a root folder called", updateName)
 		} else {
 			rootFolder := file.Name[:index]
 			logger.Trace("RootFolder: %s", rootFolder)
 			if rootFolder != updateName {
-				printFailureAndExit(file.Name, "should be in", updateName, "root directory. But it is in ", rootFolder, "directory.")
+				util.PrintErrorAndExit(file.Name, "should be in", updateName, "root directory. But it is in ", rootFolder, "directory.")
 			}
 		}
 
@@ -223,14 +225,14 @@ func readUpdateZip(zipLocation string, loggersEnabled bool) {
 		//If it is not a resource file
 		if !found {
 			//It should have a PATCH_NAME/carbon.home prefix
-			pathPrefix := updateName + "/" + _CARBON_HOME
+			pathPrefix := updateName + "/" + constant.CARBON_HOME
 			if !strings.Contains(file.Name, pathPrefix) {
 				//string(os.PathSeparator) removed because it does not work properly in windows
-				printFailureAndExit("'" + file.Name + "' is not a known resource file. It should be in '" + pathPrefix + "/" + "' folder")
+				util.PrintErrorAndExit("'" + file.Name + "' is not a known resource file. It should be in '" + pathPrefix + "/" + "' folder")
 			}
-			logger.Debug("Have a %s folder.", _CARBON_HOME)
+			logger.Debug("Have a %s folder.", constant.CARBON_HOME)
 			//string(os.PathSeparator) removed because it does not work properly in windows
-			temp := strings.TrimPrefix(file.Name, updateName + "/" + _CARBON_HOME)
+			temp := strings.TrimPrefix(file.Name, updateName + "/" + constant.CARBON_HOME)
 			logger.Trace("Entry: %s", temp)
 			updatedFilesMap[temp] = true
 		} else {
@@ -241,22 +243,22 @@ func readUpdateZip(zipLocation string, loggersEnabled bool) {
 			logger.Trace(file.FileInfo().Name(), "was removed from the map")
 			//If the file is update-descriptor.yaml file, we need to read the newly added files.
 			// Otherwise there will be no match for these files and validation will be failed
-			if file.FileInfo().Name() == _UPDATE_DESCRIPTOR_FILE {
+			if file.FileInfo().Name() == constant.UPDATE_DESCRIPTOR_FILE {
 				//Open the file
 				yamlFile, err := file.Open()
 				if err != nil {
-					printFailureAndExit("Error occurred while reading the", _UPDATE_DESCRIPTOR_FILE, "file:", err)
+					util.PrintErrorAndExit("Error occurred while reading the", constant.UPDATE_DESCRIPTOR_FILE, "file:", err)
 				}
 				//Get the byte array
 				data, err := ioutil.ReadAll(yamlFile)
 				if err != nil {
-					printFailureAndExit("Error occurred while reading the", _UPDATE_DESCRIPTOR_FILE, "file:", err)
+					util.PrintErrorAndExit("Error occurred while reading the", constant.UPDATE_DESCRIPTOR_FILE, "file:", err)
 				}
 				descriptor := update_descriptor{}
 				//Get the values
 				err = yaml.Unmarshal(data, &descriptor)
 				if err != nil {
-					printFailureAndExit("Error occurred while unmarshalling the yaml:", err)
+					util.PrintErrorAndExit("Error occurred while unmarshalling the yaml:", err)
 				}
 				logger.Debug("descriptor:", descriptor)
 				//Add all files to addedFilesMap
@@ -270,38 +272,38 @@ func readUpdateZip(zipLocation string, loggersEnabled bool) {
 	writer.Stop()
 
 	//Delete instructions.txt file if it is left in the map because it is optional
-	_, found := allResFiles[_INSTRUCTIONS_FILE]
+	_, found := allResFiles[constant.INSTRUCTIONS_FILE]
 	if found {
-		logger.Debug("%s was not found in the zip file.", _INSTRUCTIONS_FILE)
-		delete(allResFiles, _INSTRUCTIONS_FILE)
+		logger.Debug("%s was not found in the zip file.", constant.INSTRUCTIONS_FILE)
+		delete(allResFiles, constant.INSTRUCTIONS_FILE)
 		logger.Trace("Resource map: %s", allResFiles)
 		logger.Trace(updatedFilesMap)
 		color.Set(color.FgYellow)
-		fmt.Println("[INFO]", _INSTRUCTIONS_FILE, "was not found in the zip file.")
+		fmt.Println("[INFO]", constant.INSTRUCTIONS_FILE, "was not found in the zip file.")
 		color.Unset()
 	} else {
-		logger.Debug("%s was found in the zip file.", _INSTRUCTIONS_FILE)
+		logger.Debug("%s was found in the zip file.", constant.INSTRUCTIONS_FILE)
 	}
 
 	//Delete NOT_A_CONTRIBUTION.txt file if it is left in the map because it is optional
-	_, found = allResFiles[_NOT_A_CONTRIBUTION_FILE]
+	_, found = allResFiles[constant.NOT_A_CONTRIBUTION_FILE]
 	if found {
-		logger.Debug("%s was not found in the zip file.", _NOT_A_CONTRIBUTION_FILE)
-		delete(allResFiles, _NOT_A_CONTRIBUTION_FILE)
+		logger.Debug("%s was not found in the zip file.", constant.NOT_A_CONTRIBUTION_FILE)
+		delete(allResFiles, constant.NOT_A_CONTRIBUTION_FILE)
 		logger.Trace("Resource map: %s", allResFiles)
 		logger.Trace(updatedFilesMap)
 		color.Set(color.FgYellow)
-		fmt.Println("[INFO]", _NOT_A_CONTRIBUTION_FILE, "was not found in the zip file.")
+		fmt.Println("[INFO]", constant.NOT_A_CONTRIBUTION_FILE, "was not found in the zip file.")
 		color.Unset()
 	} else {
-		logger.Debug("%s was found in the zip file.", _NOT_A_CONTRIBUTION_FILE)
+		logger.Debug("%s was found in the zip file.", constant.NOT_A_CONTRIBUTION_FILE)
 	}
 
 	//At this point, the size of the allResFiles should be zero. If one or more files are not found, that means
 	// that some required files are missing
 	if (len(allResFiles) != 0) {
 		//Print the missing files
-		printFailureAndExit("Following resource file(s) were not found in the update zip: ")
+		util.PrintErrorAndExit("Following resource file(s) were not found in the update zip: ")
 		for key := range allResFiles {
 			fmt.Println("\t", "-", key)
 		}
@@ -313,7 +315,7 @@ func readUpdateZip(zipLocation string, loggersEnabled bool) {
 	if totalFiles == fileCount {
 		logger.Debug("All files read")
 	} else {
-		printFailureAndExit("All files not read from zip file")
+		util.PrintErrorAndExit("All files not read from zip file")
 	}
 }
 
@@ -330,7 +332,7 @@ func readDistZip(zipLocation string, loggersEnabled bool) {
 	// Create a reader out of the zip archive
 	zipReader, err := zip.OpenReader(zipLocation)
 	if err != nil {
-		printFailureAndExit("Error occurred while reading zip:", err)
+		util.PrintErrorAndExit("Error occurred while reading zip:", err)
 	}
 	defer zipReader.Close()
 
@@ -369,7 +371,7 @@ func readDistZip(zipLocation string, loggersEnabled bool) {
 	if totalFiles == fileCount {
 		logger.Debug("All files read.")
 	} else {
-		printFailureAndExit("All files not read from zip file.")
+		util.PrintErrorAndExit("All files not read from zip file.")
 	}
 }
 
@@ -395,7 +397,7 @@ func readDistDir(distributionLocation string, loggersEnabled bool) {
 		return nil
 	})
 	if err != nil {
-		printFailureAndExit("Error occurred while reading the zip file: ", err)
+		util.PrintErrorAndExit("Error occurred while reading the zip file: ", err)
 	}
 	logger.Debug("Total files read: %s", fileCount)
 	//stop the writer
@@ -403,5 +405,5 @@ func readDistDir(distributionLocation string, loggersEnabled bool) {
 }
 
 func printValidationFailureMessage() {
-	printInRed("\nValidation FAILED\n")
+	util.PrintInRed("\nValidation FAILED\n")
 }

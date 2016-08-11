@@ -1,6 +1,9 @@
 package cmd
 
-import "github.com/spf13/cobra"
+import (
+	"github.com/shan1024/wum-uc/util"
+	"github.com/spf13/cobra"
+)
 
 var initCmd = &cobra.Command{
 	Use:   "init",
@@ -13,9 +16,9 @@ var initCmd = &cobra.Command{
 		to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(args) < 1 || len(args) > 1 {
-			printFailureAndExit("Invalid number of argumants. Run with --help for more details about the argumants")
+			util.PrintErrorAndExit("Invalid number of argumants. Run with --help for more details about the argumants")
 		}
-		create(args[0], args[1], enableDebugLogsForCreateCommand, enableTraceLogsForCreateCommand)
+		createUpdate(args[0], args[1], enableDebugLogsForCreateCommand, enableTraceLogsForCreateCommand)
 	},
 }
 
@@ -25,7 +28,6 @@ func init() {
 	RootCmd.Flags().BoolVarP(&enableTraceLogsForCreateCommand, "trace", "t", false, "Enable trace logs")
 }
 
-
-func startInit(){
+func startInit() {
 
 }

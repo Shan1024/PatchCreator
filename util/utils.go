@@ -1,4 +1,4 @@
-package cmd
+package util
 
 import (
 	"strings"
@@ -7,31 +7,36 @@ import (
 	"fmt"
 	"io/ioutil"
 	"github.com/fatih/color"
-	"archive/zip"
 )
 
-func hasZipExtension(path string) bool {
+func HasZipExtension(path string) bool {
 	return strings.HasSuffix(path, ".zip")
 }
 
-func getParentDirectory(path string) string {
+func GetParentDirectory(filepath string) string {
 	parentDirectory := "./"
-	if lastIndex := strings.LastIndex(path, string(os.PathSeparator)); lastIndex > -1 {
-		parentDirectory = path[:lastIndex]
+	if lastIndex := strings.LastIndex(filepath, string(os.PathSeparator)); lastIndex > -1 {
+		parentDirectory = filepath[:lastIndex]
 	}
 	return parentDirectory
 }
 
-func deleteDir(path string) error {
+func DeleteDirectory(path string) error {
 	return os.RemoveAll(path)
 }
 
-func createDir(path string) error {
-	return os.MkdirAll(path, 0777)
+func CreateDirectory(path string) error {
+	return os.MkdirAll(path, 0700)
+}
+
+func HandleError(err error, customMessage ...interface{}) {
+	if err != nil {
+		PrintErrorAndExit(append(customMessage, "Error Message: '" + err.Error() + "'")...)
+	}
 }
 
 //Check whether the given string is in the given slice
-func stringIsInSlice(a string, list []string) bool {
+func IsStringIsInSlice(a string, list []string) bool {
 	for _, b := range list {
 		if b == a {
 			return true
@@ -114,7 +119,7 @@ func (e *CustomError) Error() string {
 }
 
 //Check whether the given location points to a directory
-func isDirectoryExists(location string) (bool, error) {
+func IsDirectoryExists(location string) (bool, error) {
 	locationInfo, err := os.Stat(location)
 	if err != nil {
 		return false, err
@@ -127,7 +132,7 @@ func isDirectoryExists(location string) (bool, error) {
 }
 
 //Check whether the given location points to a file
-func isFileExists(location string) (bool, error) {
+func IsFileExists(location string) (bool, error) {
 	locationInfo, err := os.Stat(location)
 	if err != nil {
 		return false, err
@@ -140,103 +145,103 @@ func isFileExists(location string) (bool, error) {
 }
 
 //This is used to print failure messages
-func printFailure(args ...interface{}) {
+func PrintError(args ...interface{}) {
 	color.Set(color.FgRed, color.Bold)
-	fmt.Println(append(append([]interface{}{"\n[FAILURE]"}, args...), "\n")...)
+	fmt.Println(append(append([]interface{}{"\n[ERROR]"}, args...), "\n")...)
 	color.Unset()
 }
 
 //This is used to print failure messages and exit
-func printFailureAndExit(args ...interface{}) {
+func PrintErrorAndExit(args ...interface{}) {
 	//call the printFailure method and exit
-	printFailure(args...)
+	PrintError(args...)
 	os.Exit(1)
 }
 
 //This is used to print warning messages
-func printWarning(args ...interface{}) {
+func PrintWarning(args ...interface{}) {
 	color.Set(color.FgYellow, color.Bold)
 	fmt.Println(append(append([]interface{}{"[WARNING]"}, args...), "\n")...)
 	color.Unset()
 }
 
 //This is used to print info messages
-func printInfo(args ...interface{}) {
+func PrintInfo(args ...interface{}) {
 	color.Set(color.FgYellow, color.Bold)
 	fmt.Println(append(append([]interface{}{"[INFO]"}, args...), "\n")...)
 	color.Unset()
 }
 
 //This is used to print success messages
-func printSuccess(args ...interface{}) {
+func PrintSuccess(args ...interface{}) {
 	color.Set(color.FgGreen, color.Bold)
 	fmt.Println(append(append([]interface{}{"[INFO]"}, args...), "\n")...)
 	color.Unset()
 }
 
 //This is used to print messages in Yellow color
-func printInYellow(args ...interface{}) {
+func PrintInYellow(args ...interface{}) {
 	color.Set(color.FgYellow, color.Bold)
 	fmt.Print(args...)
 	color.Unset()
 }
 
 //This is used to print messages in Red color
-func printInRed(args ...interface{}) {
+func PrintInRed(args ...interface{}) {
 	color.Set(color.FgRed, color.Bold)
 	fmt.Print(args...)
 	color.Unset()
 }
 
-func zipDirectory(filename string, directory string) error {
-	// Create a file to write the archive buffer to
-	// Could also use an in memory buffer.
-	outFile, err := os.Create(filename)
-	if err != nil {
-		return err
-	}
-	defer outFile.Close()
-
-	// Create a zip writer on top of the file writer
-	zipWriter := zip.NewWriter(outFile)
-
-
-	//todo: write walk function
-	// Add files to archive
-	// We use some hard coded data to demonstrate,
-	// but you could iterate through all the files
-	// in a directory and pass the name and contents
-	// of each file, or you can take data from your
-	// program and write it write in to the archive
-	// without
-	var filesToArchive = []struct {
-		Name, Body string
-	}{
-		{"test.txt", "String contents of file"},
-		{"test2.txt", "\x61\x62\x63\n"},
-	}
-
-	// Create and write files to the archive, which in turn
-	// are getting written to the underlying writer to the
-	// .zip file we created at the beginning
-	for _, file := range filesToArchive {
-		fileWriter, err := zipWriter.Create(file.Name)
-		if err != nil {
-			return err
-		}
-		_, err = fileWriter.Write([]byte(file.Body))
-		if err != nil {
-			return err
-		}
-	}
-
-	// Clean up
-	err = zipWriter.Close()
-	if err != nil {
-		return err
-	}
-	return nil
-}
+//func ZipDirectory(filename string, directory string) error {
+//	// Create a file to write the archive buffer to
+//	// Could also use an in memory buffer.
+//	outFile, err := os.Create(filename)
+//	if err != nil {
+//		return err
+//	}
+//	defer outFile.Close()
+//
+//	// Create a zip writer on top of the file writer
+//	zipWriter := zip.NewWriter(outFile)
+//
+//
+//	//todo: write walk function
+//	// Add files to archive
+//	// We use some hard coded data to demonstrate,
+//	// but you could iterate through all the files
+//	// in a directory and pass the name and contents
+//	// of each file, or you can take data from your
+//	// program and write it write in to the archive
+//	// without
+//	var filesToArchive = []struct {
+//		Name, Body string
+//	}{
+//		{"test.txt", "String contents of file"},
+//		{"test2.txt", "\x61\x62\x63\n"},
+//	}
+//
+//	// Create and write files to the archive, which in turn
+//	// are getting written to the underlying writer to the
+//	// .zip file we created at the beginning
+//	for _, file := range filesToArchive {
+//		fileWriter, err := zipWriter.Create(file.Name)
+//		if err != nil {
+//			return err
+//		}
+//		_, err = fileWriter.Write([]byte(file.Body))
+//		if err != nil {
+//			return err
+//		}
+//	}
+//
+//	// Clean up
+//	err = zipWriter.Close()
+//	if err != nil {
+//		return err
+//	}
+//	return nil
+//}
 
 //func unzip(zipFileName, targetDir string) error {
 //	// Create a reader out of the zip archive

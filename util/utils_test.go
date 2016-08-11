@@ -1,7 +1,8 @@
-package cmd
+package util
 
 import (
 	"testing"
+
 	. "github.com/franela/goblin"
 )
 
@@ -11,10 +12,10 @@ func TestIsAZipFile(t *testing.T) {
 	invalidPath := "/path/test.txt"
 	g.Describe("This tests whether given path points to a zip or not", func() {
 		g.It(validPath + " should return true", func() {
-			g.Assert(isAZipFile(validPath)).IsTrue()
+			g.Assert(HasZipExtension(validPath)).IsTrue()
 		})
 		g.It(invalidPath + " should return false", func() {
-			g.Assert(isAZipFile(invalidPath)).IsFalse()
+			g.Assert(HasZipExtension(invalidPath)).IsFalse()
 		})
 	})
 }
@@ -28,16 +29,16 @@ func TestStringIsInSlice(t *testing.T) {
 	g := Goblin(t)
 	g.Describe("This tests whether the given string is in a slice or not", func() {
 		g.It(a + " is in the slice", func() {
-			g.Assert(stringIsInSlice(a, slice)).IsTrue()
+			g.Assert(IsStringIsInSlice(a, slice)).IsTrue()
 		})
 		g.It("Should return true", func() {
-			g.Assert(stringIsInSlice(b, slice)).IsTrue()
+			g.Assert(IsStringIsInSlice(b, slice)).IsTrue()
 		})
 		g.It("Should return true", func() {
-			g.Assert(stringIsInSlice(c, slice)).IsTrue()
+			g.Assert(IsStringIsInSlice(c, slice)).IsTrue()
 		})
 		g.It("Should return false", func() {
-			g.Assert(stringIsInSlice(d, slice)).IsFalse()
+			g.Assert(IsStringIsInSlice(d, slice)).IsFalse()
 		})
 	})
 }

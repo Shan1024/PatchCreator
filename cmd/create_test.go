@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"testing"
+
 	. "github.com/franela/goblin"
 	"github.com/ian-kent/go-log/levels"
 )

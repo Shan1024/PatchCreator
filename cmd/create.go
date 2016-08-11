@@ -1,22 +1,25 @@
 package cmd
 
 import (
-	"path/filepath"
-	"io/ioutil"
+	"crypto/md5"
 	"gopkg.in/yaml.v2"
+	"fmt"
+	"io"
+	"io/ioutil"
+	"os"
 	"path"
+	"path/filepath"
+	"strings"
+	"encoding/hex"
+
 	"github.com/ian-kent/go-log/log"
 	"github.com/ian-kent/go-log/levels"
 	"github.com/ian-kent/go-log/layout"
-	"github.com/spf13/cobra"
 	"github.com/mholt/archiver"
+	"github.com/shan1024/wum-uc/constant"
+	"github.com/shan1024/wum-uc/util"
+	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"strings"
-	"fmt"
-	"crypto/md5"
-	"os"
-	"io"
-	"encoding/hex"
 )
 
 type Info struct {
@@ -89,7 +92,7 @@ type update_descriptor struct {
 
 var (
 	//This contains the mandatory resource files that needs to be copied to the update zip
-	_MANDATORY_RESOURCE_FILES = []string{_UPDATE_DESCRIPTOR_FILE, _LICENSE_FILE}
+	_MANDATORY_RESOURCE_FILES = []string{constant.UPDATE_DESCRIPTOR_FILE, constant.LICENSE_FILE}
 
 	//These are used to store file/directory locations to later find matches. Keys of the map are file/directory
 	// names and the value will be a entry which contain a slice which has locations of that file
@@ -101,7 +104,7 @@ var (
 
 	//This holds the complete name of the update zip file/root folder of the zip. This will be a combination of
 	// few other variables
-	_UPDATE_NAME string
+	//_UPDATE_NAME string
 
 	//Create the logger
 	logger = log.Logger()
@@ -122,9 +125,9 @@ var createCmd = &cobra.Command{
 		to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(args) < 2 || len(args) > 2 {
-			printFailureAndExit("Invalid number of argumants. Run with --help for more details about the argumants")
+			util.PrintErrorAndExit("Invalid number of argumants. Run with --help for more details about the argumants")
 		}
-		create(args[0], args[1], enableDebugLogsForCreateCommand, enableTraceLogsForCreateCommand)
+		createUpdate(args[0], args[1], enableDebugLogsForCreateCommand, enableTraceLogsForCreateCommand)
 	},
 }
 
@@ -134,58 +137,43 @@ func init() {
 	createCmd.Flags().BoolVarP(&enableTraceLogsForCreateCommand, "trace", "t", false, "Enable trace logs")
 }
 
-func create(updateDirectory, distributionPath string, debugLogsEnabled, traceLogsEnabled bool) {
+func createUpdate(updateDirectoryPath, distributionPath string, isDebugLogsEnabled, isTraceLogsEnabled bool) {
 
 	//set debug level
-	setLogLevel(debugLogsEnabled, traceLogsEnabled)
+	setLogLevel(isDebugLogsEnabled, isTraceLogsEnabled)
 	logger.Debug("create command called")
-
-	//data := []byte("These pretzels are making me thirsty.")
-	//file := fileData{
-	//	name:"test.jar",
-	//	path: "/abc/def",
-	//	md5: md5.Sum(data),
-	//}
-	//fmt.Println(file)
 
 	//Flow - First check whether the given locations exists and required files exists. Then start processing.
 	//If one step fails, print error message and exit.
 
 	//1) Check whether the given update directory exists
-	exists, err := isDirectoryExists(updateDirectory)
-	if err != nil {
-		printFailureAndExit(err)
-	}
+	exists, err := util.IsDirectoryExists(updateDirectoryPath)
+	util.HandleError(err, "Update directory does not exist.")
 	if !exists {
-		printFailureAndExit("Update Directory does not exist at %s.", updateDirectory)
+		util.PrintErrorAndExit("Update Directory does not exist at %s.", updateDirectoryPath)
 	}
 
 	//2) Check whether the update-descriptor.yaml file exists
 	//Construct the update-descriptor.yaml file location
-	updateDescriptorPath := path.Join(updateDirectory, _UPDATE_DESCRIPTOR_FILE)
-	exists, err = isFileExists(updateDescriptorPath)
-	if err != nil {
-		printFailureAndExit(err)
-	}
+	updateDescriptorPath := path.Join(updateDirectoryPath, constant.UPDATE_DESCRIPTOR_FILE)
+	exists, err = util.IsFileExists(updateDescriptorPath)
+	util.HandleError(err, "")
 	if !exists {
-		printFailureAndExit("%s not found at %s.", _UPDATE_DESCRIPTOR_FILE, updateDescriptorPath)
+		util.PrintErrorAndExit("%s not found at %s.", constant.UPDATE_DESCRIPTOR_FILE, updateDescriptorPath)
 	}
 	logger.Debug("Descriptor Exists. Location %s", updateDescriptorPath)
 
 	//3) Check whether the given distribution exists
 	exists, err = isDistributionExists(distributionPath)
-	if err != nil {
-		printFailureAndExit(err)
-	}
+	util.HandleError(err, "")
 	if !exists {
-		printFailureAndExit("Distribution does not exist at %s.", updateDirectory)
+		util.PrintErrorAndExit("Distribution does not exist at %s.", updateDirectoryPath)
 	}
 
 	//4) Read update-descriptor.yaml and set the update name which will be used when creating the update zip file.
-	err = readDescriptor(&updateDescriptor, updateDirectory)
-	if err != nil {
-		printFailureAndExit(err)
-	}
+	err = readDescriptor(&updateDescriptor, updateDirectoryPath)
+	util.HandleError(err, "")
+	//set the update name
 	setUpdateName(&updateDescriptor)
 
 	//5) Traverse and read the update
@@ -195,14 +183,12 @@ func create(updateDirectory, distributionPath string, debugLogsEnabled, traceLog
 	//logger.Debug("Update Entries: ", updateEntriesMap)
 
 	ignoredFiles := getIgnoredFilesInUpdate()
-
 	updateMap := LocationMap{
 		nameLocationMap: make(map[string]Locations),
 	}
-	err = readDirectoryStructure(updateDirectory, &updateMap, ignoredFiles)
-	if err != nil {
-		printFailureAndExit(err)
-	}
+	err = readDirectoryStructure(updateDirectoryPath, &updateMap, ignoredFiles)
+	util.HandleError(err, "")
+
 	fmt.Println(updateMap)
 
 	//6) Traverse and read distribution
@@ -210,38 +196,33 @@ func create(updateDirectory, distributionPath string, debugLogsEnabled, traceLog
 		nameLocationMap: make(map[string]Locations),
 	}
 
-	if hasZipExtension(distributionPath) {
+	if util.HasZipExtension(distributionPath) {
 
-		unzipDirectory := getParentDirectory(distributionPath)
+		unzipDirectory := util.GetParentDirectory(distributionPath)
 		logger.Debug("unzipDirectory: %s", unzipDirectory)
 
-		printInfo("Extracting zip file. Please wait...")
+		util.PrintInfo("Extracting zip file. Please wait...")
 		err := archiver.Unzip(distributionPath, unzipDirectory)
-		if err != nil {
-			printFailureAndExit("Error occurred while extracting the zip: ", err)
-		}
-		printInfo("Extracting zip file finished successfully.")
+		util.HandleError(err, "")
 
-		distributionRoot := getDistributionRoot(distributionPath)
+		util.PrintInfo("Extracting zip file finished successfully.")
+
+		distributionRoot := getDistributionRootDirectory(distributionPath)
 		log.Debug("distributionRoot: %s", distributionRoot)
-		viper.Set(_DISTRIBUTION_ROOT, distributionRoot)
+		viper.Set(constant.DISTRIBUTION_ROOT, distributionRoot)
 
 		err = readDirectoryStructure(distributionRoot, &distributionMap, nil)
-		if err != nil {
-			printFailureAndExit(err)
-		}
+		util.HandleError(err, "")
 
 		//unzipAndReadDistribution(distributionPath, &distEntriesMap, (debugLogsEnabled || traceLogsEnabled))
 		//Delete the extracted distribution directory after function is finished
 		//defer os.RemoveAll(strings.TrimSuffix(distributionPath, ".zip")) //todo: add
 	} else {
-		viper.Set(_DISTRIBUTION_ROOT, distributionPath)
+		viper.Set(constant.DISTRIBUTION_ROOT, distributionPath)
 		log.Debug("distributionRoot: %s", distributionPath)
 
 		err = readDirectoryStructure(distributionPath, &distributionMap, nil)
-		if err != nil {
-			printFailureAndExit(err)
-		}
+		util.HandleError(err, "")
 
 
 
@@ -275,19 +256,17 @@ func create(updateDirectory, distributionPath string, debugLogsEnabled, traceLog
 	//logger.Debug("Creating zip file finished")
 
 	//Remove the temp directory
-	err = deleteDir(_TEMP_DIR)
-	if err != nil {
-		printFailure("Error occurred while deleting temp directory:", err)
-	}
+	err = util.DeleteDirectory(constant.TEMP_DIR)
+	util.HandleError(err, "")
 }
 
 func getIgnoredFilesInUpdate() map[string]bool {
 	return map[string]bool{
-		_UPDATE_DESCRIPTOR_FILE:true,
-		_LICENSE_FILE:true,
-		_README_FILE:true,
-		_NOT_A_CONTRIBUTION_FILE:true,
-		_INSTRUCTIONS_FILE:true,
+		constant.UPDATE_DESCRIPTOR_FILE: true,
+		constant.LICENSE_FILE: true,
+		constant.README_FILE: true,
+		constant.NOT_A_CONTRIBUTION_FILE: true,
+		constant.INSTRUCTIONS_FILE: true,
 	}
 }
 //func isUpdateDirectoryExists(updateDirectory string) (bool, error) {
@@ -303,8 +282,8 @@ func getIgnoredFilesInUpdate() map[string]bool {
 //}
 
 func isDistributionExists(distributionPath string) (bool, error) {
-	if hasZipExtension(distributionPath) {
-		exists, err := isFileExists(distributionPath)
+	if util.HasZipExtension(distributionPath) {
+		exists, err := util.IsFileExists(distributionPath)
 		if err != nil {
 			return false, err
 		}
@@ -314,7 +293,7 @@ func isDistributionExists(distributionPath string) (bool, error) {
 			return false, nil
 		}
 	} else {
-		exists, err := isDirectoryExists(distributionPath)
+		exists, err := util.IsDirectoryExists(distributionPath)
 		if err != nil {
 			return false, err
 		}
@@ -345,41 +324,44 @@ func setLogLevel(debugLogsEnabled, traceLogsEnabled bool) {
 	}
 }
 
-func getDistributionRoot(path string) string {
-	lastIndex := strings.LastIndex(path, ".")
-	return path[:lastIndex]
+func getDistributionRootDirectory(distributionZipPath string) string {
+	lastIndex := strings.LastIndex(distributionZipPath, ".")
+	return distributionZipPath[:lastIndex]
 }
 
 func readDirectoryStructure(root string, locationMap *LocationMap, ignoredFiles map[string]bool) error {
-	root = strings.TrimSuffix(root, string(os.PathSeparator))
+	//Remove the / or \ at the end of the path if it exists/ Otherwise the root directory wont be ignored
+	//root = strings.TrimSuffix(root, string(os.PathSeparator))
 	return filepath.Walk(root, func(absolutePath string, fileInfo os.FileInfo, err error) error {
-		logger.Debug("Walking: %s", absolutePath)
+		logger.Trace("Walking: %s", absolutePath)
 		if err != nil {
 			return err
 		}
 
+		//Ignore root directory
 		if root == absolutePath {
 			return nil
 		}
 
-		//check in ignored files. This is useful to ignore update-descriptor.yaml, etc in update directory
-		if len(ignoredFiles) > 0 {
+		//check current file in ignored files map. This is useful to ignore update-descriptor.yaml, etc in update directory
+		if ignoredFiles != nil {
 			_, found := ignoredFiles[fileInfo.Name()]
 			if found {
 				return nil
 			}
 		}
 
+		//get the parent directory path
 		parentDirectory := strings.TrimSuffix(absolutePath, fileInfo.Name())
-
+		//Check for file / directory
 		if !fileInfo.IsDir() {
+			//If it is a file, calculate md5 sum
 			md5, err := getMD5(absolutePath)
 			if err != nil {
 				return err
 			}
 			logger.Debug(absolutePath + " : " + fileInfo.Name() + ": " + md5)
 			locationMap.Add(fileInfo.Name(), parentDirectory, fileInfo.IsDir(), md5)
-
 		} else {
 			logger.Debug(absolutePath + " : " + fileInfo.Name())
 			locationMap.Add(fileInfo.Name(), parentDirectory, fileInfo.IsDir(), "")
@@ -388,9 +370,9 @@ func readDirectoryStructure(root string, locationMap *LocationMap, ignoredFiles 
 	})
 }
 
-func getMD5(filePath string) (string, error) {
+func getMD5(filepath string) (string, error) {
 	var result []byte
-	file, err := os.Open(filePath)
+	file, err := os.Open(filepath)
 	if err != nil {
 		return "", err
 	}
@@ -407,16 +389,16 @@ func getMD5(filePath string) (string, error) {
 func readDescriptor(updateDescriptor *update_descriptor, updateDirectory string) error {
 
 	//Construct the file path
-	updateDescriptorPath := filepath.Join(updateDirectory, _UPDATE_DESCRIPTOR_FILE)
+	updateDescriptorPath := filepath.Join(updateDirectory, constant.UPDATE_DESCRIPTOR_FILE)
 	//Read the file
 	yamlFile, err := ioutil.ReadFile(updateDescriptorPath)
 	if err != nil {
-		return &CustomError{What: "Error occurred while reading the descriptor: " + err.Error()}
+		return &util.CustomError{What: "Error occurred while reading the descriptor: " + err.Error()}
 	}
 	//Un-marshal the update-descriptor file to updateDescriptor struct
 	err = yaml.Unmarshal(yamlFile, &updateDescriptor)
 	if err != nil {
-		return &CustomError{What: "Error occurred while unmarshalling the yaml: " + err.Error()}
+		return &util.CustomError{What: "Error occurred while unmarshalling the yaml: " + err.Error()}
 	}
 	logger.Debug("----------------------------------------------------------------")
 	logger.Debug("update_number: %s", updateDescriptor.Update_number)
@@ -429,22 +411,22 @@ func readDescriptor(updateDescriptor *update_descriptor, updateDirectory string)
 	logger.Debug("----------------------------------------------------------------")
 
 	if len(updateDescriptor.Update_number) == 0 {
-		return &CustomError{What: "'update_number' field not found in " + _UPDATE_DESCRIPTOR_FILE}
+		return &util.CustomError{What: "'update_number' field not found in " + constant.UPDATE_DESCRIPTOR_FILE}
 	}
 	if len(updateDescriptor.Platform_version) == 0 {
-		return &CustomError{What: "'platform_version' field not found in " + _UPDATE_DESCRIPTOR_FILE}
+		return &util.CustomError{What: "'platform_version' field not found in " + constant.UPDATE_DESCRIPTOR_FILE}
 	}
 	if len(updateDescriptor.Platform_name) == 0 {
-		return &CustomError{What: "'platform_name' field not found in " + _UPDATE_DESCRIPTOR_FILE}
+		return &util.CustomError{What: "'platform_name' field not found in " + constant.UPDATE_DESCRIPTOR_FILE}
 	}
 	if len(updateDescriptor.Applies_to) == 0 {
-		return &CustomError{What: "'applies_to' field not found in " + _UPDATE_DESCRIPTOR_FILE}
+		return &util.CustomError{What: "'applies_to' field not found in " + constant.UPDATE_DESCRIPTOR_FILE}
 	}
 	if len(updateDescriptor.Bug_fixes) == 0 {
-		return &CustomError{What: "'bug_fixes' field not found in " + _UPDATE_DESCRIPTOR_FILE}
+		return &util.CustomError{What: "'bug_fixes' field not found in " + constant.UPDATE_DESCRIPTOR_FILE}
 	}
 	if len(updateDescriptor.Description) == 0 {
-		return &CustomError{What: "'description' field not found in " + _UPDATE_DESCRIPTOR_FILE}
+		return &util.CustomError{What: "'description' field not found in " + constant.UPDATE_DESCRIPTOR_FILE}
 	}
 	return nil
 }
@@ -458,8 +440,10 @@ func setUpdateName(updateDescriptor *update_descriptor) {
 	updateNumber := updateDescriptor.Update_number
 	logger.Debug("Update number set to: %s", updateNumber)
 
-	_UPDATE_NAME = _UPDATE_NAME_PREFIX + "-" + platformVersion + "-" + updateNumber
-	logger.Debug("Update name: %s", _UPDATE_NAME)
+	updateName := constant.UPDATE_NAME_PREFIX + "-" + platformVersion + "-" + updateNumber
+	logger.Debug("Update name: %s", updateName)
+
+	viper.Set(constant.UPDATE_NAME, updateName)
 }
 
 //

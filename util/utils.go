@@ -1,17 +1,20 @@
 package util
 
 import (
+	"bufio"
+	"crypto/md5"
+	"encoding/hex"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 
-	"io/ioutil"
 	"github.com/fatih/color"
-	"path/filepath"
+	"github.com/ian-kent/go-log/log"
 	"gopkg.in/yaml.v2"
-	"bufio"
-	"github.com/ian-kent/go-log/logger"
 )
 
 //todo: Move to a separate package
@@ -67,7 +70,7 @@ func IsNo(preference string) bool {
 }
 
 func IsReenter(preference string) bool {
-	if strings.ToLower(preference) == "reenter" || (len(preference) == 1 && strings.ToLower(preference) == "r" ) {
+	if strings.ToLower(preference) == "reenter" || strings.ToLower(preference) == "re-enter" || (len(preference) == 1 && strings.ToLower(preference) == "r" ) {
 		return true
 	}
 	return false
@@ -88,8 +91,27 @@ func GetUserInput() (string, error) {
 	return strings.TrimSpace(preference), nil
 }
 
-func IsUserPreferencesValid(preferences []string,availableChoices int) bool{
-
+func IsUserPreferencesValid(preferences []string, availableChoices int) (bool, error) {
+	length := len(preferences)
+	if length == 0 {
+		return false, &CustomError{What:"No preferences entered."}
+	}
+	first, err := strconv.Atoi(preferences[0])
+	if err != nil {
+		return false, err
+	}
+	message := "Invalid preferences. Please select indices where " + strconv.Itoa(availableChoices) + ">= index >=1."
+	if first < 1 {
+		return false, &CustomError{What:message}
+	}
+	last, err := strconv.Atoi(preferences[length - 1])
+	if err != nil {
+		return false, err
+	}
+	if last > availableChoices {
+		return false, &CustomError{What:message}
+	}
+	return true, nil
 }
 
 //This function will read update-descriptor.yaml
@@ -97,7 +119,7 @@ func LoadUpdateDescriptor(filename, updateDirectoryPath string) (*UpdateDescript
 
 	//Construct the file path
 	updateDescriptorPath := filepath.Join(updateDirectoryPath, filename)
-	fmt.Println("updateDescriptorPath:", updateDescriptorPath)
+	log.Debug("updateDescriptorPath:", updateDescriptorPath)
 
 	//Read the file
 	updateDescriptor := UpdateDescriptor{}
@@ -139,14 +161,40 @@ func ValidateUpdateDescriptor(updateDescriptor *UpdateDescriptor) error {
 
 func PrintUpdateDescriptor(updateDescriptor *UpdateDescriptor) {
 	fmt.Println("----------------------------------------------------------------")
-	fmt.Println("update_number: %s", updateDescriptor.Update_number)
-	fmt.Println("kernel_version: %s", updateDescriptor.Platform_version)
-	fmt.Println("platform_version: %s", updateDescriptor.Platform_name)
-	fmt.Println("applies_to: %s", updateDescriptor.Applies_to)
-	fmt.Println("bug_fixes: %s", updateDescriptor.Bug_fixes)
-	fmt.Println("file_changes: %s", updateDescriptor.File_changes)
-	fmt.Println("description: %s", updateDescriptor.Description)
+	fmt.Printf("update_number: %s\n", updateDescriptor.Update_number)
+	fmt.Printf("kernel_version: %s\n", updateDescriptor.Platform_version)
+	fmt.Printf("platform_version: %s\n", updateDescriptor.Platform_name)
+	fmt.Printf("applies_to: %s\n", updateDescriptor.Applies_to)
+	fmt.Printf("bug_fixes: %s\n", updateDescriptor.Bug_fixes)
+	fmt.Printf("file_changes: %s\n", updateDescriptor.File_changes)
+	fmt.Printf("description: %s\n", updateDescriptor.Description)
 	fmt.Println("----------------------------------------------------------------")
+}
+
+
+//ok
+func GetMD5(filepath string) (string, error) {
+	var result []byte
+	file, err := os.Open(filepath)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	hash := md5.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(hash.Sum(result)), nil
+}
+
+//This function will set the update name which will be used when creating the update zip
+func GetUpdateName(updateDescriptor *UpdateDescriptor, updateNamePrefix string) string {
+	//Read the corresponding details
+	platformVersion := updateDescriptor.Platform_version
+	updateNumber := updateDescriptor.Update_number
+	updateName := updateNamePrefix + "-" + platformVersion + "-" + updateNumber
+	return updateName
 }
 
 //Check whether the given string is in the given slice
@@ -306,116 +354,3 @@ func PrintInRed(args ...interface{}) {
 	fmt.Print(args...)
 	color.Unset()
 }
-
-//func ZipDirectory(filename string, directory string) error {
-//	// Create a file to write the archive buffer to
-//	// Could also use an in memory buffer.
-//	outFile, err := os.Create(filename)
-//	if err != nil {
-//		return err
-//	}
-//	defer outFile.Close()
-//
-//	// Create a zip writer on top of the file writer
-//	zipWriter := zip.NewWriter(outFile)
-//
-//
-//	//todo: write walk function
-//	// Add files to archive
-//	// We use some hard coded data to demonstrate,
-//	// but you could iterate through all the files
-//	// in a directory and pass the name and contents
-//	// of each file, or you can take data from your
-//	// program and write it write in to the archive
-//	// without
-//	var filesToArchive = []struct {
-//		Name, Body string
-//	}{
-//		{"test.txt", "String contents of file"},
-//		{"test2.txt", "\x61\x62\x63\n"},
-//	}
-//
-//	// Create and write files to the archive, which in turn
-//	// are getting written to the underlying writer to the
-//	// .zip file we created at the beginning
-//	for _, file := range filesToArchive {
-//		fileWriter, err := zipWriter.Create(file.Name)
-//		if err != nil {
-//			return err
-//		}
-//		_, err = fileWriter.Write([]byte(file.Body))
-//		if err != nil {
-//			return err
-//		}
-//	}
-//
-//	// Clean up
-//	err = zipWriter.Close()
-//	if err != nil {
-//		return err
-//	}
-//	return nil
-//}
-
-//func unzip(zipFileName, targetDir string) error {
-//	// Create a reader out of the zip archive
-//	zipReader, err := zip.OpenReader(zipFileName)
-//	if err != nil {
-//		return err
-//	}
-//	defer zipReader.Close()
-//
-//	// Iterate through each file/dir found in
-//	for _, file := range zipReader.Reader.File {
-//
-//		logger.Debug("File: %s", file.Name)
-//		// Open the file inside the zip archive
-//		// like a normal file
-//		zippedFile, err := file.Open()
-//		if err != nil {
-//			return err
-//		}
-//
-//		// Specify what the extracted file name should be.
-//		// You can specify a full path or a prefix
-//		// to move it to a different directory.
-//		// In this case, we will extract the file from
-//		// the zip to a file of the same name.
-//		extractedFilePath := filepath.Join(
-//			targetDir,
-//			file.Name,
-//		)
-//
-//		// Extract the item (or create directory)
-//		if file.FileInfo().IsDir() {
-//			// Create directories to recreate directory
-//			// structure inside the zip archive. Also
-//			// preserves permissions
-//			logger.Debug("Creating directory:", extractedFilePath)
-//			os.MkdirAll(extractedFilePath, file.Mode())
-//		} else {
-//			// Extract regular file since not a directory
-//			logger.Debug("Extracting file:", file.Name)
-//
-//			// Open an output file for writing
-//			outputFile, err := os.OpenFile(
-//				extractedFilePath,
-//				os.O_CREATE,
-//				file.Mode(),
-//			)
-//			if err != nil {
-//				return err
-//			}
-//			outputFile.Close()
-//
-//			// "Extract" the file by copying zipped file
-//			// contents to the output file
-//			_, err = io.Copy(outputFile, zippedFile)
-//			if err != nil {
-//				return err
-//			}
-//		}
-//		zippedFile.Close()
-//	}
-//	return nil
-//}

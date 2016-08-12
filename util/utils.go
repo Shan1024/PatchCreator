@@ -1,3 +1,5 @@
+//todo: add copyright notice
+
 package util
 
 import (
@@ -36,15 +38,43 @@ type UpdateDescriptor struct {
 func HasZipExtension(path string) bool {
 	return strings.HasSuffix(path, ".zip")
 }
+
 func HasJarExtension(path string) bool {
 	return strings.HasSuffix(path, ".jar")
 }
+
 func GetParentDirectory(filepath string) string {
 	parentDirectory := "./"
 	if lastIndex := strings.LastIndex(filepath, string(os.PathSeparator)); lastIndex > -1 {
 		parentDirectory = filepath[:lastIndex]
 	}
 	return parentDirectory
+}
+
+//This checks whether the distribution directory/zip exists
+func IsDistributionExists(distributionPath string) (bool, error) {
+	if HasZipExtension(distributionPath) {
+		exists, err := IsFileExists(distributionPath)
+		if err != nil {
+			return false, err
+		}
+		if exists {
+			return true, nil
+		} else {
+			return false, nil
+		}
+	} else {
+		exists, err := IsDirectoryExists(distributionPath)
+		if err != nil {
+			return false, err
+		}
+		if exists {
+			return true, nil
+		} else {
+			return false, nil
+		}
+	}
+	return false, nil
 }
 
 func DeleteDirectory(path string) error {
@@ -322,9 +352,9 @@ func PrintErrorAndExit(args ...interface{}) {
 
 //This is used to print warning messages
 func PrintWarning(args ...interface{}) {
-	color.Set(color.FgYellow, color.Bold)
+	//color.Set(color.FgYellow, color.Bold)
 	fmt.Println(append(append([]interface{}{"[WARNING]"}, args...), "\n")...)
-	color.Unset()
+	//color.Unset()
 }
 
 //This is used to print info messages

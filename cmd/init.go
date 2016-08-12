@@ -1,3 +1,5 @@
+//todo: add copyright notice
+
 package cmd
 
 import (
@@ -16,10 +18,14 @@ Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		if len(args) < 1 || len(args) > 1 {
+		if len(args) == 0 {
+			initCurrentDirectory()
+		} else if len(args) == 1 {
+			initDirectory(args[0])
+		} else {
 			util.PrintErrorAndExit("Invalid number of argumants. Run with --help for more details about the argumants")
 		}
-		startInit(args[0])
+
 	},
 }
 
@@ -29,6 +35,11 @@ func init() {
 	RootCmd.Flags().BoolVarP(&isTraceLogsEnabled, "trace", "t", false, "Enable trace logs")
 }
 
-func startInit(filepath string) {
+func initCurrentDirectory() {
+	currentDirectory := "./"
+	initDirectory(currentDirectory)
+}
+
+func initDirectory(filepath string) {
 
 }

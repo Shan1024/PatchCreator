@@ -1,3 +1,5 @@
+//todo: add copyright notice
+
 package constant
 
 import (
@@ -10,7 +12,7 @@ const (
 
 	PLUGINS_DIRECTORY = "repository" + string(os.PathSeparator) + "components" + string(os.PathSeparator) + "plugins" + string(os.PathSeparator)
 
-	//constants to store resource files
+	//constants to store resource file names
 	README_FILE = "README.txt"
 	LICENSE_FILE = "LICENSE.txt"
 	NOT_A_CONTRIBUTION_FILE = "NOT_A_CONTRIBUTION.txt"
@@ -26,11 +28,9 @@ const (
 	//Prefix of the update file and the root folder of the update zip
 	UPDATE_NAME_PREFIX = "WSO2-CARBON-UPDATE"
 
+	//Constants to store configs in viper
 	UNZIP_DIRECTORY = "_UNZIP_DIRECTORY"
 	DISTRIBUTION_ROOT = "DISTRIBUTION_ROOT"
 	UPDATE_ROOT = "UPDATE_ROOT"
 	UPDATE_NAME = "_UPDATE_NAME"
-
-	IS_DEBUG_LOGS_ENABLED = "IS_DEBUG_LOGS_ENABLED"
-	IS_TRACE_LOGS_ENABLED = "IS_TRACE_LOGS_ENABLED"
 )

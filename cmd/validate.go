@@ -1,16 +1,11 @@
+//todo: add copyright notice
+
 package cmd
 
 import (
 	"github.com/shan1024/wum-uc/util"
 	"github.com/spf13/cobra"
 )
-
-//var (
-//	allResFiles  map[string]bool
-//	updatedFilesMap map[string]bool
-//	distFileMap map[string]bool
-//	addedFilesMap map[string]bool
-//)
 
 // validateCmd represents the validate command
 var validateCmd = &cobra.Command{

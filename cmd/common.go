@@ -1,7 +1,8 @@
+//todo: add copyright notice
+
 package cmd
 
 import (
-	"fmt"
 	"github.com/ian-kent/go-log/log"
 )
 
@@ -9,10 +10,6 @@ import (
 type Info struct {
 	isDir bool
 	md5   string
-}
-
-func (i Info) String() string {
-	return fmt.Sprintf("{isDir: %v md5: %s}", i.isDir, i.md5)
 }
 
 //key - filePath, value - Info
@@ -46,6 +43,7 @@ func (f *FileLocationInfo) Add(filename string, location string, isDir bool, md5
 	}
 }
 
+//locationsInUpdate is a map to store the isDir
 type LocationData struct {
 	locationsInUpdate       map[string]bool
 	locationsInDistribution map[string]bool
@@ -58,21 +56,6 @@ type Diff struct {
 func (d *Diff) Add(filename string, locationData LocationData) {
 	d.files[filename] = locationData
 }
-
-////struct which is used to read update-descriptor.yaml
-//type UpdateDescriptor struct {
-//	Update_number    string
-//	Platform_version string
-//	Platform_name    string
-//	Applies_to       string
-//	Bug_fixes        map[string]string
-//	Description      string
-//	File_changes     struct {
-//				 Added_files    []string
-//				 Removed_files  []string
-//				 Modified_files []string
-//			 }
-//}
 
 var (
 	//Create the logger

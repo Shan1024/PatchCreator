@@ -5,6 +5,7 @@ import (
 	"github.com/ian-kent/go-log/log"
 )
 
+//todo: move to a separate package
 type Info struct {
 	isDir bool
 	md5   string
@@ -58,20 +59,20 @@ func (d *Diff) Add(filename string, locationData LocationData) {
 	d.files[filename] = locationData
 }
 
-//struct which is used to read update-descriptor.yaml
-type update_descriptor struct {
-	Update_number    string
-	Platform_version string
-	Platform_name    string
-	Applies_to       string
-	Bug_fixes        map[string]string
-	Description      string
-	File_changes     struct {
-				 Added_files    []string
-				 Removed_files  []string
-				 Modified_files []string
-			 }
-}
+////struct which is used to read update-descriptor.yaml
+//type UpdateDescriptor struct {
+//	Update_number    string
+//	Platform_version string
+//	Platform_name    string
+//	Applies_to       string
+//	Bug_fixes        map[string]string
+//	Description      string
+//	File_changes     struct {
+//				 Added_files    []string
+//				 Removed_files  []string
+//				 Modified_files []string
+//			 }
+//}
 
 var (
 	//Create the logger

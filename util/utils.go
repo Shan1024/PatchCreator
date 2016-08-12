@@ -8,7 +8,27 @@ import (
 
 	"io/ioutil"
 	"github.com/fatih/color"
+	"path/filepath"
+	"gopkg.in/yaml.v2"
+	"bufio"
+	"github.com/ian-kent/go-log/logger"
 )
+
+//todo: Move to a separate package
+//struct which is used to read update-descriptor.yaml
+type UpdateDescriptor struct {
+	Update_number    string
+	Platform_version string
+	Platform_name    string
+	Applies_to       string
+	Bug_fixes        map[string]string
+	Description      string
+	File_changes     struct {
+				 Added_files    []string
+				 Removed_files  []string
+				 Modified_files []string
+			 }
+}
 
 func HasZipExtension(path string) bool {
 	return strings.HasSuffix(path, ".zip")
@@ -57,6 +77,76 @@ func HandleError(err error, customMessage ...interface{}) {
 	if err != nil {
 		PrintErrorAndExit(append(customMessage, "Error Message: '" + err.Error() + "'")...)
 	}
+}
+
+func GetUserInput() (string, error) {
+	reader := bufio.NewReader(os.Stdin)
+	preference, err := reader.ReadString('\n')
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(preference), nil
+}
+
+func IsUserPreferencesValid(preferences []string,availableChoices int) bool{
+
+}
+
+//This function will read update-descriptor.yaml
+func LoadUpdateDescriptor(filename, updateDirectoryPath string) (*UpdateDescriptor, error) {
+
+	//Construct the file path
+	updateDescriptorPath := filepath.Join(updateDirectoryPath, filename)
+	fmt.Println("updateDescriptorPath:", updateDescriptorPath)
+
+	//Read the file
+	updateDescriptor := UpdateDescriptor{}
+	yamlFile, err := ioutil.ReadFile(updateDescriptorPath)
+	if err != nil {
+		return nil, &CustomError{What: err.Error()}
+	}
+	//Un-marshal the update-descriptor file to updateDescriptor struct
+	err = yaml.Unmarshal(yamlFile, &updateDescriptor)
+	if err != nil {
+		return nil, &CustomError{What: err.Error()}
+	}
+	return &updateDescriptor, nil
+}
+
+func ValidateUpdateDescriptor(updateDescriptor *UpdateDescriptor) error {
+	if len(updateDescriptor.Update_number) == 0 {
+		return &CustomError{What: "'update_number' field not found." }
+	}
+	//todo: use regex to validate Update_number format
+	if len(updateDescriptor.Platform_version) == 0 {
+		return &CustomError{What: "'platform_version' field not found." }
+	}
+	//todo: use regex to validate Platform_version format
+	if len(updateDescriptor.Platform_name) == 0 {
+		return &CustomError{What: "'platform_name' field not found." }
+	}
+	if len(updateDescriptor.Applies_to) == 0 {
+		return &CustomError{What: "'applies_to' field not found." }
+	}
+	if len(updateDescriptor.Bug_fixes) == 0 {
+		return &CustomError{What: "'bug_fixes' field not found." }
+	}
+	if len(updateDescriptor.Description) == 0 {
+		return &CustomError{What: "'description' field not found." }
+	}
+	return nil
+}
+
+func PrintUpdateDescriptor(updateDescriptor *UpdateDescriptor) {
+	fmt.Println("----------------------------------------------------------------")
+	fmt.Println("update_number: %s", updateDescriptor.Update_number)
+	fmt.Println("kernel_version: %s", updateDescriptor.Platform_version)
+	fmt.Println("platform_version: %s", updateDescriptor.Platform_name)
+	fmt.Println("applies_to: %s", updateDescriptor.Applies_to)
+	fmt.Println("bug_fixes: %s", updateDescriptor.Bug_fixes)
+	fmt.Println("file_changes: %s", updateDescriptor.File_changes)
+	fmt.Println("description: %s", updateDescriptor.Description)
+	fmt.Println("----------------------------------------------------------------")
 }
 
 //Check whether the given string is in the given slice

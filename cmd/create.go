@@ -1,17 +1,16 @@
 package cmd
 
 import (
-	"bufio"
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
-	"gopkg.in/yaml.v2"
 	"io"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
+	"strconv"
 
 	"github.com/ian-kent/go-log/log"
 	"github.com/ian-kent/go-log/levels"
@@ -22,7 +21,6 @@ import (
 	"github.com/shan1024/wum-uc/util"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"strconv"
 )
 
 // createCmd represents the create command
@@ -69,7 +67,6 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 	log.Debug("updateRoot: %s", updateRoot)
 	viper.Set(constant.UPDATE_ROOT, updateRoot)
 
-	//todo: break into two parts. Reading and verifying the structure of yaml file
 	//2) Check whether the update-descriptor.yaml file exists
 	//Construct the update-descriptor.yaml file location
 	updateDescriptorPath := path.Join(updateDirectoryPath, constant.UPDATE_DESCRIPTOR_FILE)
@@ -89,11 +86,16 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 
 	//4) Read update-descriptor.yaml and set the update name which will be used when creating the update zip file.
 	//This is used to read the update-descriptor.yaml file
-	updateDescriptor := update_descriptor{}
-	err = readDescriptor(&updateDescriptor, updateDirectoryPath)
-	util.HandleError(err, "")
+	updateDescriptor, err := util.LoadUpdateDescriptor(constant.UPDATE_DESCRIPTOR_FILE, updateDirectoryPath)
+	util.HandleError(err, "Error occurred when reading the " + constant.UPDATE_DESCRIPTOR_FILE)
+
+	//Validate the file format
+	err = util.ValidateUpdateDescriptor(updateDescriptor)
+	util.HandleError(err, constant.UPDATE_DESCRIPTOR_FILE + " format is not correct.")
+
 	//set the update name
-	setUpdateName(&updateDescriptor)
+	updateName := GetUpdateName(updateDescriptor)
+	viper.Set(constant.UPDATE_NAME, updateName)
 
 	//5) Traverse and read the update
 	ignoredFiles := getIgnoredFilesInUpdate()
@@ -102,7 +104,6 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 	}
 	err = readDirectoryStructure(updateDirectoryPath, &updateLocationInfo, ignoredFiles)
 	util.HandleError(err, "")
-
 	logger.Trace("updateLocationInfo:", updateLocationInfo)
 
 	//6) Traverse and read distribution
@@ -296,7 +297,7 @@ func handleNoMatch(filename string, locationData *LocationData, skipUserInput bo
 	fmt.Print(filename + " not found in distribution. ")
 	for {
 		fmt.Print("Do you want to add it as a new file? [(Y)es/(N)o]: ")
-		preference, err := GetUserInput()
+		preference, err := util.GetUserInput()
 		util.HandleError(err, "Error occurred while getting input from the user.")
 
 		if util.IsYes(preference) {
@@ -338,15 +339,34 @@ func handleMultipleMatches(filename string, locationData *LocationData) error {
 	//	fmt.Println("filepath:", filepath, "; isDir:", isDir)
 	//}
 
-	locationTable, indexMap := generateTable(filename, locationData.locationsInDistribution)
+	locationTable, indexMap := generateLocationTable(filename, locationData.locationsInDistribution)
 	locationTable.Render()
 
 	fmt.Println("indexMap:", indexMap)
+
+	for {
+		preferences, err := util.GetUserInput()
+		util.HandleError(err)
+		logger.Debug("preferences: %s", preferences)
+
+		//Remove the new line at the end
+		preferences = strings.TrimSpace(preferences)
+
+		//Split the indices
+		selectedIndices := strings.Split(preferences, ",");
+		//Sort the locations
+		sort.Strings(selectedIndices)
+
+	}
+
+
+
+
 	//todo
 	return nil
 }
 
-func generateTable(filename string, locationsInDistribution map[string]bool) (*tablewriter.Table, map[string]string) {
+func generateLocationTable(filename string, locationsInDistribution map[string]bool) (*tablewriter.Table, map[string]string) {
 	locationTable := tablewriter.NewWriter(os.Stdout)
 	locationTable.SetAlignment(tablewriter.ALIGN_LEFT)
 	locationTable.SetHeader([]string{"Index", "Location"})
@@ -373,7 +393,7 @@ func handleNewFile(filename string, locationData *LocationData) error {
 	readDestinationLoop:
 	for {
 		fmt.Print("Enter destination directory relative to CARBON_HOME: ")
-		relativePath, err := GetUserInput()
+		relativePath, err := util.GetUserInput()
 		util.HandleError(err, "Error occurred while getting input from the user.")
 		logger.Debug("relativePath:", relativePath)
 
@@ -390,7 +410,7 @@ func handleNewFile(filename string, locationData *LocationData) error {
 			fmt.Print("Entered relative path does not exist in the distribution. ")
 			for {
 				fmt.Print("Copy anyway? [(Y)es/(N)o/(R)e-enter]: ")
-				preference, err := GetUserInput()
+				preference, err := util.GetUserInput()
 				util.HandleError(err, "Error occurred while getting input from the user.")
 
 				if util.IsYes(preference) {
@@ -442,17 +462,6 @@ func getLocationFromMap(locationMap map[string]bool) (string, bool, error) {
 		//do nothing
 	}
 	return location, isDir, nil
-}
-
-//ok
-func GetUserInput() (string, error) {
-	reader := bufio.NewReader(os.Stdin)
-	preference, err := reader.ReadString('\n')
-	if err != nil {
-		return "", err
-	}
-	logger.Debug("[INPUT] User input:", preference)
-	return strings.TrimSpace(preference), nil
 }
 
 //ok
@@ -576,65 +585,21 @@ func getMD5(filepath string) (string, error) {
 	return hex.EncodeToString(hash.Sum(result)), nil
 }
 
-//This function will read update-descriptor.yaml
-func readDescriptor(updateDescriptor *update_descriptor, updateDirectory string) error {
 
-	//Construct the file path
-	updateDescriptorPath := filepath.Join(updateDirectory, constant.UPDATE_DESCRIPTOR_FILE)
-	//Read the file
-	yamlFile, err := ioutil.ReadFile(updateDescriptorPath)
-	if err != nil {
-		return &util.CustomError{What: "Error occurred while reading the descriptor: " + err.Error()}
-	}
-	//Un-marshal the update-descriptor file to updateDescriptor struct
-	err = yaml.Unmarshal(yamlFile, &updateDescriptor)
-	if err != nil {
-		return &util.CustomError{What: "Error occurred while unmarshalling the yaml: " + err.Error()}
-	}
-	logger.Debug("----------------------------------------------------------------")
-	logger.Debug("update_number: %s", updateDescriptor.Update_number)
-	logger.Debug("kernel_version: %s", updateDescriptor.Platform_version)
-	logger.Debug("platform_version: %s", updateDescriptor.Platform_name)
-	logger.Debug("applies_to: %s", updateDescriptor.Applies_to)
-	logger.Debug("bug_fixes: %s", updateDescriptor.Bug_fixes)
-	logger.Debug("file_changes: %s", updateDescriptor.File_changes)
-	logger.Debug("description: %s", updateDescriptor.Description)
-	logger.Debug("----------------------------------------------------------------")
-
-	if len(updateDescriptor.Update_number) == 0 {
-		return &util.CustomError{What: "'update_number' field not found in " + constant.UPDATE_DESCRIPTOR_FILE}
-	}
-	if len(updateDescriptor.Platform_version) == 0 {
-		return &util.CustomError{What: "'platform_version' field not found in " + constant.UPDATE_DESCRIPTOR_FILE}
-	}
-	if len(updateDescriptor.Platform_name) == 0 {
-		return &util.CustomError{What: "'platform_name' field not found in " + constant.UPDATE_DESCRIPTOR_FILE}
-	}
-	if len(updateDescriptor.Applies_to) == 0 {
-		return &util.CustomError{What: "'applies_to' field not found in " + constant.UPDATE_DESCRIPTOR_FILE}
-	}
-	if len(updateDescriptor.Bug_fixes) == 0 {
-		return &util.CustomError{What: "'bug_fixes' field not found in " + constant.UPDATE_DESCRIPTOR_FILE}
-	}
-	if len(updateDescriptor.Description) == 0 {
-		return &util.CustomError{What: "'description' field not found in " + constant.UPDATE_DESCRIPTOR_FILE}
-	}
-	return nil
-}
 
 //This function will set the update name which will be used when creating the update zip
-func setUpdateName(updateDescriptor *update_descriptor) {
+func GetUpdateName(updateDescriptor *util.UpdateDescriptor) string {
 	//Read the corresponding details
 	platformVersion := updateDescriptor.Platform_version
-	logger.Debug("Platform version set to: %s", platformVersion)
+	logger.Debug("[UPDATE NAME] Platform version: %s", platformVersion)
 
 	updateNumber := updateDescriptor.Update_number
-	logger.Debug("Update number set to: %s", updateNumber)
+	logger.Debug("[UPDATE NAME] Update number: %s", updateNumber)
 
 	updateName := constant.UPDATE_NAME_PREFIX + "-" + platformVersion + "-" + updateNumber
-	logger.Debug("Update name: %s", updateName)
+	logger.Debug("[UPDATE NAME] Update name: %s", updateName)
 
-	viper.Set(constant.UPDATE_NAME, updateName)
+	return updateName
 }
 
 //

@@ -19,7 +19,7 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-//todo: Move to a separate package
+//todo: Move to a separate package?
 //struct which is used to read update-descriptor.yaml
 type UpdateDescriptor struct {
 	Update_number    string
@@ -35,10 +35,6 @@ type UpdateDescriptor struct {
 			 }
 }
 
-func HasZipExtension(path string) bool {
-	return strings.HasSuffix(path, ".zip")
-}
-
 func HasJarExtension(path string) bool {
 	return strings.HasSuffix(path, ".jar")
 }
@@ -51,30 +47,39 @@ func GetParentDirectory(filepath string) string {
 	return parentDirectory
 }
 
+
+//This will return the md5 hash of the file in the given filepath
+func GetMD5(filepath string) (string, error) {
+	var result []byte
+	file, err := os.Open(filepath)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	hash := md5.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(hash.Sum(result)), nil
+}
+
+//todo: check for const
+//This function will set the update name which will be used when creating the update zip
+func GetUpdateName(updateDescriptor *UpdateDescriptor, updateNamePrefix string) string {
+	//Read the corresponding details
+	platformVersion := updateDescriptor.Platform_version
+	updateNumber := updateDescriptor.Update_number
+	updateName := updateNamePrefix + "-" + platformVersion + "-" + updateNumber
+	return updateName
+}
+
 //This checks whether the distribution directory/zip exists
 func IsDistributionExists(distributionPath string) (bool, error) {
-	if HasZipExtension(distributionPath) {
-		exists, err := IsFileExists(distributionPath)
-		if err != nil {
-			return false, err
-		}
-		if exists {
-			return true, nil
-		} else {
-			return false, nil
-		}
-	} else {
-		exists, err := IsDirectoryExists(distributionPath)
-		if err != nil {
-			return false, err
-		}
-		if exists {
-			return true, nil
-		} else {
-			return false, nil
-		}
+	if strings.HasSuffix(distributionPath, ".zip") {
+		return IsFileExists(distributionPath)
 	}
-	return false, nil
+	return IsDirectoryExists(distributionPath)
 }
 
 func DeleteDirectory(path string) error {
@@ -104,12 +109,6 @@ func IsReenter(preference string) bool {
 		return true
 	}
 	return false
-}
-
-func HandleError(err error, customMessage ...interface{}) {
-	if err != nil {
-		PrintErrorAndExit(append(customMessage, "Error Message: '" + err.Error() + "'")...)
-	}
 }
 
 func GetUserInput() (string, error) {
@@ -165,11 +164,14 @@ func LoadUpdateDescriptor(filename, updateDirectoryPath string) (*UpdateDescript
 	return &updateDescriptor, nil
 }
 
+//todo: change error to
 func ValidateUpdateDescriptor(updateDescriptor *UpdateDescriptor) error {
 	if len(updateDescriptor.Update_number) == 0 {
 		return &CustomError{What: "'update_number' field not found." }
 	}
 	//todo: use regex to validate Update_number format
+
+	//todo: trim
 	if len(updateDescriptor.Platform_version) == 0 {
 		return &CustomError{What: "'platform_version' field not found." }
 	}
@@ -199,32 +201,6 @@ func PrintUpdateDescriptor(updateDescriptor *UpdateDescriptor) {
 	fmt.Printf("file_changes: %s\n", updateDescriptor.File_changes)
 	fmt.Printf("description: %s\n", updateDescriptor.Description)
 	fmt.Println("----------------------------------------------------------------")
-}
-
-
-//ok
-func GetMD5(filepath string) (string, error) {
-	var result []byte
-	file, err := os.Open(filepath)
-	if err != nil {
-		return "", err
-	}
-	defer file.Close()
-
-	hash := md5.New()
-	if _, err := io.Copy(hash, file); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(hash.Sum(result)), nil
-}
-
-//This function will set the update name which will be used when creating the update zip
-func GetUpdateName(updateDescriptor *UpdateDescriptor, updateNamePrefix string) string {
-	//Read the corresponding details
-	platformVersion := updateDescriptor.Platform_version
-	updateNumber := updateDescriptor.Update_number
-	updateName := updateNamePrefix + "-" + platformVersion + "-" + updateNumber
-	return updateName
 }
 
 //Check whether the given string is in the given slice
@@ -300,6 +276,12 @@ func CopyDir(source string, dest string) (err error) {
 	return
 }
 
+func HandleError(err error, customMessage ...interface{}) {
+	if err != nil {
+		PrintErrorAndExit(append(customMessage, "Error Message: '" + err.Error() + "'")...)
+	}
+}
+
 //A struct for returning custom error messages
 type CustomError struct {
 	What string
@@ -314,7 +296,11 @@ func (e *CustomError) Error() string {
 func IsDirectoryExists(location string) (bool, error) {
 	locationInfo, err := os.Stat(location)
 	if err != nil {
-		return false, err
+		if os.IsNotExist(err) {
+			return false, nil
+		} else {
+			return false, err
+		}
 	}
 	if locationInfo.IsDir() {
 		return true, nil
@@ -327,7 +313,11 @@ func IsDirectoryExists(location string) (bool, error) {
 func IsFileExists(location string) (bool, error) {
 	locationInfo, err := os.Stat(location)
 	if err != nil {
-		return false, err
+		if os.IsNotExist(err) {
+			return false, nil
+		} else {
+			return false, err
+		}
 	}
 	if locationInfo.IsDir() {
 		return false, nil

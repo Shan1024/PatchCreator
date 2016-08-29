@@ -349,7 +349,7 @@ func PrintWarning(args ...interface{}) {
 
 //This is used to print info messages
 func PrintInfo(args ...interface{}) {
-	color.Set(color.FgYellow, color.Bold)
+	color.Set(color.FgGreen, color.Bold)
 	fmt.Println(append(append([]interface{}{"[INFO]"}, args...), "\n")...)
 	color.Unset()
 }
@@ -358,6 +358,13 @@ func PrintInfo(args ...interface{}) {
 func PrintSuccess(args ...interface{}) {
 	color.Set(color.FgGreen, color.Bold)
 	fmt.Println(append(append([]interface{}{"[INFO]"}, args...), "\n")...)
+	color.Unset()
+}
+
+//This is used to print messages in Green color
+func PrintInGreen(args ...interface{}) {
+	color.Set(color.FgGreen, color.Bold)
+	fmt.Print(args...)
 	color.Unset()
 }
 

@@ -3,8 +3,8 @@
 package cmd
 
 import (
-	"github.com/spf13/cobra"
 	"github.com/shan1024/wum-uc/util"
+	"github.com/spf13/cobra"
 )
 
 // initCmd represents the validate command

@@ -3,7 +3,6 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
 	"path"
 	"path/filepath"
@@ -62,10 +61,10 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 	if !exists {
 		util.PrintErrorAndExit("Update Directory does not exist at %s.", updateDirectoryPath)
 	}
-	//updateRoot := strings.TrimSuffix(updateDirectoryPath, "/")
-	//updateRoot = strings.TrimSuffix(updateRoot, "\\")
-	//logger.Debug("updateRoot: %s", updateRoot)
-	//viper.Set(constant.UPDATE_ROOT, updateRoot)
+	updateRoot := strings.TrimSuffix(updateDirectoryPath, "/")
+	updateRoot = strings.TrimSuffix(updateRoot, "\\")
+	logger.Debug("updateRoot: %s", updateRoot)
+	viper.Set(constant.UPDATE_ROOT, updateRoot)
 
 	//2) Check whether the update-descriptor.yaml file exists
 	//Construct the update-descriptor.yaml file location
@@ -140,13 +139,11 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 		err = readDirectoryStructure(distributionPath, &distributionLocationInfo, nil)
 		util.HandleError(err, "")
 	}
-
 	logger.Debug("distributionLocationInfo:", distributionLocationInfo)
 
 	//7) Find matches
 	diff, err := getDiff(&updateLocationInfo, &distributionLocationInfo, true)
 	util.HandleError(err, "Error occurred while getting the diff.")
-
 	logger.Debug("diff: ", diff)
 
 	//8) Copy files to the temp
@@ -156,9 +153,9 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 	//9) update added_files, modified_files entries in the update-descriptor.yaml
 
 	//10) Copy resource files (update-descriptor.yaml, etc)
-
-	//11) Create the update zip file
-	//todo: what should be the destination directory for the zip file? current working directory?
+	resourceFiles := getResourceFiles()
+	err = copyResourceFiles(resourceFiles)
+	util.HandleError(err, &util.CustomError{What: "Error occurred while copying resource files."})
 
 	//logger.Debug("Copying resource files")
 	//copyResourceFiles(updateDirectory)
@@ -172,9 +169,15 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 	//createUpdateZip(_UPDATE_NAME)
 	//logger.Debug("Creating zip file finished")
 
+	//11) Create the update zip file
+	//todo: what should be the destination directory for the zip file? current working directory?
+	err = archiver.Zip(updateName + ".zip", []string{filepath.Join(constant.TEMP_DIR, constant.CARBON_HOME)})
+	util.HandleError(err)
 	//Remove the temp directory
 	//err = util.DeleteDirectory(constant.TEMP_DIR)//todo: uncomment
 	//util.HandleError(err, "")
+
+	util.PrintInfo("'" + updateName + ".zip' created successfully.")
 }
 
 //This will return a map of files which would be ignored when reading the update directory
@@ -186,6 +189,31 @@ func getIgnoredFilesInUpdate() map[string]bool {
 		constant.NOT_A_CONTRIBUTION_FILE: true,
 		constant.INSTRUCTIONS_FILE: true,
 	}
+}
+
+//This will return a map of files which would be copied to the temp directory before creating the update zip. Key is the
+// file name and value is whether the file is mandatory or not.
+func getResourceFiles() map[string]bool {
+	return map[string]bool{
+		constant.UPDATE_DESCRIPTOR_FILE: true,
+		constant.LICENSE_FILE: true,
+		constant.README_FILE: false,
+		constant.NOT_A_CONTRIBUTION_FILE: false,
+		constant.INSTRUCTIONS_FILE: false,
+	}
+}
+
+func copyResourceFiles(resourceFilesMap map[string]bool) error {
+	for filename, isMandatory := range resourceFilesMap {
+		updateRoot := viper.GetString(constant.UPDATE_ROOT)
+		source := filepath.Join(updateRoot, filename)
+		destination := filepath.Join(constant.TEMP_DIR, constant.CARBON_HOME, filename)
+		err := util.CopyFile(source, destination)
+		if err != nil && isMandatory {
+			return err
+		}
+	}
+	return nil
 }
 
 //This will return the diff of the given FileLocationInfo structs
@@ -281,9 +309,9 @@ func populateZipDirectoryStructure(diff *Diff, updateDescriptor *util.UpdateDesc
 //This function will handle the copy process if no match is found in the distribution
 func handleNoMatch(filename string, locationData *LocationData, updateDescriptor *util.UpdateDescriptor) error {
 	logger.Debug("[NO MATCH]", filename)
-	fmt.Print(filename + " not found in distribution. ")
+	util.PrintInfo("'" + filename + "' not found in distribution.")
 	for {
-		fmt.Print("Do you want to add it as a new file? [(Y)es/(N)o]: ")
+		util.PrintInGreen("Do you want to add it as a new file? [(Y)es/(N)o]: ")
 		preference, err := util.GetUserInput()
 		util.HandleError(err, "Error occurred while getting input from the user.")
 
@@ -311,6 +339,7 @@ func handleSingleMatch(filename string, locationData *LocationData, updateDescri
 
 	locationInDistribution, _, err := getLocationFromMap(locationData.locationsInDistribution)
 	util.HandleError(err)
+	locationInDistribution = strings.TrimPrefix(locationInDistribution, viper.GetString(constant.DISTRIBUTION_ROOT))
 	logger.Debug("[SINGLE MATCH] Matching location in the Distribution:", locationInDistribution)
 
 	//todo: update the modified_files in the update-descriptor
@@ -322,15 +351,13 @@ func handleSingleMatch(filename string, locationData *LocationData, updateDescri
 //This function will handle the copy process if multiple matches are found in the distribution
 func handleMultipleMatches(filename string, locationData *LocationData, updateDescriptor *util.UpdateDescriptor) error {
 	logger.Debug("[MULTIPLE MATCHES]", filename)
-
+	util.PrintInGreen("Multiple matches for '" + filename + "' found.\n")
 	locationTable, indexMap := generateLocationTable(filename, locationData.locationsInDistribution)
 	locationTable.Render()
-
 	logger.Debug("indexMap:", indexMap)
-
 	var selectedIndices []string
 	for {
-		fmt.Print("Enter preference(s)[Multiple selections separated by commas]: ")
+		util.PrintInGreen("Enter preference(s)[Multiple selections separated by commas]: ")
 		preferences, err := util.GetUserInput()
 		util.HandleError(err)
 		logger.Debug("preferences: %s", preferences)
@@ -364,13 +391,14 @@ func handleMultipleMatches(filename string, locationData *LocationData, updateDe
 	//todo: update the modified_files in the update-descriptor
 	for _, selectedIndex := range selectedIndices {
 		pathInDistribution := indexMap[selectedIndex]
-		fmt.Println("[MULTIPLE MATCHES] Selected path:", selectedIndex, ";", pathInDistribution)
+		logger.Debug("[MULTIPLE MATCHES] Selected path:", selectedIndex, ";", pathInDistribution)
 
 		locationInUpdate, isDir, err := getLocationFromMap(locationData.locationsInUpdate)
 		util.HandleError(err)
 		logger.Debug("[SINGLE MATCH] Location in Update:", locationInUpdate)
+		relativeLocationInDistribution := strings.TrimPrefix(pathInDistribution, viper.GetString(constant.DISTRIBUTION_ROOT))
 
-		err = copyFile(filename, isDir, locationInUpdate, pathInDistribution)
+		err = copyFile(filename, isDir, locationInUpdate, relativeLocationInDistribution)
 		util.HandleError(err)
 	}
 	return nil
@@ -403,7 +431,7 @@ func handleNewFile(filename string, locationData *LocationData, updateDescriptor
 
 	readDestinationLoop:
 	for {
-		fmt.Print("Enter destination directory relative to CARBON_HOME: ")
+		util.PrintInGreen("Enter destination directory relative to CARBON_HOME: ")
 		relativePath, err := util.GetUserInput()
 		util.HandleError(err, "Error occurred while getting input from the user.")
 		logger.Debug("relativePath:", relativePath)
@@ -418,9 +446,9 @@ func handleNewFile(filename string, locationData *LocationData, updateDescriptor
 			util.HandleError(err)
 			break
 		} else {
-			fmt.Print("Entered relative path does not exist in the distribution. ")
+			util.PrintInfo("Entered relative path does not exist in the distribution. ")
 			for {
-				fmt.Print("Copy anyway? [(Y)es/(N)o/(R)e-enter]: ")
+				util.PrintInGreen("Copy anyway? [(Y)es/(N)o/(R)e-enter]: ")
 				preference, err := util.GetUserInput()
 				util.HandleError(err, "Error occurred while getting input from the user.")
 				//todo: save the selected location to generate the final summary map
@@ -451,14 +479,39 @@ func copyFile(filename string, isDir bool, locationInUpdate, relativeLocationInT
 	//else dir, check files in the directory for matches
 
 	//get the relative path in the distribution and join to the temp directory to get the destination directory
-	fmt.Println("[FINAL][COPY] Name:", filename, "; IsDir:", isDir, "; From:", locationInUpdate, "; To:", relativeLocationInTemp)
+	logger.Debug("[FINAL][COPY] Name:", filename, "; IsDir:", isDir, "; From:", locationInUpdate, "; To:", relativeLocationInTemp)
+	source := filepath.Join(locationInUpdate, filename)
+
+	destination := filepath.Join(constant.TEMP_DIR, constant.CARBON_HOME, relativeLocationInTemp)
+	util.CreateDirectory(destination)
+	if !isDir {
+		isABundle := IsABundle(filename, relativeLocationInTemp)
+
+		if isABundle {
+			newName := ConstructBundleName(filename)
+			logger.Debug("[FINAL][COPY][TEMP] Name:", filename, "; From:", source, "; To:", filepath.Join(destination, newName))
+			err := util.CopyFile(source, filepath.Join(destination, newName))
+			util.HandleError(err)
+		} else {
+			logger.Debug("[FINAL][COPY][TEMP2] Name:", filename, "; From:", source, "; To:", filepath.Join(destination, filename))
+			err := util.CopyFile(source, filepath.Join(destination, filename))
+			util.HandleError(err)
+		}
+	} else {
+		logger.Debug("[FINAL][COPY][TEMP3] Name:", filename, "; From:", source, "; To:", filepath.Join(destination, filename))
+		err := util.CopyDir(source, filepath.Join(destination, filename))
+		util.HandleError(err)
+	}
 	return nil
 }
 
 //This function detects whether a jar should be a bundle or not according to its path
-func IsABundle(filename, location string) (bool, error) {
+func IsABundle(filename, location string) bool {
 	//todo
-	return false, nil
+	if location == constant.PLUGINS_DIRECTORY {
+		return true
+	}
+	return false
 }
 
 //This constructs the bundle name of a normal jar

@@ -18,6 +18,7 @@ import (
 	"github.com/shan1024/wum-uc/util"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"gopkg.in/yaml.v2"
 )
 
 //createCmd represents the create command
@@ -59,7 +60,7 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 	//todo: look for best practice
 	util.HandleError(err, "Error occurred while reading the update directory.")
 	if !exists {
-		util.PrintErrorAndExit("Update Directory does not exist at %s.", updateDirectoryPath)
+		util.PrintErrorAndExit("Update Directory does not exist at ", updateDirectoryPath)
 	}
 	updateRoot := strings.TrimSuffix(updateDirectoryPath, "/")
 	updateRoot = strings.TrimSuffix(updateRoot, "\\")
@@ -72,7 +73,7 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 	exists, err = util.IsFileExists(updateDescriptorPath)
 	util.HandleError(err, "")
 	if !exists {
-		util.PrintErrorAndExit("%s not found at %s.", constant.UPDATE_DESCRIPTOR_FILE, updateDescriptorPath)
+		util.PrintErrorAndExit(constant.UPDATE_DESCRIPTOR_FILE, " not found at ", updateDescriptorPath)
 	}
 	logger.Debug("Descriptor Exists. Location %s", updateDescriptorPath)
 
@@ -80,7 +81,7 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 	exists, err = util.IsDistributionExists(distributionPath)
 	util.HandleError(err, "Distribution does not exists.")
 	if !exists {
-		util.PrintErrorAndExit("Distribution does not exist at %s.", updateDirectoryPath)
+		util.PrintErrorAndExit("Distribution does not exist at ", updateDirectoryPath)
 	}
 
 	//4) Read update-descriptor.yaml and set the update name which will be used when creating the update zip file.
@@ -157,26 +158,20 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 	err = copyResourceFiles(resourceFiles)
 	util.HandleError(err, &util.CustomError{What: "Error occurred while copying resource files."})
 
-	//logger.Debug("Copying resource files")
-	//copyResourceFiles(updateDirectory)
-	//logger.Debug("Copying resource files finished")
-	//
-	////Update the update-descriptor with the newly added files
-	//prepareUpdateDescriptorForSaving(&updateDescriptor)
-	//
-	////Create the update zip file
-	//logger.Debug("Creating zip file")
-	//createUpdateZip(_UPDATE_NAME)
-	//logger.Debug("Creating zip file finished")
+	//Save the update-descriptor with the updated, newly added files to the temp directory
+	data, err := marshalUpdateDescriptor(updateDescriptor)
+	util.HandleError(err)
+
+	err = saveUpdateDescriptor(constant.UPDATE_DESCRIPTOR_FILE, data)
+	util.HandleError(err)
 
 	//11) Create the update zip file
 	//todo: what should be the destination directory for the zip file? current working directory?
-	err = archiver.Zip(updateName + ".zip", []string{filepath.Join(constant.TEMP_DIR, constant.CARBON_HOME)})
+	err = archiver.Zip(updateName + ".zip", []string{filepath.Join(constant.TEMP_DIR, updateName)})
 	util.HandleError(err)
 	//Remove the temp directory
 	//err = util.DeleteDirectory(constant.TEMP_DIR)//todo: uncomment
 	//util.HandleError(err, "")
-
 	util.PrintInfo("'" + updateName + ".zip' created successfully.")
 }
 
@@ -195,7 +190,6 @@ func getIgnoredFilesInUpdate() map[string]bool {
 // file name and value is whether the file is mandatory or not.
 func getResourceFiles() map[string]bool {
 	return map[string]bool{
-		constant.UPDATE_DESCRIPTOR_FILE: true,
 		constant.LICENSE_FILE: true,
 		constant.README_FILE: false,
 		constant.NOT_A_CONTRIBUTION_FILE: false,
@@ -203,14 +197,48 @@ func getResourceFiles() map[string]bool {
 	}
 }
 
+func marshalUpdateDescriptor(updateDescriptor *util.UpdateDescriptor) ([]byte, error) {
+	data, err := yaml.Marshal(&updateDescriptor)
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+func saveUpdateDescriptor(updateDescriptorFilename string, data []byte) error {
+	updateName := viper.GetString(constant.UPDATE_NAME)
+	destination := filepath.Join(constant.TEMP_DIR, updateName, updateDescriptorFilename)
+	// Open a new file for writing only
+	file, err := os.OpenFile(
+		destination,
+		os.O_WRONLY | os.O_TRUNC | os.O_CREATE,
+		0600,
+	)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	// Write bytes to file
+	_, err = file.Write(data)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func copyResourceFiles(resourceFilesMap map[string]bool) error {
 	for filename, isMandatory := range resourceFilesMap {
 		updateRoot := viper.GetString(constant.UPDATE_ROOT)
+		updateName := viper.GetString(constant.UPDATE_NAME)
 		source := filepath.Join(updateRoot, filename)
-		destination := filepath.Join(constant.TEMP_DIR, constant.CARBON_HOME, filename)
+		destination := filepath.Join(constant.TEMP_DIR, updateName, filename)
 		err := util.CopyFile(source, destination)
-		if err != nil && isMandatory {
-			return err
+		if err != nil {
+			if isMandatory {
+				return err
+			} else {
+				util.PrintWarning("'", filename, "' not found.")
+			}
 		}
 	}
 	return nil
@@ -309,9 +337,9 @@ func populateZipDirectoryStructure(diff *Diff, updateDescriptor *util.UpdateDesc
 //This function will handle the copy process if no match is found in the distribution
 func handleNoMatch(filename string, locationData *LocationData, updateDescriptor *util.UpdateDescriptor) error {
 	logger.Debug("[NO MATCH]", filename)
-	util.PrintInfo("'" + filename + "' not found in distribution.")
+	util.PrintInBold("'" + filename + "' not found in distribution.")
 	for {
-		util.PrintInGreen("Do you want to add it as a new file? [(Y)es/(N)o]: ")
+		util.PrintInBold("Do you want to add it as a new file? [(Y)es/(N)o]: ")
 		preference, err := util.GetUserInput()
 		util.HandleError(err, "Error occurred while getting input from the user.")
 
@@ -343,6 +371,9 @@ func handleSingleMatch(filename string, locationData *LocationData, updateDescri
 	logger.Debug("[SINGLE MATCH] Matching location in the Distribution:", locationInDistribution)
 
 	//todo: update the modified_files in the update-descriptor
+	modifiedFile := strings.TrimPrefix(filepath.Join(locationInDistribution, filename), constant.PATH_SEPARATOR)
+	updateDescriptor.File_changes.Modified_files = append(updateDescriptor.File_changes.Modified_files, modifiedFile)
+
 	err = copyFile(filename, isDir, locationInUpdate, locationInDistribution)
 	util.HandleError(err, "Error occurred while copying the '" + filename + "' ; From " + locationInUpdate + " ; To: " + locationInDistribution)
 	return nil
@@ -351,13 +382,13 @@ func handleSingleMatch(filename string, locationData *LocationData, updateDescri
 //This function will handle the copy process if multiple matches are found in the distribution
 func handleMultipleMatches(filename string, locationData *LocationData, updateDescriptor *util.UpdateDescriptor) error {
 	logger.Debug("[MULTIPLE MATCHES]", filename)
-	util.PrintInGreen("Multiple matches for '" + filename + "' found.\n")
+	util.PrintInBold("Multiple matches for '" + filename + "' found.\n")
 	locationTable, indexMap := generateLocationTable(filename, locationData.locationsInDistribution)
 	locationTable.Render()
 	logger.Debug("indexMap:", indexMap)
 	var selectedIndices []string
 	for {
-		util.PrintInGreen("Enter preference(s)[Multiple selections separated by commas]: ")
+		util.PrintInBold("Enter preference(s)[Multiple selections separated by commas]: ")
 		preferences, err := util.GetUserInput()
 		util.HandleError(err)
 		logger.Debug("preferences: %s", preferences)
@@ -387,8 +418,6 @@ func handleMultipleMatches(filename string, locationData *LocationData, updateDe
 		}
 	}
 
-	//todo: save the preferences to generate the final summary map
-	//todo: update the modified_files in the update-descriptor
 	for _, selectedIndex := range selectedIndices {
 		pathInDistribution := indexMap[selectedIndex]
 		logger.Debug("[MULTIPLE MATCHES] Selected path:", selectedIndex, ";", pathInDistribution)
@@ -397,6 +426,12 @@ func handleMultipleMatches(filename string, locationData *LocationData, updateDe
 		util.HandleError(err)
 		logger.Debug("[SINGLE MATCH] Location in Update:", locationInUpdate)
 		relativeLocationInDistribution := strings.TrimPrefix(pathInDistribution, viper.GetString(constant.DISTRIBUTION_ROOT))
+
+
+		//todo: save the preferences to generate the final summary map
+		//todo: update the modified_files in the update-descriptor
+		modifiedFile := strings.TrimPrefix(filepath.Join(relativeLocationInDistribution, filename), constant.PATH_SEPARATOR)
+		updateDescriptor.File_changes.Modified_files = append(updateDescriptor.File_changes.Modified_files, modifiedFile)
 
 		err = copyFile(filename, isDir, locationInUpdate, relativeLocationInDistribution)
 		util.HandleError(err)
@@ -431,7 +466,7 @@ func handleNewFile(filename string, locationData *LocationData, updateDescriptor
 
 	readDestinationLoop:
 	for {
-		util.PrintInGreen("Enter destination directory relative to CARBON_HOME: ")
+		util.PrintInBold("Enter destination directory relative to CARBON_HOME: ")
 		relativePath, err := util.GetUserInput()
 		util.HandleError(err, "Error occurred while getting input from the user.")
 		logger.Debug("relativePath:", relativePath)
@@ -446,14 +481,18 @@ func handleNewFile(filename string, locationData *LocationData, updateDescriptor
 			util.HandleError(err)
 			break
 		} else {
-			util.PrintInfo("Entered relative path does not exist in the distribution. ")
+			util.PrintInBold("Entered relative path does not exist in the distribution. ")
 			for {
-				util.PrintInGreen("Copy anyway? [(Y)es/(N)o/(R)e-enter]: ")
+				util.PrintInBold("Copy anyway? [(Y)es/(N)o/(R)e-enter]: ")
 				preference, err := util.GetUserInput()
 				util.HandleError(err, "Error occurred while getting input from the user.")
-				//todo: save the selected location to generate the final summary map
-				//todo: update the added_files in the update-descriptor
+
 				if util.IsYes(preference) {
+					//todo: save the selected location to generate the final summary map
+					//todo: update the added_files in the update-descriptor
+					newFile := strings.TrimPrefix(filepath.Join(relativePath, filename), constant.PATH_SEPARATOR)
+					updateDescriptor.File_changes.Added_files = append(updateDescriptor.File_changes.Added_files, newFile)
+
 					err = copyFile(filename, isDir, locationInUpdate, relativePath)
 					util.HandleError(err)
 					break readDestinationLoop
@@ -480,9 +519,9 @@ func copyFile(filename string, isDir bool, locationInUpdate, relativeLocationInT
 
 	//get the relative path in the distribution and join to the temp directory to get the destination directory
 	logger.Debug("[FINAL][COPY] Name:", filename, "; IsDir:", isDir, "; From:", locationInUpdate, "; To:", relativeLocationInTemp)
+	updateName := viper.GetString(constant.UPDATE_NAME)
 	source := filepath.Join(locationInUpdate, filename)
-
-	destination := filepath.Join(constant.TEMP_DIR, constant.CARBON_HOME, relativeLocationInTemp)
+	destination := filepath.Join(constant.TEMP_DIR, updateName, constant.CARBON_HOME, relativeLocationInTemp)
 	util.CreateDirectory(destination)
 	if !isDir {
 		isABundle := IsABundle(filename, relativeLocationInTemp)
@@ -517,7 +556,7 @@ func IsABundle(filename, location string) bool {
 //This constructs the bundle name of a normal jar
 func ConstructBundleName(filename string) string {
 	//todo
-	return ""
+	return filename
 }
 
 //This will return the values of the map only if the map contain single key, value pair

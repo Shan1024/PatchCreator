@@ -342,42 +342,50 @@ func PrintErrorAndExit(args ...interface{}) {
 
 //This is used to print warning messages
 func PrintWarning(args ...interface{}) {
-	//color.Set(color.FgYellow, color.Bold)
-	fmt.Println(append(append([]interface{}{"[WARNING]"}, args...), "\n")...)
-	//color.Unset()
+	color.Set(color.Bold)
+	fmt.Println(append([]interface{}{"[WARNING]"}, args...)...)
+	color.Unset()
 }
 
 //This is used to print info messages
 func PrintInfo(args ...interface{}) {
-	color.Set(color.FgGreen, color.Bold)
+	color.Set(color.Bold)
 	fmt.Println(append(append([]interface{}{"[INFO]"}, args...), "\n")...)
 	color.Unset()
 }
+//
+////This is used to print success messages
+//func PrintSuccess(args ...interface{}) {
+//	color.Set(color.FgGreen, color.Bold)
+//	fmt.Println(append(append([]interface{}{"[INFO]"}, args...), "\n")...)
+//	color.Unset()
+//}
+//
+////This is used to print messages in Green color
+//func PrintInGreen(args ...interface{}) {
+//	//color.Set(color.FgGreen, color.Bold)
+//	color.Set(color.Bold)
+//	fmt.Print(args...)
+//	color.Unset()
+//}
+//
+////This is used to print messages in Yellow color
+//func PrintInYellow(args ...interface{}) {
+//	color.Set(color.FgYellow, color.Bold)
+//	fmt.Print(args...)
+//	color.Unset()
+//}
+//
+////This is used to print messages in Red color
+//func PrintInRed(args ...interface{}) {
+//	color.Set(color.FgRed, color.Bold)
+//	fmt.Print(args...)
+//	color.Unset()
+//}
 
-//This is used to print success messages
-func PrintSuccess(args ...interface{}) {
-	color.Set(color.FgGreen, color.Bold)
-	fmt.Println(append(append([]interface{}{"[INFO]"}, args...), "\n")...)
-	color.Unset()
-}
-
-//This is used to print messages in Green color
-func PrintInGreen(args ...interface{}) {
-	color.Set(color.FgGreen, color.Bold)
+func PrintInBold(args ...interface{}) {
+	color.Set(color.Bold)
 	fmt.Print(args...)
 	color.Unset()
 }
 
-//This is used to print messages in Yellow color
-func PrintInYellow(args ...interface{}) {
-	color.Set(color.FgYellow, color.Bold)
-	fmt.Print(args...)
-	color.Unset()
-}
-
-//This is used to print messages in Red color
-func PrintInRed(args ...interface{}) {
-	color.Set(color.FgRed, color.Bold)
-	fmt.Print(args...)
-	color.Unset()
-}

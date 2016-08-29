@@ -10,7 +10,8 @@ import (
 const (
 	DEFAULT_LOG_LEVEL = levels.WARN
 
-	PLUGINS_DIRECTORY = "repository" + string(os.PathSeparator) + "components" + string(os.PathSeparator) + "plugins" + string(os.PathSeparator)
+	PATH_SEPARATOR = string(os.PathSeparator)
+	PLUGINS_DIRECTORY = "repository" + PATH_SEPARATOR + "components" + PATH_SEPARATOR + "plugins" + PATH_SEPARATOR
 
 	//constants to store resource file names
 	README_FILE = "README.txt"

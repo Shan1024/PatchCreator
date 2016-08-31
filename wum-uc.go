@@ -2,7 +2,7 @@
 
 package main
 
-import "github.com/shan1024/wum-uc/cmd"
+import "github.com/wso2/wum-uc/cmd"
 
 func main() {
 	cmd.Execute()

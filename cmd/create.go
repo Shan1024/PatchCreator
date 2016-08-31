@@ -3,6 +3,7 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"path"
 	"path/filepath"
@@ -14,12 +15,11 @@ import (
 	"github.com/ian-kent/go-log/layout"
 	"github.com/mholt/archiver"
 	"github.com/olekukonko/tablewriter"
-	"github.com/shan1024/wum-uc/constant"
-	"github.com/shan1024/wum-uc/util"
+	"github.com/wso2/wum-uc/constant"
+	"github.com/wso2/wum-uc/util"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v2"
-	"fmt"
 )
 
 //createCmd represents the create command
@@ -670,18 +670,18 @@ func readDirectoryStructure(root string, locationMap *FileLocationInfo, ignoredF
 			}
 			logger.Debug(absolutePath + " : " + fileInfo.Name() + ": " + md5)
 			locationMap.Add(fileInfo.Name(), parentDirectory, fileInfo.IsDir(), md5)
-
-			fullPath := filepath.Join(root, constant.PLUGINS_DIRECTORY, fileInfo.Name())
-			logger.Trace("[COMPARE] " + fullPath + " ; " + absolutePath)
-			if (fullPath == absolutePath) && util.HasJarExtension(absolutePath) {
-				logger.Debug("[PLUGIN] FilePath:", absolutePath)
-				newFileName := strings.Replace(fileInfo.Name(), "_", "-", 1)
-				logger.Debug("[PLUGIN] New Name:", newFileName)
-				if index := strings.Index(newFileName, "_"); index != -1 {
-					return &util.CustomError{What: fileInfo.Name() + " is in " + constant.PLUGINS_DIRECTORY + ". But it has multiple _ in its name. Only one _ is expected." }
-				}
-				locationMap.Add(newFileName, parentDirectory, fileInfo.IsDir(), md5)
-			}
+			//
+			//fullPath := filepath.Join(root, constant.PLUGINS_DIRECTORY, fileInfo.Name())
+			//logger.Trace("[COMPARE] " + fullPath + " ; " + absolutePath)
+			//if (fullPath == absolutePath) && util.HasJarExtension(absolutePath) {
+			//	logger.Debug("[PLUGIN] FilePath:", absolutePath)
+			//	newFileName := strings.Replace(fileInfo.Name(), "_", "-", 1)
+			//	logger.Debug("[PLUGIN] New Name:", newFileName)
+			//	if index := strings.Index(newFileName, "_"); index != -1 {
+			//		return &util.CustomError{What: fileInfo.Name() + " is in " + constant.PLUGINS_DIRECTORY + ". But it has multiple _ in its name. Only one _ is expected." }
+			//	}
+			//	locationMap.Add(newFileName, parentDirectory, fileInfo.IsDir(), md5)
+			//}
 		} else {
 			logger.Debug(absolutePath + " : " + fileInfo.Name())
 			locationMap.Add(fileInfo.Name(), parentDirectory, fileInfo.IsDir(), "")

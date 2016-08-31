@@ -3,7 +3,7 @@
 package cmd
 
 import (
-	"github.com/shan1024/wum-uc/util"
+	"github.com/wso2/wum-uc/util"
 	"github.com/spf13/cobra"
 )
 

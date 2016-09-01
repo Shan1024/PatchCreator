@@ -3,8 +3,13 @@
 package cmd
 
 import (
-	"github.com/wso2/wum-uc/util"
+	"os"
+	"path/filepath"
+
 	"github.com/spf13/cobra"
+	"github.com/wso2/wum-uc/constant"
+	"github.com/wso2/wum-uc/util"
+	"gopkg.in/yaml.v2"
 )
 
 // initCmd represents the validate command
@@ -40,6 +45,30 @@ func initCurrentDirectory() {
 	initDirectory(currentDirectory)
 }
 
-func initDirectory(filepath string) {
+func initDirectory(destination string) {
+	err := util.CreateDirectory(destination)
+	util.HandleError(err)
 
+	updateDescriptorFile := filepath.Join(destination, constant.UPDATE_DESCRIPTOR_FILE)
+	updateDescriptor := util.UpdateDescriptor{}
+	data, err := yaml.Marshal(&updateDescriptor)
+	if err != nil {
+		util.HandleError(err)
+	}
+
+	file, err := os.OpenFile(
+		updateDescriptorFile,
+		os.O_WRONLY | os.O_TRUNC | os.O_CREATE,
+		0600,
+	)
+	if err != nil {
+		util.HandleError(err)
+	}
+	defer file.Close()
+
+	// Write bytes to file
+	_, err = file.Write(data)
+	if err != nil {
+		util.HandleError(err)
+	}
 }

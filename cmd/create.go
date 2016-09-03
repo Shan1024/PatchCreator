@@ -20,6 +20,7 @@ import (
 	"github.com/wso2/wum-uc/constant"
 	"github.com/wso2/wum-uc/util"
 	"gopkg.in/yaml.v2"
+	"fmt"
 )
 
 //createCmd represents the create command
@@ -171,8 +172,8 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 	err = archiver.Zip(updateName + ".zip", []string{filepath.Join(constant.TEMP_DIR, updateName)})
 	util.HandleError(err)
 	//Remove the temp directory
-	//err = util.DeleteDirectory(constant.TEMP_DIR)//todo: uncomment
-	//util.HandleError(err, "")
+	err = util.DeleteDirectory(constant.TEMP_DIR)
+	util.HandleError(err, "")
 	util.PrintInfo("'" + updateName + ".zip' successfully created.")
 }
 
@@ -192,7 +193,6 @@ func getIgnoredFilesInUpdate() map[string]bool {
 func getResourceFiles() map[string]bool {
 	return map[string]bool{
 		constant.LICENSE_FILE: true,
-		constant.README_FILE: false,
 		constant.NOT_A_CONTRIBUTION_FILE: false,
 		constant.INSTRUCTIONS_FILE: false,
 	}
@@ -557,14 +557,20 @@ func updateUpdateDescriptor(source, destination string, updateDescriptor *util.U
 		switch len(locationData.locationsInDistribution) {
 		case 0:
 			// new file
-			logger.Debug("XX NEW: ", filename)
-			updateDescriptor.File_changes.Added_files = append(updateDescriptor.File_changes.Added_files, filepath.Join(destination, filename))
+			distributionRoot := viper.GetString(constant.DISTRIBUTION_ROOT)
+			relativePathInDistribution := strings.TrimPrefix(filepath.Join(destination, filename), distributionRoot)
+			relativePathInDistribution = strings.TrimPrefix(relativePathInDistribution, string(os.PathSeparator))
+			fmt.Println("XX NEW: ", relativePathInDistribution)
+			updateDescriptor.File_changes.Added_files = append(updateDescriptor.File_changes.Added_files, relativePathInDistribution)
 		default:
 			//modified file
 			locationInDistribution, isDir := getLocationFromMap(locationData.locationsInDistribution)
 			if !isDir {
-				logger.Debug("XX Modified: ", filepath.Join(locationInDistribution, filename))
-				updateDescriptor.File_changes.Modified_files = append(updateDescriptor.File_changes.Modified_files, filepath.Join(destination, filename))
+				distributionRoot := viper.GetString(constant.DISTRIBUTION_ROOT)
+				relativePathInDistribution := strings.TrimPrefix(filepath.Join(locationInDistribution, filename), distributionRoot)
+				relativePathInDistribution = strings.TrimPrefix(relativePathInDistribution, string(os.PathSeparator))
+				fmt.Println("XX Modified: ", relativePathInDistribution)
+				updateDescriptor.File_changes.Modified_files = append(updateDescriptor.File_changes.Modified_files, relativePathInDistribution)
 			} else {
 				newLocationData := diff.files[filename]
 				newSource, sourceIsDir, err := getSingleLocationFromMap(newLocationData.locationsInUpdate)

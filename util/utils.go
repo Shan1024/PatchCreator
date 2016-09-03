@@ -343,7 +343,7 @@ func PrintErrorAndExit(args ...interface{}) {
 //This is used to print warning messages
 func PrintWarning(args ...interface{}) {
 	color.Set(color.Bold)
-	fmt.Println(append(append([]interface{}{"[WARNING]"}, args...), "\n")...)
+	fmt.Println(append([]interface{}{"[WARNING]"}, args...)...)
 	color.Unset()
 }
 

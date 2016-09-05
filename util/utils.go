@@ -278,7 +278,7 @@ func CopyDir(source string, dest string) (err error) {
 
 func HandleError(err error, customMessage ...interface{}) {
 	if err != nil {
-		PrintErrorAndExit(append(customMessage, "Error Message: '" + err.Error() + "'")...)
+		PrintErrorAndExit(append(customMessage, "[" + err.Error() + "]")...)
 	}
 }
 

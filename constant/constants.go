@@ -1,4 +1,4 @@
-//todo: add copyright notice
+// Copyright (c) 2016, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
 
 package constant
 
@@ -34,4 +34,22 @@ const (
 	DISTRIBUTION_ROOT = "DISTRIBUTION_ROOT"
 	UPDATE_ROOT = "UPDATE_ROOT"
 	UPDATE_NAME = "_UPDATE_NAME"
+
+	INIT_EXAMPLE = `  update_number: 0001
+  platform_version: 4.4.0
+  platform_name: wilkes
+  applies_to: All the products based on carbon 4.4.1
+  bug_fixes:
+    CARBON-15395: Upgrade Hazelcast version to 3.5.2
+    <MORE_JIRAS_HERE>
+  description: |
+    This update contain the relavent fixes for upgrading Hazelcast version
+    to its latest 3.5.2 version. When applying this update it requires a
+    full cluster estart since if the nodes has multiple client versions of
+    Hazelcast it can cause issues during connectivity.
+  file_changes:
+    added_files: []
+    removed_files: []
+    modified_files:
+    - repository/components/plugins/hazelcast_3.5.0.wso2v1.jar`
 )

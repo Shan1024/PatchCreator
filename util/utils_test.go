@@ -1,4 +1,4 @@
-//todo: add copyright notice
+// Copyright (c) 2016, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
 
 package util
 
@@ -9,17 +9,17 @@ import (
 )
 
 func TestIsAZipFile(t *testing.T) {
-	g := Goblin(t)
-	validPath := "/path/test.zip"
-	invalidPath := "/path/test.txt"
-	g.Describe("This tests whether given path points to a zip or not", func() {
-		g.It(validPath + " should return true", func() {
-			g.Assert(HasZipExtension(validPath)).IsTrue()
-		})
-		g.It(invalidPath + " should return false", func() {
-			g.Assert(HasZipExtension(invalidPath)).IsFalse()
-		})
-	})
+	//g := Goblin(t)
+	//validPath := "/path/test.zip"
+	//invalidPath := "/path/test.txt"
+	//g.Describe("This tests whether given path points to a zip or not", func() {
+	//	g.It(validPath + " should return true", func() {
+	//		g.Assert(HasZipExtension(validPath)).IsTrue()
+	//	})
+	//	g.It(invalidPath + " should return false", func() {
+	//		g.Assert(HasZipExtension(invalidPath)).IsFalse()
+	//	})
+	//})
 }
 
 func TestStringIsInSlice(t *testing.T) {

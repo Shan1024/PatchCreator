@@ -17,6 +17,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/ian-kent/go-log/log"
 	"gopkg.in/yaml.v2"
+	"regexp"
 )
 
 //todo: Move to a separate package?
@@ -145,7 +146,6 @@ func IsUserPreferencesValid(preferences []string, availableChoices int) (bool, e
 
 //This function will read update-descriptor.yaml
 func LoadUpdateDescriptor(filename, updateDirectoryPath string) (*UpdateDescriptor, error) {
-
 	//Construct the file path
 	updateDescriptorPath := filepath.Join(updateDirectoryPath, filename)
 	log.Debug("updateDescriptorPath:", updateDescriptorPath)
@@ -167,26 +167,30 @@ func LoadUpdateDescriptor(filename, updateDirectoryPath string) (*UpdateDescript
 //todo: change error to
 func ValidateUpdateDescriptor(updateDescriptor *UpdateDescriptor) error {
 	if len(updateDescriptor.Update_number) == 0 {
-		return &CustomError{What: "'update_number' field not found." }
+		return &CustomError{What: "'update_number' field not found" }
 	}
-	//todo: use regex to validate Update_number format
-
-	//todo: trim
+	match, _ := regexp.MatchString("^\\d{4}$", updateDescriptor.Update_number)
+	if !match {
+		return &CustomError{What: "'update_number' is not valid" }
+	}
 	if len(updateDescriptor.Platform_version) == 0 {
-		return &CustomError{What: "'platform_version' field not found." }
+		return &CustomError{What: "'platform_version' field not found" }
 	}
-	//todo: use regex to validate Platform_version format
+	match, _ = regexp.MatchString("^\\d+\\.\\d+\\.\\d+$", updateDescriptor.Platform_version)
+	if !match {
+		return &CustomError{What: "'platform_version' is not valid" }
+	}
 	if len(updateDescriptor.Platform_name) == 0 {
-		return &CustomError{What: "'platform_name' field not found." }
+		return &CustomError{What: "'platform_name' field not found" }
 	}
 	if len(updateDescriptor.Applies_to) == 0 {
-		return &CustomError{What: "'applies_to' field not found." }
+		return &CustomError{What: "'applies_to' field not found" }
 	}
 	if len(updateDescriptor.Bug_fixes) == 0 {
-		return &CustomError{What: "'bug_fixes' field not found." }
+		return &CustomError{What: "'bug_fixes' field not found. Add '\"N/A\": \"N/A\"' if there are no bug fixes" }
 	}
 	if len(updateDescriptor.Description) == 0 {
-		return &CustomError{What: "'description' field not found." }
+		return &CustomError{What: "'description' field not found" }
 	}
 	return nil
 }

@@ -360,3 +360,7 @@ func PrintInBold(args ...interface{}) {
 	color.Unset()
 }
 
+func PrintWhatsNext(args ...interface{}) {
+	fmt.Println("What's next?")
+	fmt.Println(append([]interface{}{"\t"}, args...)...)
+}

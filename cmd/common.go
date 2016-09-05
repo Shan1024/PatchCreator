@@ -6,6 +6,10 @@ import (
 	"github.com/ian-kent/go-log/log"
 )
 
+var (
+	Version string
+	BuildDate string
+)
 //todo: move to a separate package
 type Info struct {
 	isDir bool

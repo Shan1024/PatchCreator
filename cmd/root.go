@@ -14,7 +14,7 @@ var cfgFile string
 
 // RootCmd represents the base command when called without any subcommands
 var RootCmd = &cobra.Command{
-	Use:   "uct",
+	Use:   "wum-uc",
 	Short: "A brief description of your application",
 	Long: `A longer description that spans multiple lines and likely contains
 examples and usage of using your application. For example:
@@ -56,7 +56,7 @@ func initConfig() {
 		viper.SetConfigFile(cfgFile)
 	}
 
-	viper.SetConfigName(".uct") // name of config file (without extension)
+	viper.SetConfigName(".wum-uc") // name of config file (without extension)
 	viper.AddConfigPath("$HOME")  // adding home directory as first search path
 	viper.AutomaticEnv()          // read in environment variables that match
 
@@ -65,3 +65,4 @@ func initConfig() {
 		fmt.Println("Using config file:", viper.ConfigFileUsed())
 	}
 }
+

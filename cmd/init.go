@@ -3,43 +3,70 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
+	"github.com/renstrom/dedent"
 	"github.com/spf13/cobra"
 	"github.com/wso2/wum-uc/constant"
 	"github.com/wso2/wum-uc/util"
 	"gopkg.in/yaml.v2"
-	"fmt"
-	"strings"
+)
+
+var (
+	initCmdUse = "init"
+	initCmdShortDesc = "A brief description of your command"
+	initCmdLongDesc = `A longer description that spans multiple lines and likely contains examples
+	and usage of using your command.`;
+
+	initCmdExample = dedent.Dedent(`update_number: 0001
+platform_version: 4.4.0
+platform_name: wilkes
+applies_to: All the products based on carbon 4.4.1
+bug_fixes:
+  CARBON-15395: Upgrade Hazelcast version to 3.5.2
+  <MORE_JIRAS_HERE>
+description: |
+  This update contain the relavent fixes for upgrading Hazelcast version
+  to its latest 3.5.2 version. When applying this update it requires a
+  full cluster estart since if the nodes has multiple client versions of
+  Hazelcast it can cause issues during connectivity.
+file_changes:
+  added_files: []
+  removed_files: []
+  modified_files: []`)
+
+	isSample bool
 )
 
 // initCmd represents the validate command
 var initCmd = &cobra.Command{
-	Use:   "init",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		if len(args) == 0 {
-			initCurrentDirectory()
-		} else if len(args) == 1 {
-			initDirectory(args[0])
-		} else {
-			util.PrintErrorAndExit("Invalid number of argumants. Run with --help for more details about the argumants")
-		}
-
-	},
+	Use: initCmdUse,
+	Short: initCmdShortDesc,
+	Long: initCmdLongDesc,
+	Run: initializeInitCommand,
 }
 
 func init() {
 	RootCmd.AddCommand(initCmd)
-	RootCmd.Flags().BoolVarP(&isDebugLogsEnabled, "debug", "d", false, "Enable debug logs")
-	RootCmd.Flags().BoolVarP(&isTraceLogsEnabled, "trace", "t", false, "Enable trace logs")
+	initCmd.Flags().BoolVarP(&isSample, "sample", "s", false, "View sample file")
+}
+
+func initializeInitCommand(cmd *cobra.Command, args []string) {
+	switch len(args) {
+	case 0:
+		if isSample {
+			fmt.Println(initCmdExample)
+		} else {
+			initCurrentDirectory()
+		}
+	case 1:
+		initDirectory(args[0])
+	default:
+		util.PrintErrorAndExit("Invalid number of argumants. Run with --help for more details about the argumants")
+	}
 }
 
 func initCurrentDirectory() {
@@ -75,8 +102,7 @@ func initDirectory(destination string) {
 	if err != nil {
 		util.HandleError(err)
 	}
-
 	util.PrintInfo("'" + constant.UPDATE_DESCRIPTOR_FILE + "' has been successfully created.")
-	fmt.Println("Example:")
-	fmt.Println(constant.INIT_EXAMPLE)
+
+	util.PrintWhatsNext("run 'wum-uc init --sample' to view sample file.")
 }

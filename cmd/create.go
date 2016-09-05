@@ -3,6 +3,7 @@
 package cmd
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
@@ -15,30 +16,28 @@ import (
 	"github.com/ian-kent/go-log/layout"
 	"github.com/mholt/archiver"
 	"github.com/olekukonko/tablewriter"
+	"github.com/renstrom/dedent"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/wso2/wum-uc/constant"
 	"github.com/wso2/wum-uc/util"
 	"gopkg.in/yaml.v2"
-	"fmt"
+)
+
+var (
+	createCmdUse = "create <update_dir> <dist_loc>"
+	createCmdShortDesc = "A brief description of your command"
+	createCmdLongDesc = dedent.Dedent(`
+		A longer description that spans multiple lines and likely contains
+		examples and usage of using your command.`)
 )
 
 //createCmd represents the create command
 var createCmd = &cobra.Command{
-	Use:   "create <update_dir> <dist_loc>",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		if len(args) != 2 {
-			util.PrintErrorAndExit("Invalid number of argumants. Run with --help for more details about the argumants")
-		}
-		createUpdate(args[0], args[1])
-	},
+	Use: createCmdUse,
+	Short: createCmdShortDesc,
+	Long: createCmdLongDesc,
+	Run: initializeCreateCommand,
 }
 
 func init() {
@@ -47,12 +46,19 @@ func init() {
 	createCmd.Flags().BoolVarP(&isTraceLogsEnabled, "trace", "t", false, "Enable trace logs")
 }
 
+func initializeCreateCommand(cmd *cobra.Command, args []string) {
+	if len(args) != 2 {
+		util.PrintErrorAndExit("Invalid number of argumants. Run 'wum-uc create --help' to view help.")
+	}
+	createUpdate(args[0], args[1])
+}
+
 //main execution path
 func createUpdate(updateDirectoryPath, distributionPath string) {
 
 	//set debug level
 	setLogLevel()
-	logger.Debug("create command called")
+	logger.Debug("<create> command called")
 
 	//Flow - First check whether the given locations exists and required files exists. Then start processing.
 	//If one step fails, print error message and exit.
@@ -75,7 +81,9 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 	exists, err = util.IsFileExists(updateDescriptorPath)
 	util.HandleError(err, "")
 	if !exists {
-		util.PrintErrorAndExit(constant.UPDATE_DESCRIPTOR_FILE, " not found at ", updateDescriptorPath)
+		util.PrintError("'" + constant.UPDATE_DESCRIPTOR_FILE + "' not found at '" + updateDirectoryPath + "'.")
+		util.PrintWhatsNext("Run 'wum-uc init " + updateDirectoryPath + "' to generate the '" + constant.UPDATE_DESCRIPTOR_FILE + "' template in the update location.")
+		os.Exit(1)
 	}
 	logger.Debug("Descriptor Exists. Location %s", updateDescriptorPath)
 
@@ -85,7 +93,6 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 	if !exists {
 		util.PrintErrorAndExit("Distribution does not exist at ", updateDirectoryPath)
 	}
-
 	//4) Read update-descriptor.yaml and set the update name which will be used when creating the update zip file.
 	//This is used to read the update-descriptor.yaml file
 	updateDescriptor, err := util.LoadUpdateDescriptor(constant.UPDATE_DESCRIPTOR_FILE, updateDirectoryPath)
@@ -132,7 +139,7 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 		util.HandleError(err, "")
 
 		//Delete the extracted distribution directory after function is finished
-		//defer os.RemoveAll(strings.TrimSuffix(distributionPath, ".zip")) //todo: uncomment
+		defer os.RemoveAll(strings.TrimSuffix(distributionPath, ".zip"))
 	} else {
 		distributionRoot := strings.TrimSuffix(distributionPath, "/")
 		distributionRoot = strings.TrimSuffix(distributionRoot, "\\")
@@ -175,6 +182,7 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 	err = util.DeleteDirectory(constant.TEMP_DIR)
 	util.HandleError(err, "")
 	util.PrintInfo("'" + updateName + ".zip' successfully created.")
+	util.PrintWhatsNext("Validate the update zip after manual modifications using 'wum-uc validate " + updateName + ".zip " + distributionPath + "'")
 }
 
 //This will return a map of files which would be ignored when reading the update directory
@@ -257,32 +265,26 @@ func getDiff(updateLocationMap, distributionLocationMap *FileLocationInfo, inspe
 	diff := Diff{
 		files: make(map[string]LocationData),
 	}
-
 	distributionRoot := viper.GetString(constant.DISTRIBUTION_ROOT)
 	logger.Debug("updateLocationMap:", updateLocationMap)
 	for filename, updateFileLocationInfo := range updateLocationMap.nameLocationInfoMap {
 		logger.Trace("[UPDATE FILE INFO]:", filename, ":", updateFileLocationInfo)
-
 		//todo: add inspectRootOnly value support to get complete diff of two directories
 		updateFilePath, updateFileInfo, err := getUpdateFilePathAndInfo(&updateFileLocationInfo)
 		util.HandleError(err, "Error occurred while getting location of a file in update directory.")
 		logger.Trace("[UPDATE FILE INFO] updateFilePath:", updateFilePath)
 		logger.Trace("[UPDATE FILE INFO] updateFileInfo:", updateFileInfo)
-
 		distributionLocationInfo, foundMatchInDistribution := distributionLocationMap.nameLocationInfoMap[filename]
-
 		locationData := LocationData{
 			locationsInUpdate:make(map[string]bool),
 			locationsInDistribution:make(map[string]bool),
 		}
 		if foundMatchInDistribution {
 			logger.Debug("[MATCH] Match found in distribution: ", distributionLocationInfo)
-
 			//Add
 			locationData.locationsInUpdate[updateFilePath] = updateFileInfo.isDir
 			for distributionFilepath, info := range distributionLocationInfo.filepathInfoMap {
 				logger.Trace("[DIST FILE INFO] filepath:", distributionFilepath, ",Info:", info)
-
 				if !updateFileInfo.isDir && !info.isDir && updateFileInfo.md5 == info.md5 {
 					message := filename + " found in both update, distribution locations. But have the same md5 hash(" + info.md5 + ")" +
 						"\n\tLocation in update: " + updateFilePath + filename +
@@ -351,7 +353,6 @@ func handleNoMatch(filename string, locationData *LocationData, updateDescriptor
 		util.PrintInBold("Do you want to add it as a new file? [(Y)es/(N)o]: ")
 		preference, err := util.GetUserInput()
 		util.HandleError(err, "Error occurred while getting input from the user.")
-
 		if util.IsYes(preference) {
 			err = handleNewFile(filename, locationData, updateDescriptor)
 			util.HandleError(err)
@@ -405,10 +406,8 @@ func handleMultipleMatches(filename string, locationData *LocationData, updateDe
 		preferences, err := util.GetUserInput()
 		util.HandleError(err)
 		logger.Debug("preferences: %s", preferences)
-
 		//Remove the new line at the end
 		preferences = strings.TrimSpace(preferences)
-
 		//Split the indices
 		selectedIndices = strings.Split(preferences, ",");
 		//Sort the locations
@@ -417,7 +416,6 @@ func handleMultipleMatches(filename string, locationData *LocationData, updateDe
 
 		length := len(indexMap)
 		isValid, err := util.IsUserPreferencesValid(selectedIndices, length)
-
 		if err != nil {
 			util.PrintError("Invalid preferences. Please select indices where 1 <= index <= " + strconv.Itoa(length))
 			continue
@@ -430,7 +428,6 @@ func handleMultipleMatches(filename string, locationData *LocationData, updateDe
 			break
 		}
 	}
-
 	for _, selectedIndex := range selectedIndices {
 		pathInDistribution := indexMap[selectedIndex]
 		logger.Debug("[MULTIPLE MATCHES] Selected path:", selectedIndex, ";", pathInDistribution)
@@ -479,7 +476,6 @@ func handleNewFile(filename string, locationData *LocationData, updateDescriptor
 	locationInUpdate, isDir, err := getSingleLocationFromMap(locationData.locationsInUpdate)
 	util.HandleError(err)
 	logger.Debug("[HANDLE NEW] Update:", locationInUpdate, ";", isDir)
-
 	readDestinationLoop:
 	for {
 		util.PrintInBold("Enter destination directory relative to CARBON_HOME: ")
@@ -489,7 +485,6 @@ func handleNewFile(filename string, locationData *LocationData, updateDescriptor
 
 		fullPath := filepath.Join(viper.GetString(constant.DISTRIBUTION_ROOT), relativeLocationInDistribution)
 		logger.Debug("fullPath:", fullPath)
-
 		//Ignore error because we are only checking whether the given path exists or not
 		exists, _ := util.IsDirectoryExists(fullPath)
 		if exists {
@@ -552,7 +547,6 @@ func updateUpdateDescriptor(source, destination string, updateDescriptor *util.U
 	util.HandleError(err, "Error occurred while getting the diff.")
 
 	logger.Debug("\ndiff:", diff)
-
 	for filename, locationData := range diff.files {
 		switch len(locationData.locationsInDistribution) {
 		case 0:

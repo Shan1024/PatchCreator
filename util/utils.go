@@ -353,35 +353,6 @@ func PrintInfo(args ...interface{}) {
 	fmt.Println(append(append([]interface{}{"\n[INFO]"}, args...), "\n")...)
 	color.Unset()
 }
-//
-////This is used to print success messages
-//func PrintSuccess(args ...interface{}) {
-//	color.Set(color.FgGreen, color.Bold)
-//	fmt.Println(append(append([]interface{}{"[INFO]"}, args...), "\n")...)
-//	color.Unset()
-//}
-//
-////This is used to print messages in Green color
-//func PrintInGreen(args ...interface{}) {
-//	//color.Set(color.FgGreen, color.Bold)
-//	color.Set(color.Bold)
-//	fmt.Print(args...)
-//	color.Unset()
-//}
-//
-////This is used to print messages in Yellow color
-//func PrintInYellow(args ...interface{}) {
-//	color.Set(color.FgYellow, color.Bold)
-//	fmt.Print(args...)
-//	color.Unset()
-//}
-//
-////This is used to print messages in Red color
-//func PrintInRed(args ...interface{}) {
-//	color.Set(color.FgRed, color.Bold)
-//	fmt.Print(args...)
-//	color.Unset()
-//}
 
 func PrintInBold(args ...interface{}) {
 	color.Set(color.Bold)

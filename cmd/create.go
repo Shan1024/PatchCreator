@@ -66,9 +66,9 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 	//1) Check whether the given update directory exists
 	exists, err := util.IsDirectoryExists(updateDirectoryPath)
 	//todo: look for best practice
-	util.HandleError(err, "Error occurred while reading the update directory.")
+	util.HandleError(err, "Error occurred while reading the update directory")
 	if !exists {
-		util.PrintErrorAndExit("Update Directory does not exist at ", updateDirectoryPath)
+		util.PrintErrorAndExit("Update directory '" + updateDirectoryPath + "' does not exist.")
 	}
 	updateRoot := strings.TrimSuffix(updateDirectoryPath, "/")
 	updateRoot = strings.TrimSuffix(updateRoot, "\\")
@@ -89,18 +89,18 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 
 	//3) Check whether the given distribution exists
 	exists, err = util.IsDistributionExists(distributionPath)
-	util.HandleError(err, "Distribution does not exists.")
+	util.HandleError(err, "Distribution path '" + distributionPath + "' does not exist")
 	if !exists {
 		util.PrintErrorAndExit("Distribution does not exist at ", updateDirectoryPath)
 	}
 	//4) Read update-descriptor.yaml and set the update name which will be used when creating the update zip file.
 	//This is used to read the update-descriptor.yaml file
 	updateDescriptor, err := util.LoadUpdateDescriptor(constant.UPDATE_DESCRIPTOR_FILE, updateDirectoryPath)
-	util.HandleError(err, "Error occurred when reading the " + constant.UPDATE_DESCRIPTOR_FILE)
+	util.HandleError(err, "Error occurred when reading '" + constant.UPDATE_DESCRIPTOR_FILE + "' file")
 
 	//Validate the file format
 	err = util.ValidateUpdateDescriptor(updateDescriptor)
-	util.HandleError(err, constant.UPDATE_DESCRIPTOR_FILE + " format is not correct.")
+	util.HandleError(err, "'" + constant.UPDATE_DESCRIPTOR_FILE + "' format is not correct")
 
 	//set the update name
 	updateName := util.GetUpdateName(updateDescriptor, constant.UPDATE_NAME_PREFIX)
@@ -182,7 +182,7 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 	err = util.DeleteDirectory(constant.TEMP_DIR)
 	util.HandleError(err, "")
 	util.PrintInfo("'" + updateName + ".zip' successfully created.")
-	util.PrintWhatsNext("Validate the update zip after manual modifications using 'wum-uc validate " + updateName + ".zip " + distributionPath + "'")
+	util.PrintWhatsNext("Validate the update zip after any manual modifications by running 'wum-uc validate " + updateName + ".zip " + distributionPath + "'")
 }
 
 //This will return a map of files which would be ignored when reading the update directory
@@ -223,10 +223,10 @@ func saveUpdateDescriptor(updateDescriptorFilename string, data []byte) error {
 		os.O_WRONLY | os.O_TRUNC | os.O_CREATE,
 		0600,
 	)
+	defer file.Close()
 	if err != nil {
 		return err
 	}
-	defer file.Close()
 
 	updatedData := strings.Replace(string(data), "\"", "", 2)
 	modifiedData := []byte(updatedData)

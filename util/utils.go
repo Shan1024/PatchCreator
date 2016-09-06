@@ -18,6 +18,7 @@ import (
 	"github.com/ian-kent/go-log/log"
 	"gopkg.in/yaml.v2"
 	"regexp"
+	"github.com/wso2/wum-uc/constant"
 )
 
 //todo: Move to a separate package?
@@ -169,22 +170,22 @@ func ValidateUpdateDescriptor(updateDescriptor *UpdateDescriptor) error {
 	if len(updateDescriptor.Update_number) == 0 {
 		return &CustomError{What: "'update_number' field not found" }
 	}
-	match, err := regexp.MatchString("^\\d{4}$", updateDescriptor.Update_number)
+	match, err := regexp.MatchString(constant.UPDATE_NUMBER_REGEX, updateDescriptor.Update_number)
 	if err != nil {
 		return err
 	}
 	if !match {
-		return &CustomError{What: "'update_number' is not valid" }
+		return &CustomError{What: "'update_number' is not valid. It should match '" + constant.UPDATE_NUMBER_REGEX + "'" }
 	}
 	if len(updateDescriptor.Platform_version) == 0 {
 		return &CustomError{What: "'platform_version' field not found" }
 	}
-	match, err = regexp.MatchString("^\\d+\\.\\d+\\.\\d+$", updateDescriptor.Platform_version)
+	match, err = regexp.MatchString(constant.KERNEL_VERSION_REGEX, updateDescriptor.Platform_version)
 	if err != nil {
 		return err
 	}
 	if !match {
-		return &CustomError{What: "'platform_version' is not valid" }
+		return &CustomError{What: "'platform_version' is not valid. It should match '" + constant.KERNEL_VERSION_REGEX + "'" }
 	}
 	if len(updateDescriptor.Platform_name) == 0 {
 		return &CustomError{What: "'platform_name' field not found" }

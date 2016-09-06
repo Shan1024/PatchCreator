@@ -169,14 +169,20 @@ func ValidateUpdateDescriptor(updateDescriptor *UpdateDescriptor) error {
 	if len(updateDescriptor.Update_number) == 0 {
 		return &CustomError{What: "'update_number' field not found" }
 	}
-	match, _ := regexp.MatchString("^\\d{4}$", updateDescriptor.Update_number)
+	match, err := regexp.MatchString("^\\d{4}$", updateDescriptor.Update_number)
+	if err != nil {
+		return err
+	}
 	if !match {
 		return &CustomError{What: "'update_number' is not valid" }
 	}
 	if len(updateDescriptor.Platform_version) == 0 {
 		return &CustomError{What: "'platform_version' field not found" }
 	}
-	match, _ = regexp.MatchString("^\\d+\\.\\d+\\.\\d+$", updateDescriptor.Platform_version)
+	match, err = regexp.MatchString("^\\d+\\.\\d+\\.\\d+$", updateDescriptor.Platform_version)
+	if err != nil {
+		return err
+	}
 	if !match {
 		return &CustomError{What: "'platform_version' is not valid" }
 	}

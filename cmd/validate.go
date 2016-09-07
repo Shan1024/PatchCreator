@@ -120,6 +120,9 @@ func readUpdateZip(filename string) (map[string]bool, error) {
 	fileMap := make(map[string]bool)
 	updateDescriptor := util.UpdateDescriptor{}
 
+	isNotAContributionFileFound := false
+	isASecPatch := false
+
 	// Create a reader out of the zip archive
 	zipReader, err := zip.OpenReader(filename)
 	if err != nil {
@@ -163,9 +166,13 @@ func readUpdateZip(filename string) (map[string]bool, error) {
 					return nil, &util.CustomError{What: "'" + constant.UPDATE_DESCRIPTOR_FILE + "' is invalid. " + err.Error() }
 				}
 			case constant.LICENSE_FILE:
-				_, err := validateFile(file, constant.UPDATE_DESCRIPTOR_FILE, fullPath, updateName)
+				data, err := validateFile(file, constant.UPDATE_DESCRIPTOR_FILE, fullPath, updateName)
 				if err != nil {
 					return nil, err
+				}
+				dataString := string(data)
+				if strings.Contains(dataString, "under Apache License 2.0") {
+					isASecPatch = true
 				}
 			case constant.INSTRUCTIONS_FILE:
 				_, err := validateFile(file, constant.UPDATE_DESCRIPTOR_FILE, fullPath, updateName)
@@ -173,6 +180,7 @@ func readUpdateZip(filename string) (map[string]bool, error) {
 					return nil, err
 				}
 			case constant.NOT_A_CONTRIBUTION_FILE:
+				isNotAContributionFileFound = true
 				_, err := validateFile(file, constant.UPDATE_DESCRIPTOR_FILE, fullPath, updateName)
 				if err != nil {
 					return nil, err
@@ -187,6 +195,11 @@ func readUpdateZip(filename string) (map[string]bool, error) {
 				fileMap[relativePath] = false
 			}
 		}
+	}
+	if !isASecPatch && !isNotAContributionFileFound {
+		util.PrintWarning("This update is not a security update. But '" + constant.NOT_A_CONTRIBUTION_FILE + "' was not found. Please review and add '" + constant.NOT_A_CONTRIBUTION_FILE + "' file if necessary.")
+	} else if isASecPatch && isNotAContributionFileFound {
+		util.PrintWarning("This update is a security update. But '" + constant.NOT_A_CONTRIBUTION_FILE + "' was found. Please review and remove '" + constant.NOT_A_CONTRIBUTION_FILE + "' file if necessary.")
 	}
 	return fileMap, nil
 }

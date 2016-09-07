@@ -4,6 +4,7 @@ package cmd
 
 import (
 	"archive/zip"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -14,6 +15,7 @@ import (
 	"github.com/spf13/viper"
 	"github.com/wso2/wum-uc/util"
 	"github.com/wso2/wum-uc/constant"
+	"gopkg.in/yaml.v2"
 )
 
 var (
@@ -47,6 +49,9 @@ func initializeValidateCommand(cmd *cobra.Command, args []string) {
 
 //Entry point of  the validate command
 func startValidation(updateFilePath, distributionLocation string) {
+
+	setLogLevel()
+	logger.Debug("validate command called")
 
 	updateFileMap := make(map[string]bool)
 	distributionFileMap := make(map[string]bool)
@@ -113,6 +118,8 @@ func compare(updateFileMap, distributionFileMap map[string]bool) error {
 
 func readUpdateZip(filename string) (map[string]bool, error) {
 	fileMap := make(map[string]bool)
+	updateDescriptor := util.UpdateDescriptor{}
+
 	// Create a reader out of the zip archive
 	zipReader, err := zip.OpenReader(filename)
 	if err != nil {
@@ -146,6 +153,26 @@ func readUpdateZip(filename string) (map[string]bool, error) {
 				if file.Name != fullPath {
 					parent := strings.TrimSuffix(file.Name, file.FileInfo().Name())
 					return nil, &util.CustomError{What: "'" + constant.UPDATE_DESCRIPTOR_FILE + "' found at '" + parent + "'. It should be in the '" + updateName + "' directory" }
+				}
+				zippedFile, err := file.Open()
+				if err != nil {
+					return nil, err
+				}
+				data, err := ioutil.ReadAll(zippedFile)
+				if err != nil {
+					return nil, err
+				}
+				//fmt.Print(string(data))
+
+				zippedFile.Close()
+
+				err = yaml.Unmarshal(data, &updateDescriptor)
+				if err != nil {
+					return nil, err
+				}
+				err = util.ValidateUpdateDescriptor(&updateDescriptor)
+				if err != nil {
+					return nil, &util.CustomError{What: "'" + constant.UPDATE_DESCRIPTOR_FILE + "' is invalid. " + err.Error() }
 				}
 			case constant.LICENSE_FILE:
 				//todo: read license and validate

@@ -102,7 +102,7 @@ func startValidation(updateFilePath, distributionLocation string) {
 	err = compare(updateFileMap, distributionFileMap)
 	util.HandleError(err)
 
-	util.PrintInfo("'" + updateName + "' validation successfully finished. No issues found.")
+	util.PrintInfo("'" + updateName + "' validation successfully finished.")
 }
 
 func compare(updateFileMap, distributionFileMap map[string]bool) error {
@@ -149,47 +149,33 @@ func readUpdateZip(filename string) (map[string]bool, error) {
 			logger.Debug("fullPath:", fullPath)
 			switch file.FileInfo().Name() {
 			case constant.UPDATE_DESCRIPTOR_FILE:
-				//todo: read update descriptor and validate
-				if file.Name != fullPath {
-					parent := strings.TrimSuffix(file.Name, file.FileInfo().Name())
-					return nil, &util.CustomError{What: "'" + constant.UPDATE_DESCRIPTOR_FILE + "' found at '" + parent + "'. It should be in the '" + updateName + "' directory" }
-				}
-				zippedFile, err := file.Open()
+				data, err := validateFile(file, constant.UPDATE_DESCRIPTOR_FILE, fullPath, updateName)
 				if err != nil {
 					return nil, err
 				}
-				data, err := ioutil.ReadAll(zippedFile)
-				if err != nil {
-					return nil, err
-				}
-				//fmt.Print(string(data))
-
-				zippedFile.Close()
-
 				err = yaml.Unmarshal(data, &updateDescriptor)
 				if err != nil {
 					return nil, err
 				}
+				//check
 				err = util.ValidateUpdateDescriptor(&updateDescriptor)
 				if err != nil {
 					return nil, &util.CustomError{What: "'" + constant.UPDATE_DESCRIPTOR_FILE + "' is invalid. " + err.Error() }
 				}
 			case constant.LICENSE_FILE:
-				//todo: read license and validate
-				//This security update is licensed by WSO2 Inc. under Apache License 2.0.
-				if file.Name != fullPath {
-					parent := strings.TrimSuffix(file.Name, file.FileInfo().Name())
-					return nil, &util.CustomError{What: "'" + constant.LICENSE_FILE + "' found at '" + parent + "'. It should be in the '" + updateName + "' directory" }
+				_, err := validateFile(file, constant.UPDATE_DESCRIPTOR_FILE, fullPath, updateName)
+				if err != nil {
+					return nil, err
 				}
 			case constant.INSTRUCTIONS_FILE:
-				if file.Name != fullPath {
-					parent := strings.TrimSuffix(file.Name, file.FileInfo().Name())
-					return nil, &util.CustomError{What: "'" + constant.INSTRUCTIONS_FILE + "' found at '" + parent + "'. It should be in the '" + updateName + "' directory" }
+				_, err := validateFile(file, constant.UPDATE_DESCRIPTOR_FILE, fullPath, updateName)
+				if err != nil {
+					return nil, err
 				}
 			case constant.NOT_A_CONTRIBUTION_FILE:
-				if file.Name != fullPath {
-					parent := strings.TrimSuffix(file.Name, file.FileInfo().Name())
-					return nil, &util.CustomError{What: "'" + constant.NOT_A_CONTRIBUTION_FILE + "' found at '" + parent + "'. It should be in the '" + updateName + "' directory" }
+				_, err := validateFile(file, constant.UPDATE_DESCRIPTOR_FILE, fullPath, updateName)
+				if err != nil {
+					return nil, err
 				}
 			default:
 				prefix := filepath.Join(updateName, constant.CARBON_HOME)
@@ -203,6 +189,29 @@ func readUpdateZip(filename string) (map[string]bool, error) {
 		}
 	}
 	return fileMap, nil
+}
+
+func validateFile(file *zip.File, fileName, fullPath, updateName string) ([]byte, error) {
+	if file.Name != fullPath {
+		parent := strings.TrimSuffix(file.Name, file.FileInfo().Name())
+		return nil, &util.CustomError{What: "'" + fileName + "' found at '" + parent + "'. It should be in the '" + updateName + "' directory" }
+	}
+	zippedFile, err := file.Open()
+	if err != nil {
+		return nil, err
+	}
+	data, err := ioutil.ReadAll(zippedFile)
+	zippedFile.Close()
+	if err != nil {
+		return nil, err
+	}
+	dataString := string(data)
+	//check
+	isPatchWordFound := strings.Contains(dataString, "patch")
+	if isPatchWordFound {
+		util.PrintWarning("'" + fileName + "' file contains the word 'patch'. Please review and change it to 'update' if possible.")
+	}
+	return data, nil
 }
 
 func readDistributionZip(filename string) (map[string]bool, error) {

@@ -84,7 +84,7 @@ func startValidation(updateFilePath, distributionLocation string) {
 	updateName := strings.TrimSuffix(locationInfo.Name(), ".zip")
 	viper.Set(constant.UPDATE_NAME, updateName)
 
-	updateFileMap, err = readUpdateZip(updateFilePath)
+	updateFileMap, updateDescriptor, err := readUpdateZip(updateFilePath)
 	util.HandleError(err)
 	logger.Debug(updateFileMap)
 
@@ -93,30 +93,32 @@ func startValidation(updateFilePath, distributionLocation string) {
 		locationInfo, err := os.Stat(distributionLocation)
 		util.HandleError(err, "")
 		viper.Set(constant.PRODUCT_NAME, strings.TrimSuffix(locationInfo.Name(), ".zip"))
-
 		distributionFileMap, err = readDistributionZip(distributionLocation)
 	} else {
 
 	}
-
-	err = compare(updateFileMap, distributionFileMap)
+	err = compare(updateFileMap, distributionFileMap, updateDescriptor)
 	util.HandleError(err)
-
 	util.PrintInfo("'" + updateName + "' validation successfully finished.")
 }
 
-func compare(updateFileMap, distributionFileMap map[string]bool) error {
+func compare(updateFileMap, distributionFileMap map[string]bool, updateDescriptor *util.UpdateDescriptor) error {
 	for filePath := range updateFileMap {
 		logger.Debug("Searching:", filePath)
 		_, found := distributionFileMap[filePath]
 		if !found {
-			return &util.CustomError{What: "File not found in the distribution: '" + filePath + "'" }
+			isInAddedFiles := util.IsStringIsInSlice(filePath, updateDescriptor.File_changes.Added_files)
+			if !isInAddedFiles {
+				return &util.CustomError{What: "File not found in the distribution: '" + filePath + "'. If this is a new file, add an entry to the 'added_files' sections in the '" + constant.UPDATE_DESCRIPTOR_FILE + "' file" }
+			} else {
+				logger.Debug("'" + filePath + "' found in added files.")
+			}
 		}
 	}
 	return nil
 }
 
-func readUpdateZip(filename string) (map[string]bool, error) {
+func readUpdateZip(filename string) (map[string]bool, *util.UpdateDescriptor, error) {
 	fileMap := make(map[string]bool)
 	updateDescriptor := util.UpdateDescriptor{}
 
@@ -126,6 +128,7 @@ func readUpdateZip(filename string) (map[string]bool, error) {
 	// Create a reader out of the zip archive
 	zipReader, err := zip.OpenReader(filename)
 	if err != nil {
+		return nil, nil, err
 	}
 	defer zipReader.Close()
 
@@ -142,7 +145,7 @@ func readUpdateZip(filename string) (map[string]bool, error) {
 				prefix := filepath.Join(updateName, constant.CARBON_HOME)
 				hasPrefix := strings.HasPrefix(file.Name, prefix)
 				if !hasPrefix {
-					return nil, &util.CustomError{What: "Unknown directory found: '" + file.Name + "'" }
+					return nil, nil, &util.CustomError{What: "Unknown directory found: '" + file.Name + "'" }
 				}
 			}
 		} else {
@@ -154,21 +157,21 @@ func readUpdateZip(filename string) (map[string]bool, error) {
 			case constant.UPDATE_DESCRIPTOR_FILE:
 				data, err := validateFile(file, constant.UPDATE_DESCRIPTOR_FILE, fullPath, updateName)
 				if err != nil {
-					return nil, err
+					return nil, nil, err
 				}
 				err = yaml.Unmarshal(data, &updateDescriptor)
 				if err != nil {
-					return nil, err
+					return nil, nil, err
 				}
 				//check
 				err = util.ValidateUpdateDescriptor(&updateDescriptor)
 				if err != nil {
-					return nil, &util.CustomError{What: "'" + constant.UPDATE_DESCRIPTOR_FILE + "' is invalid. " + err.Error() }
+					return nil, nil, &util.CustomError{What: "'" + constant.UPDATE_DESCRIPTOR_FILE + "' is invalid. " + err.Error() }
 				}
 			case constant.LICENSE_FILE:
 				data, err := validateFile(file, constant.UPDATE_DESCRIPTOR_FILE, fullPath, updateName)
 				if err != nil {
-					return nil, err
+					return nil, nil, err
 				}
 				dataString := string(data)
 				if strings.Contains(dataString, "under Apache License 2.0") {
@@ -177,21 +180,21 @@ func readUpdateZip(filename string) (map[string]bool, error) {
 			case constant.INSTRUCTIONS_FILE:
 				_, err := validateFile(file, constant.UPDATE_DESCRIPTOR_FILE, fullPath, updateName)
 				if err != nil {
-					return nil, err
+					return nil, nil, err
 				}
 			case constant.NOT_A_CONTRIBUTION_FILE:
 				isNotAContributionFileFound = true
 				_, err := validateFile(file, constant.UPDATE_DESCRIPTOR_FILE, fullPath, updateName)
 				if err != nil {
-					return nil, err
+					return nil, nil, err
 				}
 			default:
 				prefix := filepath.Join(updateName, constant.CARBON_HOME)
 				hasPrefix := strings.HasPrefix(file.Name, prefix)
 				if !hasPrefix {
-					return nil, &util.CustomError{What: "Unknown file found: '" + file.Name + "'" }
+					return nil, nil, &util.CustomError{What: "Unknown file found: '" + file.Name + "'" }
 				}
-				relativePath := strings.TrimPrefix(file.Name, prefix)
+				relativePath := strings.TrimPrefix(file.Name, prefix + string(os.PathSeparator))
 				fileMap[relativePath] = false
 			}
 		}
@@ -201,7 +204,7 @@ func readUpdateZip(filename string) (map[string]bool, error) {
 	} else if isASecPatch && isNotAContributionFileFound {
 		util.PrintWarning("This update is a security update. But '" + constant.NOT_A_CONTRIBUTION_FILE + "' was found. Please review and remove '" + constant.NOT_A_CONTRIBUTION_FILE + "' file if necessary.")
 	}
-	return fileMap, nil
+	return fileMap, &updateDescriptor, nil
 }
 
 func validateFile(file *zip.File, fileName, fullPath, updateName string) ([]byte, error) {
@@ -239,7 +242,7 @@ func readDistributionZip(filename string) (map[string]bool, error) {
 	productName := viper.GetString(constant.PRODUCT_NAME)
 	// Iterate through each file/dir found in
 	for _, file := range zipReader.Reader.File {
-		relativePath := strings.TrimPrefix(file.Name, productName)
+		relativePath := strings.TrimPrefix(file.Name, productName + string(os.PathSeparator))
 		if !file.FileInfo().IsDir() {
 			fileMap[relativePath] = false
 		}

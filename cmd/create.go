@@ -6,14 +6,15 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/signal"
 	"path"
 	"path/filepath"
 	"sort"
 	"strings"
 	"strconv"
 
-	"github.com/ian-kent/go-log/levels"
 	"github.com/ian-kent/go-log/layout"
+	"github.com/ian-kent/go-log/levels"
 	"github.com/mholt/archiver"
 	"github.com/olekukonko/tablewriter"
 	"github.com/renstrom/dedent"
@@ -121,9 +122,16 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 	}
 
 	if strings.HasSuffix(distributionPath, ".zip") {
-
+		distributionRoot := GetDistributionRootDirectory(distributionPath)
+		logger.Debug("distributionRoot: %s", distributionRoot)
+		viper.Set(constant.DISTRIBUTION_ROOT, distributionRoot)
 		unzipDirectory := util.GetParentDirectory(distributionPath)
 		logger.Debug("unzipDirectory: %s", unzipDirectory)
+
+		cleanupChannel := util.HandleInterrupts(func() {
+			logger.Debug("Cleaning up distributionRoot directory")
+			util.CleanUpDirectory(distributionRoot)
+		})
 
 		util.PrintInfo("Extracting zip file. Please wait...")
 		err := archiver.Unzip(distributionPath, unzipDirectory)
@@ -131,15 +139,15 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 
 		util.PrintInfo("Extracting zip file successfully finished.")
 
-		distributionRoot := GetDistributionRootDirectory(distributionPath)
-		logger.Debug("distributionRoot: %s", distributionRoot)
-		viper.Set(constant.DISTRIBUTION_ROOT, distributionRoot)
+		signal.Stop(cleanupChannel)
 
+		util.PrintInfo("Reading files...")
 		err = readDirectoryStructure(distributionRoot, &distributionLocationInfo, nil, false)
 		util.HandleError(err, "")
+		util.PrintInfo("Reading files successfully finished.")
 
 		//Delete the extracted distribution directory after function is finished
-		defer os.RemoveAll(strings.TrimSuffix(distributionPath, ".zip"))
+		defer util.CleanUpDirectory(strings.TrimSuffix(distributionPath, ".zip"))
 	} else {
 		distributionRoot := strings.TrimSuffix(distributionPath, "/")
 		distributionRoot = strings.TrimSuffix(distributionRoot, "\\")
@@ -160,9 +168,7 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 	err = populateZipDirectoryStructure(diff, updateDescriptor)
 	util.HandleError(err, "Error occurred while creating the folder structure.")
 
-	//9) update added_files, modified_files entries in the update-descriptor.yaml
-
-	//10) Copy resource files (update-descriptor.yaml, etc)
+	//9) Copy resource files (update-descriptor.yaml, etc)
 	resourceFiles := getResourceFiles()
 	err = copyResourceFiles(resourceFiles)
 	util.HandleError(err, &util.CustomError{What: "Error occurred while copying resource files."})
@@ -174,13 +180,21 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 	err = saveUpdateDescriptor(constant.UPDATE_DESCRIPTOR_FILE, data)
 	util.HandleError(err)
 
-	//11) Create the update zip file
+	cleanupChannel := util.HandleInterrupts(func() {
+		logger.Debug("Cleaning up temp directory")
+		util.CleanUpDirectory(constant.TEMP_DIR)
+	})
+
+	//10) Create the update zip file
 	//todo: what should be the destination directory for the zip file? current working directory?
 	err = archiver.Zip(updateName + ".zip", []string{filepath.Join(constant.TEMP_DIR, updateName)})
 	util.HandleError(err)
-	//Remove the temp directory
-	err = util.DeleteDirectory(constant.TEMP_DIR)
-	util.HandleError(err, "")
+
+	signal.Stop(cleanupChannel)
+
+	//Remove the temp directories
+	util.CleanUpDirectory(constant.TEMP_DIR)
+
 	util.PrintInfo("'" + updateName + ".zip' successfully created.")
 	util.PrintWhatsNext("Validate the update zip after any manual modifications by running 'wum-uc validate " + updateName + ".zip " + distributionPath + "'")
 }

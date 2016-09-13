@@ -10,18 +10,22 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/fatih/color"
 	"github.com/ian-kent/go-log/log"
-	"gopkg.in/yaml.v2"
-	"regexp"
 	"github.com/wso2/wum-uc/constant"
+	"gopkg.in/yaml.v2"
 )
 
-//todo: Move to a separate package?
+var logger = log.Logger()
+
 //struct which is used to read update-descriptor.yaml
 type UpdateDescriptor struct {
 	Update_number    string
@@ -48,7 +52,6 @@ func GetParentDirectory(filepath string) string {
 	}
 	return parentDirectory
 }
-
 
 //This will return the md5 hash of the file in the given filepath
 func GetMD5(filepath string) (string, error) {
@@ -82,6 +85,38 @@ func IsDistributionExists(distributionPath string) (bool, error) {
 		return IsFileExists(distributionPath)
 	}
 	return IsDirectoryExists(distributionPath)
+}
+
+func CleanUpDirectory(path string) {
+	logger.Debug("Deleting temporary files:", path)
+	err := DeleteDirectory(path)
+	if err != nil {
+		logger.Debug("Error occurred while deleting " + path + " directory: ", err)
+		time.Sleep(time.Second * 1)
+		err = DeleteDirectory(path)
+		if err != nil {
+			logger.Debug("Retry failed: ", err)
+			logger.Debug("Deleting '" + path + "' failed. Please delete this directory manually.")
+		} else {
+			logger.Debug(path + " successfully deleted on retry")
+			fmt.Println("Temporary files successfully deleted")
+		}
+	} else {
+		logger.Debug(path + " successfully deleted")
+		fmt.Println("Temporary files successfully deleted")
+	}
+}
+
+func HandleInterrupts(cleanupFunc func()) chan <- os.Signal {
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	signal.Notify(c, syscall.SIGTERM)
+	go func() {
+		<-c
+		cleanupFunc()
+		os.Exit(1)
+	}()
+	return c
 }
 
 func DeleteDirectory(path string) error {

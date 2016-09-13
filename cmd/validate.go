@@ -169,7 +169,7 @@ func readUpdateZip(filename string) (map[string]bool, *util.UpdateDescriptor, er
 					return nil, nil, &util.CustomError{What: "'" + constant.UPDATE_DESCRIPTOR_FILE + "' is invalid. " + err.Error() }
 				}
 			case constant.LICENSE_FILE:
-				data, err := validateFile(file, constant.UPDATE_DESCRIPTOR_FILE, fullPath, updateName)
+				data, err := validateFile(file, constant.LICENSE_FILE, fullPath, updateName)
 				if err != nil {
 					return nil, nil, err
 				}
@@ -178,13 +178,13 @@ func readUpdateZip(filename string) (map[string]bool, *util.UpdateDescriptor, er
 					isASecPatch = true
 				}
 			case constant.INSTRUCTIONS_FILE:
-				_, err := validateFile(file, constant.UPDATE_DESCRIPTOR_FILE, fullPath, updateName)
+				_, err := validateFile(file, constant.INSTRUCTIONS_FILE, fullPath, updateName)
 				if err != nil {
 					return nil, nil, err
 				}
 			case constant.NOT_A_CONTRIBUTION_FILE:
 				isNotAContributionFileFound = true
-				_, err := validateFile(file, constant.UPDATE_DESCRIPTOR_FILE, fullPath, updateName)
+				_, err := validateFile(file, constant.NOT_A_CONTRIBUTION_FILE, fullPath, updateName)
 				if err != nil {
 					return nil, nil, err
 				}

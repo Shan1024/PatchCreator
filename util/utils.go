@@ -96,14 +96,14 @@ func CleanUpDirectory(path string) {
 		err = DeleteDirectory(path)
 		if err != nil {
 			logger.Debug("Retry failed: ", err)
-			logger.Debug("Deleting '" + path + "' failed. Please delete this directory manually.")
+			fmt.Println("Deleting '" + path + "' failed. Please delete this directory manually.")
 		} else {
 			logger.Debug(path + " successfully deleted on retry")
-			fmt.Println("Temporary files successfully deleted")
+			logger.Debug("Temporary files successfully deleted")
 		}
 	} else {
 		logger.Debug(path + " successfully deleted")
-		fmt.Println("Temporary files successfully deleted")
+		logger.Debug("Temporary files successfully deleted")
 	}
 }
 
@@ -240,8 +240,8 @@ func ValidateUpdateDescriptor(updateDescriptor *UpdateDescriptor) error {
 func PrintUpdateDescriptor(updateDescriptor *UpdateDescriptor) {
 	fmt.Println("----------------------------------------------------------------")
 	fmt.Printf("update_number: %s\n", updateDescriptor.Update_number)
-	fmt.Printf("kernel_version: %s\n", updateDescriptor.Platform_version)
-	fmt.Printf("platform_version: %s\n", updateDescriptor.Platform_name)
+	fmt.Printf("platform_version: %s\n", updateDescriptor.Platform_version)
+	fmt.Printf("platform_name: %s\n", updateDescriptor.Platform_name)
 	fmt.Printf("applies_to: %s\n", updateDescriptor.Applies_to)
 	fmt.Printf("bug_fixes: %s\n", updateDescriptor.Bug_fixes)
 	fmt.Printf("file_changes: %s\n", updateDescriptor.File_changes)
@@ -395,9 +395,9 @@ func PrintWarning(args ...interface{}) {
 
 //This is used to print info messages
 func PrintInfo(args ...interface{}) {
-	color.Set(color.Bold)
-	fmt.Println(append(append([]interface{}{"\n[INFO]"}, args...), "\n")...)
-	color.Unset()
+	//color.Set(color.Bold)
+	fmt.Println(append([]interface{}{"[INFO]"}, args...)...)
+	//color.Unset()
 }
 
 func PrintInBold(args ...interface{}) {
@@ -407,6 +407,8 @@ func PrintInBold(args ...interface{}) {
 }
 
 func PrintWhatsNext(args ...interface{}) {
-	fmt.Println("What's next?")
+	color.Set(color.Bold)
+	fmt.Println("\nWhat's next?")
 	fmt.Println(append([]interface{}{"\t"}, args...)...)
+	color.Unset()
 }

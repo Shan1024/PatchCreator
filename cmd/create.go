@@ -196,7 +196,7 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 	util.CleanUpDirectory(constant.TEMP_DIR)
 
 	util.PrintInfo("'" + updateName + ".zip' successfully created.")
-	util.PrintWhatsNext("Validate the update zip after any manual modifications by running 'wum-uc validate " + updateName + ".zip " + distributionPath + "'")
+	util.PrintWhatsNext("Validate the update zip after any manual modification by running 'wum-uc validate " + updateName + ".zip " + distributionPath + "'")
 }
 
 //This will return a map of files which would be ignored when reading the update directory
@@ -267,7 +267,7 @@ func copyResourceFiles(resourceFilesMap map[string]bool) error {
 			if isMandatory {
 				return err
 			} else {
-				util.PrintWarning("'", filename, "' not found.")
+				util.PrintWarning("'" + filename + "' not found.")
 			}
 		}
 	}

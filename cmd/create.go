@@ -41,10 +41,13 @@ var createCmd = &cobra.Command{
 	Run: initializeCreateCommand,
 }
 
+var isValidateSelected bool
+
 func init() {
 	RootCmd.AddCommand(createCmd)
 	createCmd.Flags().BoolVarP(&isDebugLogsEnabled, "debug", "d", false, "Enable debug logs")
 	createCmd.Flags().BoolVarP(&isTraceLogsEnabled, "trace", "t", false, "Enable trace logs")
+	createCmd.Flags().BoolVarP(&isValidateSelected, "validate", "v", false, "Validate the content of the created update zip")
 }
 
 func initializeCreateCommand(cmd *cobra.Command, args []string) {
@@ -136,12 +139,11 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 		util.PrintInfo("Extracting zip file. Please wait...")
 		err := archiver.Unzip(distributionPath, unzipDirectory)
 		util.HandleError(err, "")
-
-		util.PrintInfo("Extracting zip file successfully finished.")
+		util.PrintInfo("Extracting successfully finished.")
 
 		signal.Stop(cleanupChannel)
 
-		util.PrintInfo("Reading files...")
+		util.PrintInfo("Reading files started...")
 		err = readDirectoryStructure(distributionRoot, &distributionLocationInfo, nil, false)
 		util.HandleError(err, "")
 		util.PrintInfo("Reading files successfully finished.")
@@ -185,9 +187,10 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 		util.CleanUpDirectory(constant.TEMP_DIR)
 	})
 
+	updateZipName := updateName + ".zip"
 	//10) Create the update zip file
 	//todo: what should be the destination directory for the zip file? current working directory?
-	err = archiver.Zip(updateName + ".zip", []string{filepath.Join(constant.TEMP_DIR, updateName)})
+	err = archiver.Zip(updateZipName, []string{filepath.Join(constant.TEMP_DIR, updateName)})
 	util.HandleError(err)
 
 	signal.Stop(cleanupChannel)
@@ -195,8 +198,14 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 	//Remove the temp directories
 	util.CleanUpDirectory(constant.TEMP_DIR)
 
-	util.PrintInfo("'" + updateName + ".zip' successfully created.")
-	util.PrintWhatsNext("Validate the update zip after any manual modification by running 'wum-uc validate " + updateName + ".zip " + distributionPath + "'")
+	util.PrintInfo("'" + updateZipName + "' successfully created.")
+
+	if isValidateSelected {
+		//fmt.Println("\n\nValidating '" + updateZipName + "'\n")
+		startValidation(updateZipName, distributionPath)
+	} else {
+		util.PrintWhatsNext("Validate the update zip after any manual modification by running 'wum-uc validate " + updateName + ".zip " + distributionPath + "'")
+	}
 }
 
 //This will return a map of files which would be ignored when reading the update directory
@@ -394,7 +403,6 @@ func handleSingleMatch(filename string, locationData *LocationData, updateDescri
 	locationInDistribution = strings.TrimPrefix(locationInDistribution, viper.GetString(constant.DISTRIBUTION_ROOT))
 	logger.Debug("[SINGLE MATCH] Matching location in the Distribution:", locationInDistribution)
 
-	//todo: update the modified_files in the update-descriptor
 	if isDir {
 		distributionRoot := viper.GetString(constant.DISTRIBUTION_ROOT)
 		updateUpdateDescriptor(filepath.Join(locationInUpdate, filename), filepath.Join(distributionRoot, locationInDistribution, filename), updateDescriptor)
@@ -452,7 +460,6 @@ func handleMultipleMatches(filename string, locationData *LocationData, updateDe
 		relativeLocationInDistribution := strings.TrimPrefix(pathInDistribution, viper.GetString(constant.DISTRIBUTION_ROOT))
 
 		//todo: save the preferences to generate the final summary map
-		//todo: update the modified_files in the update-descriptor
 		if isDir {
 			distributionRoot := viper.GetString(constant.DISTRIBUTION_ROOT)
 			updateUpdateDescriptor(filepath.Join(locationInUpdate, filename), filepath.Join(distributionRoot, relativeLocationInDistribution, filename), updateDescriptor)
@@ -514,7 +521,6 @@ func handleNewFile(filename string, locationData *LocationData, updateDescriptor
 
 				if util.IsYes(preference) {
 					//todo: save the selected location to generate the final summary map
-					//todo: update the added_files in the update-descriptor
 					if isDir {
 						distributionRoot := viper.GetString(constant.DISTRIBUTION_ROOT)
 						updateUpdateDescriptor(filepath.Join(locationInUpdate, filename), filepath.Join(distributionRoot, relativeLocationInDistribution, filename), updateDescriptor)

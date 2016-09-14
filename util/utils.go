@@ -22,6 +22,7 @@ import (
 	"github.com/ian-kent/go-log/log"
 	"github.com/wso2/wum-uc/constant"
 	"gopkg.in/yaml.v2"
+	"github.com/pkg/errors"
 )
 
 var logger = log.Logger()
@@ -157,7 +158,7 @@ func GetUserInput() (string, error) {
 func IsUserPreferencesValid(preferences []string, availableChoices int) (bool, error) {
 	length := len(preferences)
 	if length == 0 {
-		return false, &CustomError{What:"No preferences entered."}
+		return false, errors.New("No preferences entered.")
 	}
 	first, err := strconv.Atoi(preferences[0])
 	if err != nil {
@@ -165,14 +166,14 @@ func IsUserPreferencesValid(preferences []string, availableChoices int) (bool, e
 	}
 	message := "Invalid preferences. Please select indices where " + strconv.Itoa(availableChoices) + ">= index >=1."
 	if first < 1 {
-		return false, &CustomError{What:message}
+		return false, errors.New(message)
 	}
 	last, err := strconv.Atoi(preferences[length - 1])
 	if err != nil {
 		return false, err
 	}
 	if last > availableChoices {
-		return false, &CustomError{What:message}
+		return false, errors.New(message)
 	}
 	return true, nil
 }
@@ -187,48 +188,48 @@ func LoadUpdateDescriptor(filename, updateDirectoryPath string) (*UpdateDescript
 	updateDescriptor := UpdateDescriptor{}
 	yamlFile, err := ioutil.ReadFile(updateDescriptorPath)
 	if err != nil {
-		return nil, &CustomError{What: err.Error()}
+		return nil, err
 	}
 	//Un-marshal the update-descriptor file to updateDescriptor struct
 	err = yaml.Unmarshal(yamlFile, &updateDescriptor)
 	if err != nil {
-		return nil, &CustomError{What: err.Error()}
+		return nil, err
 	}
 	return &updateDescriptor, nil
 }
 
 func ValidateUpdateDescriptor(updateDescriptor *UpdateDescriptor) error {
 	if len(updateDescriptor.Update_number) == 0 {
-		return &CustomError{What: "'update_number' field not found" }
+		return errors.New("'update_number' field not found")
 	}
 	match, err := regexp.MatchString(constant.UPDATE_NUMBER_REGEX, updateDescriptor.Update_number)
 	if err != nil {
 		return err
 	}
 	if !match {
-		return &CustomError{What: "'update_number' is not valid. It should match '" + constant.UPDATE_NUMBER_REGEX + "'" }
+		return errors.New("'update_number' is not valid. It should match '" + constant.UPDATE_NUMBER_REGEX + "'")
 	}
 	if len(updateDescriptor.Platform_version) == 0 {
-		return &CustomError{What: "'platform_version' field not found" }
+		return errors.New("'platform_version' field not found")
 	}
 	match, err = regexp.MatchString(constant.KERNEL_VERSION_REGEX, updateDescriptor.Platform_version)
 	if err != nil {
 		return err
 	}
 	if !match {
-		return &CustomError{What: "'platform_version' is not valid. It should match '" + constant.KERNEL_VERSION_REGEX + "'" }
+		return errors.New("'platform_version' is not valid. It should match '" + constant.KERNEL_VERSION_REGEX + "'")
 	}
 	if len(updateDescriptor.Platform_name) == 0 {
-		return &CustomError{What: "'platform_name' field not found" }
+		return errors.New("'platform_name' field not found")
 	}
 	if len(updateDescriptor.Applies_to) == 0 {
-		return &CustomError{What: "'applies_to' field not found" }
+		return errors.New("'applies_to' field not found")
 	}
 	if len(updateDescriptor.Bug_fixes) == 0 {
-		return &CustomError{What: "'bug_fixes' field not found. Add '\"N/A\": \"N/A\"' if there are no bug fixes" }
+		return errors.New("'bug_fixes' field not found. Add '\"N/A\": \"N/A\"' if there are no bug fixes")
 	}
 	if len(updateDescriptor.Description) == 0 {
-		return &CustomError{What: "'description' field not found" }
+		return errors.New("'description' field not found")
 	}
 	return nil
 }

@@ -23,6 +23,7 @@ import (
 	"github.com/wso2/wum-uc/constant"
 	"github.com/wso2/wum-uc/util"
 	"gopkg.in/yaml.v2"
+	"errors"
 )
 
 var (
@@ -173,7 +174,7 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 	//9) Copy resource files (update-descriptor.yaml, etc)
 	resourceFiles := getResourceFiles()
 	err = copyResourceFiles(resourceFiles)
-	util.HandleError(err, &util.CustomError{What: "Error occurred while copying resource files."})
+	util.HandleError(err, errors.New("Error occurred while copying resource files."))
 
 	//Save the update-descriptor with the updated, newly added files to the temp directory
 	data, err := marshalUpdateDescriptor(updateDescriptor)
@@ -313,7 +314,7 @@ func getDiff(updateLocationMap, distributionLocationMap *FileLocationInfo, inspe
 						"\n\tLocation in update: " + updateFilePath + filename +
 						"\n\tLocation in dist  : CARBON_HOME" + strings.TrimPrefix(distributionFilepath, distributionRoot) + filename +
 						"\nIt is possible that the old file was copied to the update location instead of the new file."
-					return nil, &util.CustomError{What: message }
+					return nil, errors.New(message)
 				} else if updateFileInfo.isDir != info.isDir {
 					//Has same type, but different types. Ignore these matches
 					continue
@@ -338,7 +339,7 @@ func getUpdateFilePathAndInfo(updateFileLocationInfo *LocationInfo) (string, *In
 	//Check for duplicate filename. A File and A Directory in the root level of the update directory might have same name(it is highly unlikely). But this is not possible in Ubuntu. Need to check on other OSs
 	if len(updateFileLocationInfo.filepathInfoMap) > 1 {
 		logger.Debug(updateFileLocationInfo.filepathInfoMap)
-		return "", nil, &util.CustomError{What: "Duplicate files found in the update directory. Possible reason for this error is that there are a file and a directory with the same name."}
+		return "", nil, errors.New("Duplicate files found in the update directory. Possible reason for this error is that there are a file and a directory with the same name.")
 	}
 	var updateFilepath string
 	var locationInfo Info
@@ -652,7 +653,7 @@ func ConstructBundleName(filename string) string {
 func getSingleLocationFromMap(locationMap map[string]bool) (string, bool, error) {
 	//Can only have single entry
 	if len(locationMap) > 1 {
-		return "", false, &util.CustomError{What: "Multiple matches found."}
+		return "", false, errors.New("Multiple matches found.")
 	}
 	var location string
 	var isDir bool
@@ -764,7 +765,7 @@ func readDirectoryStructure(root string, locationMap *FileLocationInfo, ignoredF
 				//	newFileName := strings.Replace(fileInfo.Name(), "_", "-", 1)
 				//	logger.Debug("[PLUGIN] New Name:", newFileName)
 				//	if index := strings.Index(newFileName, "_"); index != -1 {
-				//		return &util.CustomError{What: fileInfo.Name() + " is in " + constant.PLUGINS_DIRECTORY + ". But it has multiple _ in its name. Only one _ is expected." }
+				//		return errors.New(fileInfo.Name() + " is in " + constant.PLUGINS_DIRECTORY + ". But it has multiple _ in its name. Only one _ is expected." )
 				//	}
 				//	locationMap.Add(newFileName, parentDirectory, fileInfo.IsDir(), md5)
 				//}

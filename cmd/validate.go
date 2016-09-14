@@ -16,6 +16,7 @@ import (
 	"github.com/wso2/wum-uc/util"
 	"github.com/wso2/wum-uc/constant"
 	"gopkg.in/yaml.v2"
+	"errors"
 )
 
 var (
@@ -109,7 +110,7 @@ func compare(updateFileMap, distributionFileMap map[string]bool, updateDescripto
 		if !found {
 			isInAddedFiles := util.IsStringIsInSlice(filePath, updateDescriptor.File_changes.Added_files)
 			if !isInAddedFiles {
-				return &util.CustomError{What: "File not found in the distribution: '" + filePath + "'. If this is a new file, add an entry to the 'added_files' sections in the '" + constant.UPDATE_DESCRIPTOR_FILE + "' file" }
+				return errors.New("File not found in the distribution: '" + filePath + "'. If this is a new file, add an entry to the 'added_files' sections in the '" + constant.UPDATE_DESCRIPTOR_FILE + "' file")
 			} else {
 				logger.Debug("'" + filePath + "' found in added files.")
 			}
@@ -145,7 +146,7 @@ func readUpdateZip(filename string) (map[string]bool, *util.UpdateDescriptor, er
 				prefix := filepath.Join(updateName, constant.CARBON_HOME)
 				hasPrefix := strings.HasPrefix(file.Name, prefix)
 				if !hasPrefix {
-					return nil, nil, &util.CustomError{What: "Unknown directory found: '" + file.Name + "'" }
+					return nil, nil, errors.New("Unknown directory found: '" + file.Name + "'")
 				}
 			}
 		} else {
@@ -166,7 +167,7 @@ func readUpdateZip(filename string) (map[string]bool, *util.UpdateDescriptor, er
 				//check
 				err = util.ValidateUpdateDescriptor(&updateDescriptor)
 				if err != nil {
-					return nil, nil, &util.CustomError{What: "'" + constant.UPDATE_DESCRIPTOR_FILE + "' is invalid. " + err.Error() }
+					return nil, nil, errors.New("'" + constant.UPDATE_DESCRIPTOR_FILE + "' is invalid. " + err.Error())
 				}
 			case constant.LICENSE_FILE:
 				data, err := validateFile(file, constant.LICENSE_FILE, fullPath, updateName)
@@ -192,7 +193,7 @@ func readUpdateZip(filename string) (map[string]bool, *util.UpdateDescriptor, er
 				prefix := filepath.Join(updateName, constant.CARBON_HOME)
 				hasPrefix := strings.HasPrefix(file.Name, prefix)
 				if !hasPrefix {
-					return nil, nil, &util.CustomError{What: "Unknown file found: '" + file.Name + "'" }
+					return nil, nil, errors.New("Unknown file found: '" + file.Name + "'")
 				}
 				relativePath := strings.TrimPrefix(file.Name, prefix + string(os.PathSeparator))
 				fileMap[relativePath] = false
@@ -210,7 +211,7 @@ func readUpdateZip(filename string) (map[string]bool, *util.UpdateDescriptor, er
 func validateFile(file *zip.File, fileName, fullPath, updateName string) ([]byte, error) {
 	if file.Name != fullPath {
 		parent := strings.TrimSuffix(file.Name, file.FileInfo().Name())
-		return nil, &util.CustomError{What: "'" + fileName + "' found at '" + parent + "'. It should be in the '" + updateName + "' directory" }
+		return nil, errors.New("'" + fileName + "' found at '" + parent + "'. It should be in the '" + updateName + "' directory")
 	}
 	zippedFile, err := file.Open()
 	if err != nil {

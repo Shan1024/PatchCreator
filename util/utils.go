@@ -41,10 +41,6 @@ type UpdateDescriptor struct {
 			 }
 }
 
-func HasJarExtension(path string) bool {
-	return strings.HasSuffix(path, ".jar")
-}
-
 func GetParentDirectory(filepath string) string {
 	parentDirectory := "./"
 	if lastIndex := strings.LastIndex(filepath, string(os.PathSeparator)); lastIndex > -1 {
@@ -128,21 +124,22 @@ func CreateDirectory(path string) error {
 }
 
 func IsYes(preference string) bool {
-	if strings.ToLower(preference) == "yes" || (len(preference) == 1 && strings.ToLower(preference) == "y" ) {
+	if strings.ToLower(preference) == constant.YES || (len(preference) == 1 && strings.ToLower(preference) == constant.Y ) {
 		return true
 	}
 	return false
 }
 
 func IsNo(preference string) bool {
-	if strings.ToLower(preference) == "no" || (len(preference) == 1 && strings.ToLower(preference) == "n" ) {
+	if strings.ToLower(preference) == constant.NO || (len(preference) == 1 && strings.ToLower(preference) == constant.N ) {
 		return true
 	}
 	return false
 }
 
 func IsReenter(preference string) bool {
-	if strings.ToLower(preference) == "reenter" || strings.ToLower(preference) == "re-enter" || (len(preference) == 1 && strings.ToLower(preference) == "r" ) {
+	if strings.ToLower(preference) == constant.REENTER || strings.ToLower(preference) == constant.RE_ENTER ||
+		(len(preference) == 1 && strings.ToLower(preference) == constant.R  ) {
 		return true
 	}
 	return false
@@ -200,7 +197,6 @@ func LoadUpdateDescriptor(filename, updateDirectoryPath string) (*UpdateDescript
 	return &updateDescriptor, nil
 }
 
-//todo: change error to
 func ValidateUpdateDescriptor(updateDescriptor *UpdateDescriptor) error {
 	if len(updateDescriptor.Update_number) == 0 {
 		return &CustomError{What: "'update_number' field not found" }
@@ -409,6 +405,6 @@ func PrintInBold(args ...interface{}) {
 func PrintWhatsNext(args ...interface{}) {
 	color.Set(color.Bold)
 	fmt.Println("\nWhat's next?")
-	fmt.Println(append([]interface{}{"\t"}, args...)...)
 	color.Unset()
+	fmt.Println(append([]interface{}{"\t"}, args...)...)
 }

@@ -36,4 +36,12 @@ const (
 	UPDATE_NUMBER_REGEX = "^\\d{4}$"
 	KERNEL_VERSION_REGEX = "^\\d+\\.\\d+\\.\\d+$"
 	FILENAME_REGEX = "^WSO2-CARBON-UPDATE-\\d+\\.\\d+\\.\\d+-\\d{4}.zip$"
+
+	YES = "yes"
+	Y = "y"
+	NO = "no"
+	N = "n"
+	REENTER = "reenter"
+	RE_ENTER = "re-enter"
+	R = "r"
 )

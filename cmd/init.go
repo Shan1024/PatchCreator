@@ -17,9 +17,11 @@ import (
 
 var (
 	initCmdUse = "init"
-	initCmdShortDesc = "A brief description of your command"
-	initCmdLongDesc = `A longer description that spans multiple lines and likely contains examples
-	and usage of using your command.`;
+	initCmdShortDesc = "Generate '" + constant.UPDATE_DESCRIPTOR_FILE + "' file template"
+	initCmdLongDesc = dedent.Dedent(`
+		This command will generate the 'update-descriptor.yaml' file. If the
+		user does not specify a location, it will generate the template in
+		the current working directory.`)
 
 	initCmdExample = dedent.Dedent(`update_number: 0001
 platform_version: 4.4.0
@@ -38,7 +40,7 @@ file_changes:
   removed_files: []
   modified_files: []`)
 
-	isSample bool
+	isPrintSampleSelected bool
 )
 
 // initCmd represents the validate command
@@ -51,13 +53,13 @@ var initCmd = &cobra.Command{
 
 func init() {
 	RootCmd.AddCommand(initCmd)
-	initCmd.Flags().BoolVarP(&isSample, "sample", "s", false, "View sample file")
+	initCmd.Flags().BoolVarP(&isPrintSampleSelected, "sample", "s", false, "Show sample file")
 }
 
 func initializeInitCommand(cmd *cobra.Command, args []string) {
 	switch len(args) {
 	case 0:
-		if isSample {
+		if isPrintSampleSelected {
 			fmt.Println(initCmdExample)
 		} else {
 			initCurrentDirectory()
@@ -65,7 +67,7 @@ func initializeInitCommand(cmd *cobra.Command, args []string) {
 	case 1:
 		initDirectory(args[0])
 	default:
-		util.PrintErrorAndExit("Invalid number of argumants. Run with --help for more details about the argumants")
+		util.PrintErrorAndExit("Invalid number of argumants. Run 'wum-uc init --help' to view help.")
 	}
 }
 

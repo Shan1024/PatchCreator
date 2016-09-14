@@ -4,6 +4,7 @@ package cmd
 
 import (
 	"archive/zip"
+	"errors"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -16,15 +17,14 @@ import (
 	"github.com/wso2/wum-uc/util"
 	"github.com/wso2/wum-uc/constant"
 	"gopkg.in/yaml.v2"
-	"errors"
 )
 
 var (
 	validateCmdUse = "validate <update_loc> <dist_loc>"
-	validateCmdShortDesc = "A brief description of your command"
+	validateCmdShortDesc = "Validate update zip"
 	validateCmdLongDesc = dedent.Dedent(`
-		A longer description that spans multiple lines and likely contains
-		examples and usage of using your command.`)
+		This command will validate the given update zip. Directory
+		structure will be matched against the given distribution.`)
 )
 
 // validateCmd represents the validate command
@@ -243,6 +243,7 @@ func readDistributionZip(filename string) (map[string]bool, error) {
 	productName := viper.GetString(constant.PRODUCT_NAME)
 	// Iterate through each file/dir found in
 	for _, file := range zipReader.Reader.File {
+		logger.Trace(file.Name)
 		relativePath := strings.TrimPrefix(file.Name, productName + string(os.PathSeparator))
 		if !file.FileInfo().IsDir() {
 			fileMap[relativePath] = false

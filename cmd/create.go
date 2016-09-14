@@ -3,6 +3,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -23,15 +24,16 @@ import (
 	"github.com/wso2/wum-uc/constant"
 	"github.com/wso2/wum-uc/util"
 	"gopkg.in/yaml.v2"
-	"errors"
 )
 
 var (
 	createCmdUse = "create <update_dir> <dist_loc>"
-	createCmdShortDesc = "A brief description of your command"
+	createCmdShortDesc = "Create a new update"
 	createCmdLongDesc = dedent.Dedent(`
-		A longer description that spans multiple lines and likely contains
-		examples and usage of using your command.`)
+		This command will create a new update zip file from the files in the
+		given directory. To generate the folder structure, it requires the
+		product distribution also. This distribution can either be the zip
+		file or the extracted directory.`)
 )
 
 //createCmd represents the create command

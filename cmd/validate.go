@@ -69,7 +69,7 @@ func startValidation(updateFilePath, distributionLocation string) {
 		util.PrintErrorAndExit("Update file '" + updateFilePath + "' does not exist.")
 	}
 
-	exists, err = util.IsDistributionExists(distributionLocation)
+	exists, err = util.IsFileExists(distributionLocation)
 	util.HandleError(err, "Error occurred while checking '" + distributionLocation + "'")
 	if !exists {
 		util.PrintErrorAndExit("Distribution does not exist at ", distributionLocation)

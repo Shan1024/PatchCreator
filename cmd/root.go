@@ -9,6 +9,9 @@ import (
 	"github.com/ian-kent/go-log/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"github.com/ian-kent/go-log/layout"
+	"github.com/ian-kent/go-log/levels"
+	"github.com/wso2/wum-uc/constant"
 )
 
 var (
@@ -119,4 +122,24 @@ func initConfig() {
 		fmt.Println("Using config file:", viper.ConfigFileUsed())
 	}
 }
+
+//This function will set the log level
+func setLogLevel() {
+	//Setting default time format. This will be used in loggers. Otherwise complete date and time will be printed
+	layout.DefaultTimeLayout = "15:04:05"
+	//Setting new STDOUT layout to logger
+	logger.Appender().SetLayout(layout.Pattern("[%d] [%p] %m"))
+	//Set the log level. If the log level is not given, set the log level to default level
+	if isDebugLogsEnabled {
+		logger.SetLevel(levels.DEBUG)
+		logger.Debug("Debug logs enabled")
+	} else if isTraceLogsEnabled {
+		logger.SetLevel(levels.TRACE)
+		logger.Trace("Trace logs enabled")
+	} else {
+		logger.SetLevel(constant.DEFAULT_LOG_LEVEL)
+	}
+	logger.Debug("[LOG LEVEL]", logger.Level())
+}
+
 

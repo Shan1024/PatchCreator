@@ -76,13 +76,13 @@ func GetUpdateName(updateDescriptor *UpdateDescriptor, updateNamePrefix string) 
 	return updateName
 }
 
-//This checks whether the distribution directory/zip exists
-func IsDistributionExists(distributionPath string) (bool, error) {
-	if strings.HasSuffix(distributionPath, ".zip") {
-		return IsFileExists(distributionPath)
-	}
-	return IsDirectoryExists(distributionPath)
-}
+////This checks whether the distribution directory/zip exists
+//func IsDistributionExists(distributionPath string) (bool, error) {
+//	if strings.HasSuffix(distributionPath, ".zip") {
+//		return IsFileExists(distributionPath)
+//	}
+//	return IsDirectoryExists(distributionPath)
+//}
 
 func CleanUpDirectory(path string) {
 	logger.Debug("Deleting temporary files:", path)

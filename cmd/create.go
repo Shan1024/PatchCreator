@@ -4,7 +4,6 @@ package cmd
 
 import (
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"os/signal"
@@ -24,6 +23,7 @@ import (
 	"github.com/wso2/wum-uc/constant"
 	"github.com/wso2/wum-uc/util"
 	"gopkg.in/yaml.v2"
+	"fmt"
 )
 
 var (
@@ -65,7 +65,7 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 
 	//set debug level
 	setLogLevel()
-	logger.Debug("<create> command called")
+	logger.Debug("[create] command called")
 
 	//Flow - First check whether the given locations exists and required files exists. Then start processing.
 	//If one step fails, print error message and exit.
@@ -162,12 +162,12 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 		err = readDirectoryStructure(distributionPath, &distributionLocationInfo, nil, false)
 		util.HandleError(err, "")
 	}
-	logger.Debug("distributionLocationInfo:", distributionLocationInfo)
+	logger.Trace("distributionLocationInfo:", distributionLocationInfo)
 
 	//7) Find matches
 	diff, err := getDiff(&updateLocationInfo, &distributionLocationInfo, true)
 	util.HandleError(err, "Error occurred while getting the diff.")
-	logger.Debug("diff: ", diff)
+	logger.Trace("diff: ", diff)
 
 	//8) Copy files to the temp
 	err = populateZipDirectoryStructure(diff, updateDescriptor)
@@ -294,12 +294,12 @@ func getDiff(updateLocationMap, distributionLocationMap *FileLocationInfo, inspe
 	distributionRoot := viper.GetString(constant.DISTRIBUTION_ROOT)
 	logger.Debug("updateLocationMap:", updateLocationMap)
 	for filename, updateFileLocationInfo := range updateLocationMap.nameLocationInfoMap {
-		logger.Trace("[UPDATE FILE INFO]:", filename, ":", updateFileLocationInfo)
+		logger.Debug("[UPDATE FILE INFO]:", filename, ":", updateFileLocationInfo)
 		//todo: add inspectRootOnly value support to get complete diff of two directories
 		updateFilePath, updateFileInfo, err := getUpdateFilePathAndInfo(&updateFileLocationInfo)
 		util.HandleError(err, "Error occurred while getting location of a file in update directory.")
-		logger.Trace("[UPDATE FILE INFO] updateFilePath:", updateFilePath)
-		logger.Trace("[UPDATE FILE INFO] updateFileInfo:", updateFileInfo)
+		logger.Debug("[UPDATE FILE INFO] updateFilePath:", updateFilePath)
+		logger.Debug("[UPDATE FILE INFO] updateFileInfo:", updateFileInfo)
 		distributionLocationInfo, foundMatchInDistribution := distributionLocationMap.nameLocationInfoMap[filename]
 		locationData := LocationData{
 			locationsInUpdate:make(map[string]bool),
@@ -313,10 +313,12 @@ func getDiff(updateLocationMap, distributionLocationMap *FileLocationInfo, inspe
 				logger.Trace("[DIST FILE INFO] filepath:", distributionFilepath, ",Info:", info)
 				if !updateFileInfo.isDir && !info.isDir && updateFileInfo.md5 == info.md5 {
 					message := filename + " found in both update, distribution locations. But have the same md5 hash(" + info.md5 + ")" +
-						"\n\tLocation in update: " + updateFilePath + filename +
-						"\n\tLocation in dist  : CARBON_HOME" + strings.TrimPrefix(distributionFilepath, distributionRoot) + filename +
+						"\n\t\tLocation in update: " + updateFilePath + string(os.PathSeparator) + filename +
+						"\n\t\tLocation in dist  : CARBON_HOME" + strings.TrimPrefix(distributionFilepath, distributionRoot) + string(os.PathSeparator) + filename +
 						"\nIt is possible that the old file was copied to the update location instead of the new file."
-					return nil, errors.New(message)
+					util.PrintWarning(message)
+					locationData.locationsInDistribution[distributionFilepath] = info.isDir
+					//return nil, errors.New(message)
 				} else if updateFileInfo.isDir != info.isDir {
 					//Has same type, but different types. Ignore these matches
 					continue
@@ -513,6 +515,8 @@ func handleNewFile(filename string, locationData *LocationData, updateDescriptor
 		exists, _ := util.IsDirectoryExists(fullPath)
 		if exists {
 			err = copyFile(filename, isDir, locationInUpdate, relativeLocationInDistribution)
+			newFile := strings.TrimPrefix(filepath.Join(relativeLocationInDistribution, filename), constant.PATH_SEPARATOR)
+			updateDescriptor.File_changes.Added_files = append(updateDescriptor.File_changes.Added_files, newFile)
 			util.HandleError(err)
 			break
 		} else {
@@ -552,27 +556,29 @@ func updateUpdateDescriptor(source, destination string, updateDescriptor *util.U
 	sourceInfo := FileLocationInfo{
 		nameLocationInfoMap: make(map[string]LocationInfo),
 	}
-	logger.Debug("\nsource:", source)
+	logger.Debug("\n\n\nSOURCE:", source)
 	err := readDirectoryStructure(source, &sourceInfo, nil, true)
 	util.HandleError(err, "")
-	logger.Trace("\nsourceInfo:", sourceInfo)
+	logger.Debug("\nsourceInfo:", sourceInfo)
 
 	destinationInfo := FileLocationInfo{
 		nameLocationInfoMap: make(map[string]LocationInfo),
 	}
 
-	logger.Debug("\ndestination:", destination)
+	logger.Debug("\n\ndestination:", destination)
 	err = readDirectoryStructure(destination, &destinationInfo, nil, true)
 	util.HandleError(err, "")
-	logger.Trace("\ndestinationInfo:", destinationInfo)
+	logger.Debug("\ndestinationInfo:", destinationInfo)
 
 	diff, err := getDiff(&sourceInfo, &destinationInfo, true)
 	util.HandleError(err, "Error occurred while getting the diff.")
 
-	logger.Debug("\ndiff:", diff)
+	//fmt.Println("\n-------------------------------\n\ndiff:", diff)
 	for filename, locationData := range diff.files {
+		//fmt.Println("filename:", filename, "; locationData:", locationData)
 		switch len(locationData.locationsInDistribution) {
 		case 0:
+			fmt.Println("0 found:")
 			// new file
 			distributionRoot := viper.GetString(constant.DISTRIBUTION_ROOT)
 			relativePathInDistribution := strings.TrimPrefix(filepath.Join(destination, filename), distributionRoot)
@@ -580,15 +586,26 @@ func updateUpdateDescriptor(source, destination string, updateDescriptor *util.U
 			fmt.Println("XX NEW: ", relativePathInDistribution)
 			updateDescriptor.File_changes.Added_files = append(updateDescriptor.File_changes.Added_files, relativePathInDistribution)
 		default:
+			fmt.Println("> 0 found:")
 			//modified file
 			locationInDistribution, isDir := getLocationFromMap(locationData.locationsInDistribution)
+			//fmt.Println("locationInDistribution:", locationInDistribution)
+
 			if !isDir {
 				distributionRoot := viper.GetString(constant.DISTRIBUTION_ROOT)
 				relativePathInDistribution := strings.TrimPrefix(filepath.Join(locationInDistribution, filename), distributionRoot)
 				relativePathInDistribution = strings.TrimPrefix(relativePathInDistribution, string(os.PathSeparator))
-				fmt.Println("XX Modified: ", relativePathInDistribution)
-				updateDescriptor.File_changes.Modified_files = append(updateDescriptor.File_changes.Modified_files, relativePathInDistribution)
+				if len(locationInDistribution) > 0 {
+					//fmt.Println("XX Modified: ", relativePathInDistribution)
+					updateDescriptor.File_changes.Modified_files = append(updateDescriptor.File_changes.Modified_files, relativePathInDistribution)
+				} else {
+					//fmt.Println("############################## XX Added: ", relativePathInDistribution)
+					updateDescriptor.File_changes.Added_files = append(updateDescriptor.File_changes.Added_files, relativePathInDistribution)
+				}
 			} else {
+				//fmt.Println("***********************************************************************")
+				//fmt.Println("***********************************************************************")
+				//fmt.Println("***********************************************************************")
 				newLocationData := diff.files[filename]
 				newSource, sourceIsDir, err := getSingleLocationFromMap(newLocationData.locationsInUpdate)
 				util.HandleError(err)
@@ -600,6 +617,32 @@ func updateUpdateDescriptor(source, destination string, updateDescriptor *util.U
 			}
 		}
 	}
+
+	for filename, locationData := range sourceInfo.nameLocationInfoMap {
+		fmt.Println("Checking:", filename)
+		locationInDistribution, info, err := getUpdateFilePathAndInfo(&locationData)
+		util.HandleError(err)
+
+		if info.isDir {
+			//todo
+			fmt.Println("isDir")
+		} else {
+			fmt.Println("!isDir")
+			distributionRoot := viper.GetString(constant.DISTRIBUTION_ROOT)
+			relativePathInDistribution := strings.TrimPrefix(filepath.Join(locationInDistribution, filename), distributionRoot)
+			relativePathInDistribution = strings.TrimPrefix(relativePathInDistribution, string(os.PathSeparator))
+
+			_, isPresent := diff.files[filename]
+
+			if !isPresent {
+				fmt.Println("Not present")
+				updateDescriptor.File_changes.Added_files = append(updateDescriptor.File_changes.Added_files, relativePathInDistribution)
+			}
+		}
+
+	}
+
+	fmt.Println("\n++++++++++++++++++++++++++++++++++\n\n")
 }
 
 //This function will copy the file/directory from update to temp location
@@ -711,19 +754,19 @@ func readDirectoryStructure(root string, locationMap *FileLocationInfo, ignoredF
 					continue
 				}
 			}
-			logger.Debug("filename: ", file.Name())
+			logger.Trace("filename: ", file.Name())
 			absolutePath := filepath.Join(root, file.Name())
 			if !file.IsDir() {
-				logger.Debug("[MD5] Calculating MD5")
+				logger.Trace("[MD5] Calculating MD5")
 				//If it is a file, calculate md5 sum
 				md5, err := util.GetMD5(absolutePath)
 				if err != nil {
 					return err
 				}
-				logger.Debug(absolutePath + " : " + file.Name() + ": " + md5)
+				logger.Trace(absolutePath + " : " + file.Name() + ": " + md5)
 				locationMap.Add(file.Name(), root, file.IsDir(), md5)
 			} else {
-				logger.Debug(absolutePath + " : " + file.Name())
+				logger.Trace(absolutePath + " : " + file.Name())
 				locationMap.Add(file.Name(), root, file.IsDir(), "")
 			}
 		}
@@ -732,7 +775,7 @@ func readDirectoryStructure(root string, locationMap *FileLocationInfo, ignoredF
 		//Remove the / or \ at the end of the path if it exists/ Otherwise the root directory wont be ignored
 		//root = strings.TrimSuffix(root, string(os.PathSeparator))
 		return filepath.Walk(root, func(absolutePath string, fileInfo os.FileInfo, err error) error {
-			logger.Debug("[WALK] %s", absolutePath, ";", fileInfo.IsDir())
+			logger.Trace("[WALK] %s", absolutePath, ";", fileInfo.IsDir())
 			if err != nil {
 				return err
 			}
@@ -751,13 +794,13 @@ func readDirectoryStructure(root string, locationMap *FileLocationInfo, ignoredF
 			parentDirectory := strings.TrimSuffix(absolutePath, fileInfo.Name())
 			//Check for file / directory
 			if !fileInfo.IsDir() {
-				logger.Debug("[MD5] Calculating MD5")
+				logger.Trace("[MD5] Calculating MD5")
 				//If it is a file, calculate md5 sum
 				md5, err := util.GetMD5(absolutePath)
 				if err != nil {
 					return err
 				}
-				logger.Debug(absolutePath + " : " + fileInfo.Name() + ": " + md5)
+				logger.Trace(absolutePath + " : " + fileInfo.Name() + ": " + md5)
 				locationMap.Add(fileInfo.Name(), parentDirectory, fileInfo.IsDir(), md5)
 				//
 				//fullPath := filepath.Join(root, constant.PLUGINS_DIRECTORY, fileInfo.Name())
@@ -772,7 +815,7 @@ func readDirectoryStructure(root string, locationMap *FileLocationInfo, ignoredF
 				//	locationMap.Add(newFileName, parentDirectory, fileInfo.IsDir(), md5)
 				//}
 			} else {
-				logger.Debug(absolutePath + " : " + fileInfo.Name())
+				logger.Trace(absolutePath + " : " + fileInfo.Name())
 				locationMap.Add(fileInfo.Name(), parentDirectory, fileInfo.IsDir(), "")
 			}
 			return nil

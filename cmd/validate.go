@@ -52,7 +52,7 @@ func initializeValidateCommand(cmd *cobra.Command, args []string) {
 func startValidation(updateFilePath, distributionLocation string) {
 
 	setLogLevel()
-	logger.Debug("validate command called")
+	logger.Debug("[validate] command called")
 
 	updateFileMap := make(map[string]bool)
 	distributionFileMap := make(map[string]bool)
@@ -69,7 +69,10 @@ func startValidation(updateFilePath, distributionLocation string) {
 		util.PrintErrorAndExit("Update file '" + updateFilePath + "' does not exist.")
 	}
 
-	exists, err = util.IsDistributionExists(distributionLocation)
+	if !strings.HasSuffix(distributionLocation, ".zip") {
+		util.PrintErrorAndExit("Entered distribution location does not have a 'zip' extention.")
+	}
+	exists, err = util.IsFileExists(distributionLocation)
 	util.HandleError(err, "Error occurred while checking '" + distributionLocation + "'")
 	if !exists {
 		util.PrintErrorAndExit("Distribution does not exist at ", distributionLocation)

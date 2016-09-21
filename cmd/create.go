@@ -21,6 +21,12 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+type Data struct {
+	name         string
+	isDir        bool
+	relativePath string
+	md5          string
+}
 type Node struct {
 	name             string
 	isDir            bool
@@ -133,8 +139,17 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 	//updateLocationInfo := FileLocationInfo{
 	//	nameLocationInfoMap: make(map[string]LocationInfo),
 	//}
-	err = readDirectory(updateDirectoryPath, ignoredFiles, nil, nil)
+	fileMap, directoryList, fileList, err := readDirectory(updateDirectoryPath, ignoredFiles)
 	util.HandleError(err, "")
+
+	fmt.Println("++++++++++++++++++++++++++++++++++++++")
+	fmt.Println("fileMap:", fileMap)
+	fmt.Println("++++++++++++++++++++++++++++++++++++++")
+	fmt.Println("directoryList:", directoryList)
+	fmt.Println("++++++++++++++++++++++++++++++++++++++")
+	fmt.Println("fileList:", fileList)
+	fmt.Println("++++++++++++++++++++++++++++++++++++++")
+
 	//err = readDirectoryStructure(updateDirectoryPath, &updateLocationInfo, ignoredFiles, true)
 	//logger.Debug("updateLocationInfo:", updateLocationInfo)
 
@@ -144,11 +159,17 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 	//}
 	rootNode := CreateNewNode()
 	if !strings.HasSuffix(distributionPath, ".zip") {
-
+		fmt.Println("Entered path is not a zip file")
 	}
+
+	paths := strings.Split(distributionPath, string(os.PathSeparator))
+	distributionName := strings.TrimSuffix(paths[len(paths) - 1], ".zip")
+	viper.Set(constant.PRODUCT_NAME, distributionName)
+
+	fmt.Println("Reading zip")
 	rootNode, err = readZip(distributionPath)
 	util.HandleError(err)
-
+	fmt.Println("Reading zip finished")
 	//distributionRoot := GetDistributionRootDirectory(distributionPath)
 	//logger.Debug("distributionRoot: %s", distributionRoot)
 	//viper.Set(constant.DISTRIBUTION_ROOT, distributionRoot)
@@ -185,7 +206,30 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 	//}
 	//logger.Debug("distributionLocationInfo:", distributionLocationInfo)
 
-	rootNode.PrintNode()
+	//rootNode.PrintNode()
+	fmt.Println("-------------------------------------")
+	for name, node := range rootNode.childNodes {
+		fmt.Println(name, ":", node)
+		fmt.Println("-------------------------------------")
+	}
+
+	fmt.Println("\n\nChecking Files:")
+	matches := make(map[string]*Node)
+	for file := range fileList {
+		fmt.Println("FileName:", file)
+		Find(&rootNode, file, false, matches)
+		fmt.Println("matches:", matches)
+	}
+
+	fmt.Println("=========================================")
+	fmt.Println("\n\nChecking Directories:")
+	matches = make(map[string]*Node)
+	for directory := range directoryList {
+		fmt.Println("DirectoryName:", directory)
+		Find(&rootNode, directory, true, matches)
+		fmt.Println("matches:", matches)
+	}
+
 	////7) Find matches
 	//diff, err := getDiff(&updateLocationInfo, &distributionLocationInfo, true)
 	//util.HandleError(err, "Error occurred while getting the diff.")
@@ -233,7 +277,11 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 	//}
 }
 
-func readDirectory(root string, ignoredFiles map[string]bool, filesList *[]string, directoriesList *[]string) error {
+func readDirectory(root string, ignoredFiles map[string]bool) (map[string]Data, map[string]bool, map[string]bool, error) {
+
+	fileMap := make(map[string]Data)
+	rootLevelDirectoryList := make(map[string]bool, 1)
+	rootLevelFilesList := make(map[string]bool, 1)
 	//files, _ := ioutil.ReadDir(root)
 	//for _, file := range files {
 	//	if ignoredFiles != nil {
@@ -259,15 +307,15 @@ func readDirectory(root string, ignoredFiles map[string]bool, filesList *[]strin
 	//}
 	//return nil
 
-	return filepath.Walk(root, func(absolutePath string, fileInfo os.FileInfo, err error) error {
+	filepath.Walk(root, func(absolutePath string, fileInfo os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
-		fmt.Println("[WALK] ", absolutePath, ";", fileInfo.IsDir())
 		//Ignore root directory
 		if root == absolutePath {
 			return nil
 		}
+		fmt.Println("[WALK] ", absolutePath, ";", fileInfo.IsDir())
 		//check current file in ignored files map. This is useful to ignore update-descriptor.yaml, etc in update directory
 		if ignoredFiles != nil {
 			_, found := ignoredFiles[fileInfo.Name()]
@@ -278,14 +326,39 @@ func readDirectory(root string, ignoredFiles map[string]bool, filesList *[]strin
 		//get the parent directory path
 		//parentDirectory := strings.TrimSuffix(absolutePath, fileInfo.Name())
 		//Check for file / directory
-		if !fileInfo.IsDir() {
+
+		relativePath := strings.TrimPrefix(absolutePath, root + "/")
+		info := Data{
+			name: fileInfo.Name(),
+			relativePath: relativePath,
+		}
+
+		if fileInfo.IsDir() {
+
+			logger.Debug(absolutePath + " : " + fileInfo.Name())
+			//locationMap.Add(fileInfo.Name(), parentDirectory, fileInfo.IsDir(), "")
+
+			info.isDir = true
+
+			if filepath.Join(root, fileInfo.Name()) == absolutePath {
+				rootLevelDirectoryList[fileInfo.Name()] = true
+			}
+		} else {
+
+			if filepath.Join(root, fileInfo.Name()) == absolutePath {
+				rootLevelFilesList[fileInfo.Name()] = false
+			}
+
 			logger.Debug("[MD5] Calculating MD5")
 			//If it is a file, calculate md5 sum
-			md5, err := util.GetMD5(absolutePath)
+			md5Sum, err := util.GetMD5(absolutePath)
 			if err != nil {
 				return err
 			}
-			logger.Debug(absolutePath + " : " + fileInfo.Name() + ": " + md5)
+			logger.Debug(absolutePath + " : " + fileInfo.Name() + ": " + md5Sum)
+
+			info.md5 = md5Sum
+			info.isDir = false
 			//locationMap.Add(fileInfo.Name(), parentDirectory, fileInfo.IsDir(), md5)
 			//
 			//fullPath := filepath.Join(root, constant.PLUGINS_DIRECTORY, fileInfo.Name())
@@ -299,14 +372,15 @@ func readDirectory(root string, ignoredFiles map[string]bool, filesList *[]strin
 			//	}
 			//	locationMap.Add(newFileName, parentDirectory, fileInfo.IsDir(), md5)
 			//}
-		} else {
-			logger.Debug(absolutePath + " : " + fileInfo.Name())
-			//locationMap.Add(fileInfo.Name(), parentDirectory, fileInfo.IsDir(), "")
+
 		}
+
+		fileMap[relativePath] = info
 		return nil
 	})
-
+	return fileMap, rootLevelDirectoryList, rootLevelFilesList, nil
 }
+
 func readZip(filename string) (Node, error) {
 	rootNode := CreateNewNode()
 	fileMap := make(map[string]bool)
@@ -318,6 +392,7 @@ func readZip(filename string) (Node, error) {
 	defer zipReader.Close()
 
 	productName := viper.GetString(constant.PRODUCT_NAME)
+	fmt.Println("productName:", productName)
 	// Iterate through each file/dir found in
 	for _, file := range zipReader.Reader.File {
 
@@ -328,12 +403,13 @@ func readZip(filename string) (Node, error) {
 		data, err := ioutil.ReadAll(zippedFile)
 		zippedFile.Close()
 
-		hasher := md5.New()
-		hasher.Write(data)
-		md5Hash := hex.EncodeToString(hasher.Sum(nil))
+		hash := md5.New()
+		hash.Write(data)
+		md5Hash := hex.EncodeToString(hash.Sum(nil))
 
 		//fmt.Println(file.Name)
 		relativePath := strings.TrimPrefix(file.Name, productName + "/")
+		//fmt.Println(relativePath,"\n")
 		AddToRootNode(&rootNode, strings.Split(relativePath, "/"), file.FileInfo().IsDir(), md5Hash)
 		if !file.FileInfo().IsDir() {
 			fileMap[relativePath] = false
@@ -356,7 +432,11 @@ func AddToRootNode(root *Node, path []string, isDir bool, md5Hash string) *Node 
 		newNode.name = path[0]
 		newNode.isDir = isDir
 		newNode.md5Hash = md5Hash
-		newNode.relativeLocation = root.relativeLocation + "/" + path[0]
+		if len(root.relativeLocation) == 0 {
+			newNode.relativeLocation = path[0]
+		} else {
+			newNode.relativeLocation = root.relativeLocation + "/" + path[0]
+		}
 		newNode.parent = root
 		root.childNodes[path[0]] = &newNode
 
@@ -371,7 +451,11 @@ func AddToRootNode(root *Node, path []string, isDir bool, md5Hash string) *Node 
 			newNode.name = path[0]
 			newNode.isDir = isDir
 			newNode.md5Hash = md5Hash
-			newNode.relativeLocation = root.relativeLocation + "/" + path[0]
+			if len(root.relativeLocation) == 0 {
+				newNode.relativeLocation = path[0]
+			} else {
+				newNode.relativeLocation = root.relativeLocation + "/" + path[0]
+			}
 			newNode.parent = root
 			root.childNodes[path[0]] = &newNode
 		}
@@ -379,6 +463,48 @@ func AddToRootNode(root *Node, path []string, isDir bool, md5Hash string) *Node 
 	return root
 }
 
+//func FindPath(root *Node, path []string, isDir bool, matches map[string]*Node, searchAll bool) {
+//
+//	_, found := root.childNodes[path[0]]
+//
+//	if found {
+//
+//		if len(path) > 1 {
+//			//fmt.Println("end reached")
+//
+//			//newNode := CreateNewNode()
+//			//newNode.name = path[0]
+//			//newNode.isDir = isDir
+//			//newNode.md5Hash = md5Hash
+//			//newNode.relativeLocation = root.relativeLocation + "/" + path[0]
+//			//newNode.parent = root
+//			//root.childNodes[path[0]] = &newNode
+//
+//			Find(root, path[1:], isDir, matches, searchAll)
+//		} else {
+//			matches[root.relativeLocation] = root
+//			return
+//		}
+//	}
+//}
+
+func Find(root *Node, name string, isDir bool, matches map[string]*Node) {
+
+	childNode, found := root.childNodes[name]
+
+	if found {
+		if isDir == childNode.isDir {
+			matches[root.relativeLocation] = root
+			return
+		}
+	}
+
+	for _, childNode := range root.childNodes {
+		if childNode.isDir {
+			Find(childNode, name, isDir, matches)
+		}
+	}
+}
 
 //This will return a map of files which would be ignored when reading the update directory
 func getIgnoredFilesInUpdate() map[string]bool {

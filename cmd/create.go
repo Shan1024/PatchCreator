@@ -74,9 +74,12 @@ var isValidateSelected bool
 
 func init() {
 	RootCmd.AddCommand(createCmd)
-	createCmd.Flags().BoolVarP(&isDebugLogsEnabled, "debug", "d", false, "Enable debug logs")
-	createCmd.Flags().BoolVarP(&isTraceLogsEnabled, "trace", "t", false, "Enable trace logs")
+	createCmd.Flags().BoolP("debug", "d", false, "Enable debug logs")
+	viper.BindPFlag(constant.IS_DEBUG_ENABLED, createCmd.Flags().Lookup("debug"))
+	createCmd.Flags().BoolP("trace", "t", false, "Enable trace logs")
+	viper.BindPFlag(constant.IS_TRACE_ENABLED, createCmd.Flags().Lookup("trace"))
 	createCmd.Flags().BoolVarP(&isValidateSelected, "validate", "v", false, "Validate the content of the created update zip")
+	viper.BindPFlag("validate", createCmd.Flags().Lookup("validate"))
 }
 
 func initializeCreateCommand(cmd *cobra.Command, args []string) {

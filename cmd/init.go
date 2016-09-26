@@ -13,6 +13,7 @@ import (
 	"github.com/wso2/wum-uc/constant"
 	"github.com/wso2/wum-uc/util"
 	"gopkg.in/yaml.v2"
+	"github.com/spf13/viper"
 )
 
 var (
@@ -54,6 +55,8 @@ var initCmd = &cobra.Command{
 func init() {
 	RootCmd.AddCommand(initCmd)
 	initCmd.Flags().BoolVarP(&isPrintSampleSelected, "sample", "s", false, "Show sample file")
+	initCmd.Flags().BoolP("process", "p", false, "Process README.txt file")
+	viper.BindPFlag("ProcessReadMe", initCmd.Flags().Lookup("process"))
 }
 
 func initializeInitCommand(cmd *cobra.Command, args []string) {
@@ -79,6 +82,9 @@ func initCurrentDirectory() {
 func initDirectory(destination string) {
 	err := util.CreateDirectory(destination)
 	util.HandleError(err)
+
+	processReadMe := viper.GetBool("ProcessReadMe")
+	fmt.Println("processReadMe:", processReadMe)
 
 	updateDescriptorFile := filepath.Join(destination, constant.UPDATE_DESCRIPTOR_FILE)
 	updateDescriptor := util.UpdateDescriptor{}
@@ -107,4 +113,8 @@ func initDirectory(destination string) {
 	util.PrintInfo("'" + constant.UPDATE_DESCRIPTOR_FILE + "' has been successfully created.")
 
 	util.PrintWhatsNext("run 'wum-uc init --sample' to view sample file.")
+}
+
+func processReadMe() {
+
 }

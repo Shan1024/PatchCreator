@@ -72,9 +72,6 @@ func (d *Diff) Add(filename string, locationData LocationData) {
 var (
 	//Create the logger
 	logger = log.Logger()
-	//Variable to store command line flags
-	isDebugLogsEnabled bool
-	isTraceLogsEnabled bool
 )
 
 var cfgFile string
@@ -113,13 +110,19 @@ func initConfig() {
 		viper.SetConfigFile(cfgFile)
 	}
 
-	viper.SetConfigName(".wum-uc") // name of config file (without extension)
-	viper.AddConfigPath("$HOME")  // adding home directory as first search path
-	viper.AutomaticEnv()          // read in environment variables that match
+	viper.SetConfigName("config") // name of config file (without extension)
+	//viper.SetConfigType("yaml")
+	//viper.AddConfigPath("$HOME")  // adding home directory as first search path
+	viper.AddConfigPath(".")
+	viper.AddConfigPath("$HOME/work/src/github.com/wso2/wum-uc")
+	viper.AddConfigPath("$HOME/.wum-uc")
+	//viper.AutomaticEnv()
 
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err == nil {
 		fmt.Println("Using config file:", viper.ConfigFileUsed())
+	} else {
+		fmt.Println("Config file not found")
 	}
 }
 
@@ -130,6 +133,10 @@ func setLogLevel() {
 	//Setting new STDOUT layout to logger
 	logger.Appender().SetLayout(layout.Pattern("[%d] [%p] %m"))
 	//Set the log level. If the log level is not given, set the log level to default level
+
+	isDebugLogsEnabled := viper.GetBool(constant.IS_DEBUG_ENABLED)
+	isTraceLogsEnabled := viper.GetBool(constant.IS_TRACE_ENABLED)
+
 	if isDebugLogsEnabled {
 		logger.SetLevel(levels.DEBUG)
 		logger.Debug("Debug logs enabled")

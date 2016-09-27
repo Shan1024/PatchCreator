@@ -83,11 +83,13 @@ func initDirectory(destination string) {
 	err := util.CreateDirectory(destination)
 	util.HandleError(err)
 
-	processReadMe := viper.GetBool("ProcessReadMe")
-	fmt.Println("processReadMe:", processReadMe)
-
 	updateDescriptorFile := filepath.Join(destination, constant.UPDATE_DESCRIPTOR_FILE)
 	updateDescriptor := util.UpdateDescriptor{}
+
+	if viper.GetBool(constant.PROCESS_README) {
+		processReadMe(&updateDescriptor)
+	}
+
 	data, err := yaml.Marshal(&updateDescriptor)
 	dataString := string(data)
 	dataString = strings.Replace(dataString, "\"", "", -1)
@@ -115,6 +117,6 @@ func initDirectory(destination string) {
 	util.PrintWhatsNext("run 'wum-uc init --sample' to view sample file.")
 }
 
-func processReadMe() {
+func processReadMe(updateDescriptor *util.UpdateDescriptor) {
 
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/ian-kent/go-log/layout"
 	"github.com/ian-kent/go-log/levels"
 	"github.com/wso2/wum-uc/constant"
+	"github.com/wso2/wum-uc/util"
 )
 
 var (
@@ -110,11 +111,13 @@ func initConfig() {
 		viper.SetConfigFile(cfgFile)
 	}
 
+	setDefaultValues()
+
 	viper.SetConfigName("config") // name of config file (without extension)
 	//viper.SetConfigType("yaml")
 	//viper.AddConfigPath("$HOME")  // adding home directory as first search path
 	viper.AddConfigPath(".")
-	viper.AddConfigPath("$HOME/work/src/github.com/wso2/wum-uc")
+	//viper.AddConfigPath("$HOME/work/src/github.com/wso2/wum-uc")
 	viper.AddConfigPath("$HOME/.wum-uc")
 	//viper.AutomaticEnv()
 
@@ -124,6 +127,18 @@ func initConfig() {
 	} else {
 		fmt.Println("Config file not found")
 	}
+
+	fmt.Println("Config Values---------------------------")
+	fmt.Println(viper.GetString(constant.PROCESS_README))
+	fmt.Println(viper.GetString(constant.AUTO_VALIDATE))
+	fmt.Println(viper.GetStringMapString(constant.DEFAULT_VALUES))
+	fmt.Println(viper.GetString(constant.CHECK_MD5))
+	fmt.Println(viper.GetString(constant.UPDATE_REPOSITORY))
+	fmt.Println(viper.GetStringSlice(constant.RESOURCE_FILES + "." + constant.MANDATORY))
+	fmt.Println(viper.GetStringSlice(constant.RESOURCE_FILES + "." + constant.OPTIONAL))
+	fmt.Println(viper.GetStringSlice(constant.RESOURCE_FILES + "." + constant.SKIP))
+	fmt.Println("---------------------------------------")
+
 }
 
 //This function will set the log level
@@ -149,4 +164,17 @@ func setLogLevel() {
 	logger.Debug("[LOG LEVEL]", logger.Level())
 }
 
-
+func setDefaultValues() {
+	viper.SetDefault(constant.PROCESS_README, util.ProcessReadMe)
+	viper.SetDefault(constant.AUTO_VALIDATE, util.AutoValidate)
+	viper.SetDefault(constant.DEFAULT_VALUES, map[string]string{
+		constant.PLATFORM_NAME: util.PlatformName,
+		constant.PLATFORM_VERSION: util.PlatformVersion,
+		constant.BUG_FIXES: util.BugFixes,
+	})
+	viper.SetDefault(constant.CHECK_MD5, util.CheckMd5)
+	viper.SetDefault(constant.UPDATE_REPOSITORY, util.UpdateRepository)
+	viper.SetDefault(constant.RESOURCE_FILES + "." + constant.MANDATORY, util.Mandatory)
+	viper.SetDefault(constant.RESOURCE_FILES + "." + constant.OPTIONAL, util.Optional)
+	viper.SetDefault(constant.RESOURCE_FILES + "." + constant.SKIP, util.Skip)
+}

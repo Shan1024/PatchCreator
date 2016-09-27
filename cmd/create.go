@@ -170,7 +170,7 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 		fmt.Println("Entered path is not a zip file")
 	}
 
-	paths := strings.Split(distributionPath, string(os.PathSeparator))
+	paths := strings.Split(distributionPath, constant.PATH_SEPARATOR)
 	distributionName := strings.TrimSuffix(paths[len(paths) - 1], ".zip")
 	viper.Set(constant.PRODUCT_NAME, distributionName)
 
@@ -326,12 +326,12 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 	util.HandleError(err)
 
 	//signal.Stop(cleanupChannel)
-	//
-	////Remove the temp directories
-	//util.CleanUpDirectory(constant.TEMP_DIR)
-	//
-	//util.PrintInfo("'" + updateZipName + "' successfully created.")
-	//
+
+	//Remove the temp directories
+	util.CleanUpDirectory(constant.TEMP_DIR)
+
+	util.PrintInfo("'" + updateZipName + "' successfully created.")
+
 	//if isValidateSelected {
 	//	//fmt.Println("\n\nValidating '" + updateZipName + "'\n")
 	//	startValidation(updateZipName, distributionPath)
@@ -378,7 +378,8 @@ func handleNewFile(filename string, isDir bool, rootNode *Node, allFilesMap map[
 	for {
 		util.PrintInBold("Enter destination directory relative to CARBON_HOME: ")
 		relativeLocationInDistribution, err := util.GetUserInput()
-		relativeLocationInDistribution = strings.TrimPrefix(relativeLocationInDistribution, string(os.PathSeparator))
+		relativeLocationInDistribution = strings.TrimPrefix(relativeLocationInDistribution, constant.PATH_SEPARATOR)
+		relativeLocationInDistribution = strings.TrimSuffix(relativeLocationInDistribution, constant.PATH_SEPARATOR)
 		util.HandleError(err, "Error occurred while getting input from the user.")
 		logger.Debug("relativePath:", relativeLocationInDistribution)
 		//distributionRoot := viper.GetString(constant.DISTRIBUTION_ROOT)
@@ -788,23 +789,47 @@ func FindMatches(root *Node, name string, isDir bool, matches map[string]*Node) 
 
 //This will return a map of files which would be ignored when reading the update directory
 func getIgnoredFilesInUpdate() map[string]bool {
-	return map[string]bool{
-		constant.UPDATE_DESCRIPTOR_FILE: true,
-		constant.LICENSE_FILE: true,
-		constant.README_FILE: true,
-		constant.NOT_A_CONTRIBUTION_FILE: true,
-		constant.INSTRUCTIONS_FILE: true,
+
+	filesMap := make(map[string]bool)
+
+	for _, file := range viper.GetStringSlice(constant.RESOURCE_FILES + "." + constant.MANDATORY) {
+		filesMap[file] = true
 	}
+	for _, file := range viper.GetStringSlice(constant.RESOURCE_FILES + "." + constant.OPTIONAL) {
+		filesMap[file] = true
+	}
+	for _, file := range viper.GetStringSlice(constant.RESOURCE_FILES + "." + constant.SKIP) {
+		filesMap[file] = true
+	}
+
+	//return map[string]bool{
+	//	constant.UPDATE_DESCRIPTOR_FILE: true,
+	//	constant.LICENSE_FILE: true,
+	//	constant.README_FILE: true,
+	//	constant.NOT_A_CONTRIBUTION_FILE: true,
+	//	constant.INSTRUCTIONS_FILE: true,
+	//}
+	return filesMap
 }
 
 //This will return a map of files which would be copied to the temp directory before creating the update zip. Key is the
 // file name and value is whether the file is mandatory or not.
 func getResourceFiles() map[string]bool {
-	return map[string]bool{
-		constant.LICENSE_FILE: true,
-		constant.NOT_A_CONTRIBUTION_FILE: false,
-		constant.INSTRUCTIONS_FILE: false,
+	filesMap := make(map[string]bool)
+
+	for _, file := range viper.GetStringSlice(constant.RESOURCE_FILES + "." + constant.MANDATORY) {
+		filesMap[file] = true
 	}
+	for _, file := range viper.GetStringSlice(constant.RESOURCE_FILES + "." + constant.OPTIONAL) {
+		filesMap[file] = false
+	}
+
+	//return map[string]bool{
+	//	constant.LICENSE_FILE: true,
+	//	constant.NOT_A_CONTRIBUTION_FILE: false,
+	//	constant.INSTRUCTIONS_FILE: false,
+	//}
+	return filesMap
 }
 
 func marshalUpdateDescriptor(updateDescriptor *util.UpdateDescriptor) ([]byte, error) {
@@ -930,7 +955,7 @@ func copyFile(filename string, locationInUpdate, relativeLocationInTemp string, 
 		util.HandleError(err, "temp2")
 	}
 
-	relativePath := strings.TrimPrefix(fullPath, carbonHome + string(os.PathSeparator))
+	relativePath := strings.TrimPrefix(fullPath, carbonHome + constant.PATH_SEPARATOR)
 	fmt.Println("relativePath:", relativePath)
 	contains := PathExists(rootNode, relativePath, false)
 	fmt.Println("contains:", contains)

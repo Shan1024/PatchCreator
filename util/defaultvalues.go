@@ -3,12 +3,14 @@ package util
 var ProcessReadMe = true
 var AutoValidate = true
 //default_values
-var PlatformName = "wilkes"
-var PlatformVersion = "4.4.0"
-var BugFixes = "N/A"
+var PlatformName_Default = "wilkes"
+var PlatformVersion_Default = "4.4.0"
+var BugFixes_Default = "N/A"
 var CheckMd5 = false
-var UpdateRepository = "$HOME/Documents/Updates"
+//update_repository
+var UpdateRepository_Enabled = false
+var UpdateRepository_Location = "$HOME/Documents/Updates"
 //resource_files
-var Mandatory = []string{"update-descriptor.yaml", "LICENSE.txt"}
-var Optional = []string{"instructions.txt", "NOT_A_CONTRIBUTION.txt"}
-var Skip = []string{"README.txt"}
+var ResourceFiles_Mandatory = []string{"update-descriptor.yaml", "LICENSE.txt"}
+var ResourceFiles_Optional = []string{"instructions.txt", "NOT_A_CONTRIBUTION.txt"}
+var ResourceFiles_Skip = []string{"README.txt"}

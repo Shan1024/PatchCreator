@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/ian-kent/go-log/layout"
+	"github.com/ian-kent/go-log/levels"
 	"github.com/ian-kent/go-log/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"github.com/ian-kent/go-log/layout"
-	"github.com/ian-kent/go-log/levels"
 	"github.com/wso2/wum-uc/constant"
 	"github.com/wso2/wum-uc/util"
 )
@@ -133,7 +133,8 @@ func initConfig() {
 	fmt.Println(viper.GetString(constant.AUTO_VALIDATE))
 	fmt.Println(viper.GetStringMapString(constant.DEFAULT_VALUES))
 	fmt.Println(viper.GetString(constant.CHECK_MD5))
-	fmt.Println(viper.GetString(constant.UPDATE_REPOSITORY))
+	fmt.Println(viper.GetString(constant.UPDATE_REPOSITORY + "." + constant.ENABLED))
+	fmt.Println(viper.GetString(constant.UPDATE_REPOSITORY + "." + constant.LOCATION))
 	fmt.Println(viper.GetStringSlice(constant.RESOURCE_FILES + "." + constant.MANDATORY))
 	fmt.Println(viper.GetStringSlice(constant.RESOURCE_FILES + "." + constant.OPTIONAL))
 	fmt.Println(viper.GetStringSlice(constant.RESOURCE_FILES + "." + constant.SKIP))
@@ -168,13 +169,14 @@ func setDefaultValues() {
 	viper.SetDefault(constant.PROCESS_README, util.ProcessReadMe)
 	viper.SetDefault(constant.AUTO_VALIDATE, util.AutoValidate)
 	viper.SetDefault(constant.DEFAULT_VALUES, map[string]string{
-		constant.PLATFORM_NAME: util.PlatformName,
-		constant.PLATFORM_VERSION: util.PlatformVersion,
-		constant.BUG_FIXES: util.BugFixes,
+		constant.PLATFORM_NAME: util.PlatformName_Default,
+		constant.PLATFORM_VERSION: util.PlatformVersion_Default,
+		constant.BUG_FIXES: util.BugFixes_Default,
 	})
 	viper.SetDefault(constant.CHECK_MD5, util.CheckMd5)
-	viper.SetDefault(constant.UPDATE_REPOSITORY, util.UpdateRepository)
-	viper.SetDefault(constant.RESOURCE_FILES + "." + constant.MANDATORY, util.Mandatory)
-	viper.SetDefault(constant.RESOURCE_FILES + "." + constant.OPTIONAL, util.Optional)
-	viper.SetDefault(constant.RESOURCE_FILES + "." + constant.SKIP, util.Skip)
+	viper.SetDefault(constant.UPDATE_REPOSITORY + "." + constant.ENABLED, util.UpdateRepository_Enabled)
+	viper.SetDefault(constant.UPDATE_REPOSITORY + "." + constant.LOCATION, util.UpdateRepository_Location)
+	viper.SetDefault(constant.RESOURCE_FILES + "." + constant.MANDATORY, util.ResourceFiles_Mandatory)
+	viper.SetDefault(constant.RESOURCE_FILES + "." + constant.OPTIONAL, util.ResourceFiles_Optional)
+	viper.SetDefault(constant.RESOURCE_FILES + "." + constant.SKIP, util.ResourceFiles_Skip)
 }

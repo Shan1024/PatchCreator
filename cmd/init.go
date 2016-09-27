@@ -10,10 +10,10 @@ import (
 
 	"github.com/renstrom/dedent"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"github.com/wso2/wum-uc/constant"
 	"github.com/wso2/wum-uc/util"
 	"gopkg.in/yaml.v2"
-	"github.com/spf13/viper"
 )
 
 var (
@@ -88,6 +88,8 @@ func initDirectory(destination string) {
 
 	if viper.GetBool(constant.PROCESS_README) {
 		processReadMe(&updateDescriptor)
+	} else {
+		setUpdateDescriptorDefaultValues(&updateDescriptor)
 	}
 
 	data, err := yaml.Marshal(&updateDescriptor)
@@ -117,6 +119,14 @@ func initDirectory(destination string) {
 	util.PrintWhatsNext("run 'wum-uc init --sample' to view sample file.")
 }
 
-func processReadMe(updateDescriptor *util.UpdateDescriptor) {
+func setUpdateDescriptorDefaultValues(updateDescriptor *util.UpdateDescriptor) {
+	updateDescriptor.Platform_name = util.PlatformName_Default
+	updateDescriptor.Platform_version = util.PlatformVersion_Default
+	updateDescriptor.Bug_fixes = map[string]string{
+		util.BugFixes_Default: util.BugFixes_Default,
+	}
+}
 
+func processReadMe(updateDescriptor *util.UpdateDescriptor) {
+	//todo: add logic here
 }

@@ -5,7 +5,9 @@ default_values:
   platform_version: 4.4.0
   bug_fixes: N/A
 check_md5: false
-update_repository: $HOME/Documents/Updates
+update_repository:
+  enabled: true
+  location: $HOME/Documents/Updates
 resource_files:
   mandatory:
   - update-descriptor.yaml

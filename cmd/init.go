@@ -106,6 +106,7 @@ func initDirectory(destination string) {
 
 	data, err := yaml.Marshal(&updateDescriptor)
 	dataString := string(data)
+	//remove " enclosing the update number
 	dataString = strings.Replace(dataString, "\"", "", -1)
 	if err != nil {
 		util.HandleError(err)
@@ -182,7 +183,16 @@ func processReadMe(directory string, updateDescriptor *util.UpdateDescriptor) er
 	result = regex.FindStringSubmatch(stringData)
 
 	if len(result) == 2 {
-		updateDescriptor.Applies_to = result[1]
+		fmt.Println("len=2 APPLIES_TO_REGEX:", result)
+		fmt.Println("[0]:", result[0])
+		fmt.Println("[1]:", result[1])
+		updateDescriptor.Applies_to = processAppliesTo(result[1])
+	} else if len(result) == 3 {
+		fmt.Println("len=3 APPLIES_TO_REGEX:", result)
+		fmt.Println("[0]:", result[0])
+		fmt.Println("[1]:", result[1])
+		fmt.Println("[2]:", result[2])
+		updateDescriptor.Applies_to = processAppliesTo(strings.TrimSpace(result[1] + result[2]))
 	} else {
 		fmt.Println("No matching results found for APPLIES_TO_REGEX:", result)
 	}
@@ -192,20 +202,25 @@ func processReadMe(directory string, updateDescriptor *util.UpdateDescriptor) er
 	allResult := regex.FindAllStringSubmatch(stringData, -1)
 	fmt.Println("ASSOCIATED_JIRAS_REGEX:")
 	updateDescriptor.Bug_fixes = make(map[string]string)
-	for _, match := range allResult {
-		fmt.Println("match:", match[1])
-		if len(match) == 2 {
-			updateDescriptor.Bug_fixes[match[1]] = ""
-		} else {
-			fmt.Println("incorrect length for ASSOCIATED_JIRAS_REGEX:", match)
+	if len(allResult) == 0 {
+		updateDescriptor.Bug_fixes[util.BugFixes_Default] = util.BugFixes_Default
+	} else {
+		for _, match := range allResult {
+			fmt.Println("match:", match[1])
+			if len(match) == 2 {
+				updateDescriptor.Bug_fixes[match[1]] = util.GetJiraSummary(match[1])
+			} else {
+				fmt.Println("incorrect length for ASSOCIATED_JIRAS_REGEX:", match)
+			}
 		}
 	}
+
 	fmt.Println("-----------------------------")
 	regex, err = regexp.Compile(constant.DESCRIPTION_REGEX)
 	result = regex.FindStringSubmatch(stringData)
 
 	if len(result) == 2 {
-		updateDescriptor.Description = result[1]
+		updateDescriptor.Description = processDescription(result[1])
 	} else {
 		fmt.Println("No matching results found for DESCRIPTION_REGEX:", result)
 	}
@@ -215,4 +230,34 @@ func processReadMe(directory string, updateDescriptor *util.UpdateDescriptor) er
 	fmt.Println("Processing readme finished")
 
 	return nil
+}
+
+func processAppliesTo(data string) string {
+	data = strings.TrimSpace(data)
+	contains := strings.Contains(data, "\n")
+	if !contains {
+		return data
+	}
+	allProducts := ""
+	products := strings.Split(data, "\n")
+
+	for _, product := range products {
+		allProducts = allProducts + strings.TrimSpace(product) + ", "
+	}
+	return strings.TrimSuffix(allProducts, ", ")
+}
+
+func processDescription(data string) string {
+	data = strings.TrimSpace(data)
+	contains := strings.Contains(data, "\n")
+	if !contains {
+		return data
+	}
+	allLines := ""
+	lines := strings.Split(data, "\n")
+
+	for _, line := range lines {
+		allLines = allLines + strings.TrimRight(line, " ") + "\n"
+	}
+	return allLines
 }

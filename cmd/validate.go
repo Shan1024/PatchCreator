@@ -38,8 +38,10 @@ var validateCmd = &cobra.Command{
 
 func init() {
 	RootCmd.AddCommand(validateCmd)
+
 	validateCmd.Flags().BoolP("debug", "d", false, "Enable debug logs")
 	viper.BindPFlag(constant.IS_DEBUG_ENABLED, validateCmd.Flags().Lookup("debug"))
+
 	validateCmd.Flags().BoolP("trace", "t", false, "Enable trace logs")
 	viper.BindPFlag(constant.IS_TRACE_ENABLED, validateCmd.Flags().Lookup("trace"))
 }

@@ -23,6 +23,7 @@ import (
 	"github.com/wso2/wum-uc/constant"
 	"gopkg.in/yaml.v2"
 	"github.com/pkg/errors"
+	"net/http"
 )
 
 var logger = log.Logger()
@@ -408,4 +409,37 @@ func PrintWhatsNext(args ...interface{}) {
 	fmt.Println("\nWhat's next?")
 	color.Unset()
 	fmt.Println(append([]interface{}{"\t"}, args...)...)
+}
+
+func GetJiraSummary(id string) string {
+
+	req, err := http.NewRequest("GET", constant.JIRA_API_URL + id, nil)
+	if err != nil {
+		fmt.Println("error occurred:", err)
+		return ""
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		fmt.Println("error occurred:", err)
+		return ""
+	}
+	defer res.Body.Close()
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		fmt.Println("error occurred:", err)
+		return ""
+	}
+	//fmt.Println(res)
+	responseBody := string(body)
+	//fmt.Println(responseBody)
+	regex, err := regexp.Compile(constant.JIRA_SUMMARY_REGEX)
+	result := regex.FindStringSubmatch(responseBody)
+	fmt.Println("+++++++++++++++++++++++++++++++++++++++++++++")
+
+	fmt.Println("results:", result)
+	if len(result) == 3 {
+		fmt.Println(strings.TrimSpace(result[2]))
+		return strings.TrimSpace(result[2])
+	}
+	return ""
 }

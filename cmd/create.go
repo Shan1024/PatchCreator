@@ -73,10 +73,10 @@ var createCmd = &cobra.Command{
 func init() {
 	RootCmd.AddCommand(createCmd)
 
-	createCmd.Flags().BoolP("debug", "d", false, "Enable debug logs")
+	createCmd.Flags().BoolP("debug", "d", util.EnableDebugLogs, "Enable debug logs")
 	viper.BindPFlag(constant.IS_DEBUG_ENABLED, createCmd.Flags().Lookup("debug"))
 
-	createCmd.Flags().BoolP("trace", "t", false, "Enable trace logs")
+	createCmd.Flags().BoolP("trace", "t", util.EnableTraceLogs, "Enable trace logs")
 	viper.BindPFlag(constant.IS_TRACE_ENABLED, createCmd.Flags().Lookup("trace"))
 
 	createCmd.Flags().BoolP("validate", "v", viper.GetBool(constant.AUTO_VALIDATE), "Enable/Disable validating the content of update zip")
@@ -138,6 +138,9 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 	util.HandleError(err, "Distribution path '" + distributionPath + "' does not exist")
 	if !exists {
 		util.PrintErrorAndExit("Distribution does not exist at ", updateDirectoryPath)
+	}
+	if !strings.HasSuffix(distributionPath, ".zip") {
+		util.PrintErrorAndExit("Entered update location does not have a 'zip' extention.")
 	}
 	//4) Read update-descriptor.yaml and set the update name which will be used when creating the update zip file.
 	//This is used to read the update-descriptor.yaml file

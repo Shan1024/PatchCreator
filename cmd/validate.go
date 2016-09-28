@@ -17,6 +17,7 @@ import (
 	"github.com/wso2/wum-uc/util"
 	"github.com/wso2/wum-uc/constant"
 	"gopkg.in/yaml.v2"
+	"fmt"
 )
 
 var (
@@ -192,9 +193,13 @@ func readUpdateZip(filename string) (map[string]bool, *util.UpdateDescriptor, er
 					return nil, nil, err
 				}
 			default:
+				resourceFiles := getResourceFiles()
+				fmt.Println("resourceFiles:", resourceFiles)
 				prefix := filepath.Join(updateName, constant.CARBON_HOME)
 				hasPrefix := strings.HasPrefix(file.Name, prefix)
-				if !hasPrefix {
+				_, foundInResources := resourceFiles[file.FileInfo().Name()]
+				fmt.Println("foundInResources:", foundInResources)
+				if !hasPrefix && !foundInResources {
 					return nil, nil, errors.New("Unknown file found: '" + file.Name + "'")
 				}
 				relativePath := strings.TrimPrefix(file.Name, prefix + string(os.PathSeparator))

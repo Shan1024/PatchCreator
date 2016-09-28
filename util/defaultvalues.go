@@ -5,6 +5,10 @@ import (
 	"path"
 )
 
+var EnableDebugLogs = false
+var EnableTraceLogs = false
+var PrintSampleSelected = false
+
 var ProcessReadMe = true
 var AutoValidate = true
 //default_values
@@ -21,3 +25,8 @@ var UpdateRepository_Location = path.Join(HomeDirectory, "/Documents/Updates")
 var ResourceFiles_Mandatory = []string{"update-descriptor.yaml", "LICENSE.txt"}
 var ResourceFiles_Optional = []string{"instructions.txt", "NOT_A_CONTRIBUTION.txt"}
 var ResourceFiles_Skip = []string{"README.txt"}
+
+var PlatformVersions = map[string]string{
+	"4.2.0":"turing",
+	"4.4.0":"wilkes",
+}

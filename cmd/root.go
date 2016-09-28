@@ -179,4 +179,6 @@ func setDefaultValues() {
 	viper.SetDefault(constant.RESOURCE_FILES + "." + constant.MANDATORY, util.ResourceFiles_Mandatory)
 	viper.SetDefault(constant.RESOURCE_FILES + "." + constant.OPTIONAL, util.ResourceFiles_Optional)
 	viper.SetDefault(constant.RESOURCE_FILES + "." + constant.SKIP, util.ResourceFiles_Skip)
+	viper.SetDefault(constant.PLATFORM_VERSIONS, util.PlatformVersions)
+
 }

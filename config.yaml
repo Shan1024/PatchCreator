@@ -17,3 +17,5 @@ resource_files:
   - instructions.txt
   skip:
   - README.txt
+platform_versions:
+  4.4.0: wilkes

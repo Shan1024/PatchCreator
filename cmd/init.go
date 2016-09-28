@@ -14,6 +14,9 @@ import (
 	"github.com/wso2/wum-uc/constant"
 	"github.com/wso2/wum-uc/util"
 	"gopkg.in/yaml.v2"
+	"io/ioutil"
+	"path"
+	"regexp"
 )
 
 var (
@@ -40,8 +43,6 @@ file_changes:
   added_files: []
   removed_files: []
   modified_files: []`)
-
-	isPrintSampleSelected bool
 )
 
 // initCmd represents the validate command
@@ -54,15 +55,24 @@ var initCmd = &cobra.Command{
 
 func init() {
 	RootCmd.AddCommand(initCmd)
-	initCmd.Flags().BoolVarP(&isPrintSampleSelected, "sample", "s", false, "Show sample file")
-	initCmd.Flags().BoolP("process", "p", false, "Process README.txt file")
-	viper.BindPFlag("ProcessReadMe", initCmd.Flags().Lookup("process"))
+
+	initCmd.Flags().BoolP("debug", "d", util.EnableDebugLogs, "Enable debug logs")
+	viper.BindPFlag(constant.IS_DEBUG_ENABLED, initCmd.Flags().Lookup("debug"))
+
+	initCmd.Flags().BoolP("trace", "t", util.EnableTraceLogs, "Enable trace logs")
+	viper.BindPFlag(constant.IS_TRACE_ENABLED, initCmd.Flags().Lookup("trace"))
+
+	initCmd.Flags().BoolP("sample", "s", util.PrintSampleSelected, "Show sample file")
+	viper.BindPFlag(constant.SAMPLE, initCmd.Flags().Lookup("sample"))
+
+	initCmd.Flags().BoolP("process", "p", viper.GetBool(constant.PROCESS_README), "Process README.txt file")
+	viper.BindPFlag(constant.PROCESS_README, initCmd.Flags().Lookup("process"))
 }
 
 func initializeInitCommand(cmd *cobra.Command, args []string) {
 	switch len(args) {
 	case 0:
-		if isPrintSampleSelected {
+		if viper.GetBool(constant.SAMPLE) {
 			fmt.Println(initCmdExample)
 		} else {
 			initCurrentDirectory()
@@ -87,7 +97,9 @@ func initDirectory(destination string) {
 	updateDescriptor := util.UpdateDescriptor{}
 
 	if viper.GetBool(constant.PROCESS_README) {
-		processReadMe(&updateDescriptor)
+		fmt.Println("Process readme enabled")
+		err := processReadMe(destination, &updateDescriptor)
+		util.HandleError(err)
 	} else {
 		setUpdateDescriptorDefaultValues(&updateDescriptor)
 	}
@@ -127,6 +139,80 @@ func setUpdateDescriptorDefaultValues(updateDescriptor *util.UpdateDescriptor) {
 	}
 }
 
-func processReadMe(updateDescriptor *util.UpdateDescriptor) {
-	//todo: add logic here
+func processReadMe(directory string, updateDescriptor *util.UpdateDescriptor) error {
+	fmt.Println("Processing readme started")
+	readMePath := path.Join(directory, constant.README_FILE)
+	_, err := os.Stat(readMePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Println(directory + " not found")
+			return nil
+		}
+	}
+	data, err := ioutil.ReadFile(readMePath)
+	if err != nil {
+		fmt.Println("error occurred and processing readme failed")
+		return nil
+	}
+
+	stringData := string(data)
+
+	fmt.Println("-----------------------------")
+	regex, err := regexp.Compile(constant.PATCH_ID_REGEX)
+	result := regex.FindStringSubmatch(stringData)
+	if len(result) == 3 {
+		updateDescriptor.Update_number = result[2]
+		updateDescriptor.Platform_version = result[1]
+
+		platformsMap := viper.GetStringMapString(constant.PLATFORM_VERSIONS)
+
+		platformName, found := platformsMap[result[1]]
+		if found {
+			updateDescriptor.Platform_name = platformName
+		} else {
+			fmt.Println("No matching platform name found for:", result[1])
+		}
+
+	} else {
+		fmt.Println("PATCH_ID_REGEX has incorrect results:", result)
+	}
+
+	fmt.Println("-----------------------------")
+	regex, err = regexp.Compile(constant.APPLIES_TO_REGEX)
+	result = regex.FindStringSubmatch(stringData)
+
+	if len(result) == 2 {
+		updateDescriptor.Applies_to = result[1]
+	} else {
+		fmt.Println("No matching results found for APPLIES_TO_REGEX:", result)
+	}
+
+	fmt.Println("-----------------------------")
+	regex, err = regexp.Compile(constant.ASSOCIATED_JIRAS_REGEX)
+	allResult := regex.FindAllStringSubmatch(stringData, -1)
+	fmt.Println("ASSOCIATED_JIRAS_REGEX:")
+	updateDescriptor.Bug_fixes = make(map[string]string)
+	for _, match := range allResult {
+		fmt.Println("match:", match[1])
+		if len(match) == 2 {
+			updateDescriptor.Bug_fixes[match[1]] = ""
+		} else {
+			fmt.Println("incorrect length for ASSOCIATED_JIRAS_REGEX:", match)
+		}
+	}
+	fmt.Println("-----------------------------")
+	regex, err = regexp.Compile(constant.DESCRIPTION_REGEX)
+	result = regex.FindStringSubmatch(stringData)
+
+	if len(result) == 2 {
+		updateDescriptor.Description = result[1]
+	} else {
+		fmt.Println("No matching results found for DESCRIPTION_REGEX:", result)
+	}
+
+	fmt.Println("-----------------------------")
+
+	fmt.Println("Processing readme finished")
+
+	return nil
 }

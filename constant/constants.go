@@ -48,6 +48,7 @@ const (
 	IS_DEBUG_ENABLED = "IS_DEBUG_ENABLED"
 	IS_TRACE_ENABLED = "IS_TRACE_ENABLED"
 
+	SAMPLE = "SAMPLE"
 	PROCESS_README = "PROCESS_README"
 	AUTO_VALIDATE = "AUTO_VALIDATE"
 	//default_values
@@ -67,6 +68,12 @@ const (
 	MANDATORY = "MANDATORY"
 	OPTIONAL = "OPTIONAL"
 	SKIP = "SKIP"
+	PLATFORM_VERSIONS = "PLATFORM_VERSIONS"
+
+	PATCH_ID_REGEX = "WSO2-CARBON-PATCH-(\\d+\\.\\d+\\.\\d+)-(\\d{4})"
+	APPLIES_TO_REGEX = "(?s)Applies To.*?:(.*)Associated JIRA"
+	ASSOCIATED_JIRAS_REGEX = "https:\\/\\/wso2\\.org\\/jira\\/browse\\/(\\S*)"
+	DESCRIPTION_REGEX = "(?s)DESCRIPTION(.*)"
 )
 
 

@@ -5,6 +5,7 @@ package cmd
 import (
 	"archive/zip"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -17,7 +18,6 @@ import (
 	"github.com/wso2/wum-uc/util"
 	"github.com/wso2/wum-uc/constant"
 	"gopkg.in/yaml.v2"
-	"fmt"
 )
 
 var (
@@ -109,12 +109,19 @@ func startValidation(updateFilePath, distributionLocation string) {
 }
 
 func compare(updateFileMap, distributionFileMap map[string]bool, updateDescriptor *util.UpdateDescriptor) error {
+	updateName := viper.GetString(constant.UPDATE_NAME)
 	for filePath := range updateFileMap {
-		logger.Debug("Searching:", filePath)
+		fmt.Println("Searching:", filePath)
 		_, found := distributionFileMap[filePath]
 		if !found {
 			isInAddedFiles := util.IsStringIsInSlice(filePath, updateDescriptor.File_changes.Added_files)
-			if !isInAddedFiles {
+			resourceFiles := getResourceFiles()
+			fmt.Println("resourceFiles:", resourceFiles)
+			fileName := strings.TrimPrefix(filePath, updateName + constant.PATH_SEPARATOR)
+			fmt.Println("fileName:", fileName)
+			_, foundInResources := resourceFiles[fileName]
+			fmt.Println("found in resources:", foundInResources)
+			if !isInAddedFiles && !foundInResources {
 				return errors.New("File not found in the distribution: '" + filePath + "'. If this is a new file, add an entry to the 'added_files' sections in the '" + constant.UPDATE_DESCRIPTOR_FILE + "' file")
 			} else {
 				logger.Debug("'" + filePath + "' found in added files.")

@@ -72,12 +72,24 @@ var createCmd = &cobra.Command{
 
 func init() {
 	RootCmd.AddCommand(createCmd)
+
 	createCmd.Flags().BoolP("debug", "d", false, "Enable debug logs")
 	viper.BindPFlag(constant.IS_DEBUG_ENABLED, createCmd.Flags().Lookup("debug"))
+
 	createCmd.Flags().BoolP("trace", "t", false, "Enable trace logs")
 	viper.BindPFlag(constant.IS_TRACE_ENABLED, createCmd.Flags().Lookup("trace"))
-	createCmd.Flags().BoolP("validate", "v", util.AutoValidate, "Validate the content of the created update zip")
+
+	createCmd.Flags().BoolP("validate", "v", viper.GetBool(constant.AUTO_VALIDATE), "Enable/Disable validating the content of update zip")
 	viper.BindPFlag(constant.AUTO_VALIDATE, createCmd.Flags().Lookup("validate"))
+
+	createCmd.Flags().BoolP("repository", "r", viper.GetBool(constant.UPDATE_REPOSITORY_ENABLED), "Enable/Disable repository")
+	viper.BindPFlag(constant.UPDATE_REPOSITORY_ENABLED, createCmd.Flags().Lookup("repository"))
+
+	createCmd.Flags().StringP("location", "l", viper.GetString(constant.UPDATE_REPOSITORY_LOCATION), "Override repository location")
+	viper.BindPFlag(constant.UPDATE_REPOSITORY_LOCATION, createCmd.Flags().Lookup("location"))
+
+	createCmd.Flags().BoolP("md5", "m", viper.GetBool(constant.CHECK_MD5), "Enable/Disable checking MD5 sum")
+	viper.BindPFlag(constant.CHECK_MD5, createCmd.Flags().Lookup("md5"))
 }
 
 func initializeCreateCommand(cmd *cobra.Command, args []string) {
@@ -185,6 +197,9 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 		fmt.Println("-------------------------------------")
 	}
 
+	//7) Find matches and copy files to the temp
+
+
 	fmt.Println("=========================================")
 	fmt.Println("\n\nChecking Directories:")
 
@@ -257,14 +272,7 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 	}
 
 
-
-	//7) Find matches
-
-
-	//8) Copy files to the temp
-
-
-	//9) Copy resource files (update-descriptor.yaml, etc)
+	//8) Copy resource files (update-descriptor.yaml, etc)
 	resourceFiles := getResourceFiles()
 	err = copyResourceFiles(resourceFiles)
 	util.HandleError(err, errors.New("Error occurred while copying resource files."))
@@ -281,11 +289,22 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 	//})
 
 	updateZipName := updateName + ".zip"
-	//10) Create the update zip file
 
-	if viper.IsSet(constant.UPDATE_REPOSITORY) {
-		updateRepository := viper.GetString(constant.UPDATE_REPOSITORY)
-		path.Join(updateRepository, updateZipName)
+	//9) Create the update zip file
+	if viper.IsSet(constant.UPDATE_REPOSITORY_ENABLED) {
+
+		fmt.Println("############### Update repository is enabled")
+
+		updateRepository := viper.GetString(constant.UPDATE_REPOSITORY_LOCATION)
+		util.HandleError(err)
+		fmt.Println("Update repository location is set to:", updateRepository)
+
+		err = util.CreateDirectory(updateRepository)
+		util.HandleError(err)
+
+		updateZipName = path.Join(updateRepository, updateZipName)
+	} else {
+		fmt.Println("############### Update repository is disabled")
 	}
 
 	err = archiver.Zip(updateZipName, []string{path.Join(constant.TEMP_DIR, updateName)})
@@ -371,6 +390,17 @@ func handleNewFile(filename string, isDir bool, rootNode *Node, allFilesMap map[
 				allMatchingFiles := getAllMatchingFiles(filename, allFilesMap)
 				fmt.Println("All matches:", allMatchingFiles)
 				for _, match := range allMatchingFiles {
+					//fmt.Println("match:", match)
+					//if viper.GetBool(constant.CHECK_MD5) {
+					//	data := allFilesMap[match]
+					//	md5Matches := CompareMD5(rootNode, match, data.md5)
+					//	if md5Matches {
+					//		fmt.Println("MD5 matches. Ignoring file.")
+					//		continue
+					//	} else {
+					//		fmt.Println("MD5 does not match. Copying the file.")
+					//	}
+					//}
 					//fullPath := path.Join(relativeLocationInDistribution, match)
 					//
 					//fmt.Println("Copying match:",fullPath )
@@ -471,6 +501,18 @@ func handleSingleMatch(filename string, matchingNode *Node, isDir bool, allFiles
 		for _, match := range allMatchingFiles {
 
 			fmt.Println("match:", match)
+			if viper.GetBool(constant.CHECK_MD5) {
+				data := allFilesMap[match]
+				md5Matches := CompareMD5(rootNode, path.Join(matchingNode.relativeLocation, match), data.md5)
+				if md5Matches {
+					fmt.Println("XXXXXXXXXXXXXXXXXXXXXX MD5 matches. Ignoring file.")
+					continue
+				} else {
+					fmt.Println("MD5 does not match. Copying the file.")
+				}
+			}
+
+			fmt.Println("match:", match)
 			//fullPath := path.Join(relativeLocationInDistribution, match)
 			//
 			//fmt.Println("Copying match:",fullPath )
@@ -534,6 +576,19 @@ func handleMultipleMatches(filename string, isDir bool, matches map[string]*Node
 			fmt.Println("matchingFiles:", allMatchingFiles)
 
 			for _, match := range allMatchingFiles {
+
+				fmt.Println("match:", match)
+				if viper.GetBool(constant.CHECK_MD5) {
+					data := allFilesMap[match]
+					md5Matches := CompareMD5(rootNode, path.Join(pathInDistribution, match), data.md5)
+					if md5Matches {
+						fmt.Println("XXXXXXXXXXXXXXXXXXXXXX MD5 matches. Ignoring file.")
+						continue
+					} else {
+						fmt.Println("MD5 does not match. Copying the file.")
+					}
+				}
+
 				//fullPath := filepath.Join(relativeLocationInDistribution, match)
 				//
 				//fmt.Println("Copying match:",fullPath )
@@ -548,7 +603,7 @@ func handleMultipleMatches(filename string, isDir bool, matches map[string]*Node
 			pathInDistribution := indexMap[selectedIndex]
 			fmt.Println("[MULTIPLE MATCHES] Selected path:", selectedIndex, ";", pathInDistribution)
 
-			fmt.Println("[Copy] " + filename + " ; From:" + updateRoot + "; To:" +pathInDistribution)
+			fmt.Println("[Copy] " + filename + " ; From:" + updateRoot + "; To:" + pathInDistribution)
 
 			err := copyFile(filename, updateRoot, pathInDistribution, rootNode, updateDescriptor)
 			util.HandleError(err)
@@ -729,17 +784,40 @@ func PathExists(rootNode *Node, relativePath string, isDir bool) bool {
 }
 
 func NodeExists(rootNode *Node, path []string, isDir bool) bool {
-	fmt.Println("$$$$$$$$$$$$$$$$$$$$$$$$$$")
-	fmt.Println("All:", rootNode.childNodes)
-	fmt.Println("checking:", path[0])
+	//fmt.Println("$$$$$$$$$$$$$$$$$$$$$$$$$$")
+	//fmt.Println("All:", rootNode.childNodes)
+	//fmt.Println("checking:", path[0])
+	childNode, found := rootNode.childNodes[path[0]]
+
+	if found {
+		//fmt.Println(path[0] + " found")
+		if len(path) > 1 {
+			return NodeExists(childNode, path[1:], isDir)
+		} else {
+			return childNode.isDir == isDir
+		}
+	}
+	//fmt.Println(path[0] + " NOT found")
+	return false
+}
+
+func CompareMD5(rootNode *Node, relativePath string, md5 string) bool {
+	fmt.Println("Checking MD5:", relativePath)
+	return CheckMD5(rootNode, strings.Split(relativePath, "/"), md5)
+}
+
+func CheckMD5(rootNode *Node, path []string, md5 string) bool {
+	//fmt.Println("$$$$$$$$$$$$$$$$$$$$$$$$$$")
+	//fmt.Println("All:", rootNode.childNodes)
+	//fmt.Println("checking:", path[0])
 	childNode, found := rootNode.childNodes[path[0]]
 
 	if found {
 		fmt.Println(path[0] + " found")
 		if len(path) > 1 {
-			return NodeExists(childNode, path[1:], isDir)
+			return CheckMD5(childNode, path[1:], md5)
 		} else {
-			return childNode.isDir == isDir
+			return childNode.isDir == false && childNode.md5Hash == md5
 		}
 	}
 	fmt.Println(path[0] + " NOT found")

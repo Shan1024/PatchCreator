@@ -39,11 +39,8 @@ var validateCmd = &cobra.Command{
 func init() {
 	RootCmd.AddCommand(validateCmd)
 
-	validateCmd.Flags().BoolP("debug", "d", false, "Enable debug logs")
-	viper.BindPFlag(constant.IS_DEBUG_ENABLED, validateCmd.Flags().Lookup("debug"))
-
-	validateCmd.Flags().BoolP("trace", "t", false, "Enable trace logs")
-	viper.BindPFlag(constant.IS_TRACE_ENABLED, validateCmd.Flags().Lookup("trace"))
+	validateCmd.Flags().BoolVarP(&isDebugLogsEnabled, "debug", "d", util.EnableDebugLogs, "Enable debug logs")
+	validateCmd.Flags().BoolVarP(&isTraceLogsEnabled, "trace", "t", util.EnableTraceLogs, "Enable trace logs")
 }
 
 func initializeValidateCommand(cmd *cobra.Command, args []string) {
@@ -111,16 +108,16 @@ func startValidation(updateFilePath, distributionLocation string) {
 func compare(updateFileMap, distributionFileMap map[string]bool, updateDescriptor *util.UpdateDescriptor) error {
 	updateName := viper.GetString(constant.UPDATE_NAME)
 	for filePath := range updateFileMap {
-		fmt.Println("Searching:", filePath)
+		logger.Debug(fmt.Sprintf("Searching: %s", filePath))
 		_, found := distributionFileMap[filePath]
 		if !found {
 			isInAddedFiles := util.IsStringIsInSlice(filePath, updateDescriptor.File_changes.Added_files)
 			resourceFiles := getResourceFiles()
-			fmt.Println("resourceFiles:", resourceFiles)
+			logger.Debug(fmt.Sprintf("resourceFiles: %s", resourceFiles))
 			fileName := strings.TrimPrefix(filePath, updateName + constant.PATH_SEPARATOR)
-			fmt.Println("fileName:", fileName)
+			logger.Debug(fmt.Sprintf("fileName: %s", fileName))
 			_, foundInResources := resourceFiles[fileName]
-			fmt.Println("found in resources:", foundInResources)
+			logger.Debug(fmt.Sprintf("found in resources: %s", foundInResources))
 			if !isInAddedFiles && !foundInResources {
 				return errors.New("File not found in the distribution: '" + filePath + "'. If this is a new file, add an entry to the 'added_files' sections in the '" + constant.UPDATE_DESCRIPTOR_FILE + "' file")
 			} else {
@@ -203,11 +200,11 @@ func readUpdateZip(filename string) (map[string]bool, *util.UpdateDescriptor, er
 				}
 			default:
 				resourceFiles := getResourceFiles()
-				fmt.Println("resourceFiles:", resourceFiles)
+				logger.Debug(fmt.Sprintf("resourceFiles: %s", resourceFiles))
 				prefix := filepath.Join(updateName, constant.CARBON_HOME)
 				hasPrefix := strings.HasPrefix(file.Name, prefix)
 				_, foundInResources := resourceFiles[file.FileInfo().Name()]
-				fmt.Println("foundInResources:", foundInResources)
+				logger.Debug(fmt.Sprintf("foundInResources: %s", foundInResources))
 				if !hasPrefix && !foundInResources {
 					return nil, nil, errors.New("Unknown file found: '" + file.Name + "'")
 				}

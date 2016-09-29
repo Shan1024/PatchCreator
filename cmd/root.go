@@ -3,7 +3,6 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/ian-kent/go-log/layout"
@@ -13,6 +12,7 @@ import (
 	"github.com/spf13/viper"
 	"github.com/wso2/wum-uc/constant"
 	"github.com/wso2/wum-uc/util"
+	"fmt"
 )
 
 var (
@@ -73,6 +73,9 @@ func (d *Diff) Add(filename string, locationData LocationData) {
 var (
 	//Create the logger
 	logger = log.Logger()
+
+	isDebugLogsEnabled=false
+	isTraceLogsEnabled=false
 )
 
 var cfgFile string
@@ -106,6 +109,7 @@ func init() {
 
 // initConfig reads in config file and ENV variables if set.
 func initConfig() {
+	setLogLevel()
 	if cfgFile != "" {
 		// enable ability to specify config file via flag
 		viper.SetConfigFile(cfgFile)
@@ -114,32 +118,29 @@ func initConfig() {
 	setDefaultValues()
 
 	viper.SetConfigName("config") // name of config file (without extension)
-	//viper.SetConfigType("yaml")
-	//viper.AddConfigPath("$HOME")  // adding home directory as first search path
 	viper.AddConfigPath(".")
-	//viper.AddConfigPath("$HOME/work/src/github.com/wso2/wum-uc")
 	viper.AddConfigPath("$HOME/.wum-uc")
 	//viper.AutomaticEnv()
 
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err == nil {
-		fmt.Println("Using config file:", viper.ConfigFileUsed())
+		logger.Debug(fmt.Sprintf("Config file found: %v", viper.ConfigFileUsed()))
 	} else {
-		fmt.Println("Config file not found")
+		logger.Debug("Config file not found.")
 	}
 
-	fmt.Println("Config Values---------------------------")
-	fmt.Println(viper.GetString(constant.PROCESS_README))
-	fmt.Println(viper.GetString(constant.AUTO_VALIDATE))
-	fmt.Println(viper.GetStringMapString(constant.DEFAULT_VALUES))
-	fmt.Println(viper.GetString(constant.CHECK_MD5))
-	fmt.Println(viper.GetString(constant.UPDATE_REPOSITORY_ENABLED))
-	fmt.Println(viper.GetString(constant.UPDATE_REPOSITORY_LOCATION))
-	fmt.Println(viper.GetStringSlice(constant.RESOURCE_FILES + "." + constant.MANDATORY))
-	fmt.Println(viper.GetStringSlice(constant.RESOURCE_FILES + "." + constant.OPTIONAL))
-	fmt.Println(viper.GetStringSlice(constant.RESOURCE_FILES + "." + constant.SKIP))
-	fmt.Println("---------------------------------------")
-
+	logger.Debug("Config Values: ---------------------------")
+	logger.Debug(fmt.Sprintf("%s: %s", constant.PROCESS_README, viper.GetString(constant.PROCESS_README)))
+	logger.Debug(fmt.Sprintf("%s: %s", constant.AUTO_VALIDATE, viper.GetString(constant.AUTO_VALIDATE)))
+	logger.Debug(fmt.Sprintf("%s: %s", constant.DEFAULT_VALUES, viper.GetStringMapString(constant.DEFAULT_VALUES)))
+	logger.Debug(fmt.Sprintf("%s: %s", constant.CHECK_MD5, viper.GetString(constant.CHECK_MD5)))
+	logger.Debug(fmt.Sprintf("%s: %s", constant.UPDATE_REPOSITORY_ENABLED, viper.GetString(constant.UPDATE_REPOSITORY_ENABLED)))
+	logger.Debug(fmt.Sprintf("%s: %s", constant.UPDATE_REPOSITORY_LOCATION, viper.GetString(constant.UPDATE_REPOSITORY_LOCATION)))
+	logger.Debug(fmt.Sprintf("%s: %s", constant.RESOURCE_FILES_MANDATORY, viper.GetStringSlice(constant.RESOURCE_FILES_MANDATORY)))
+	logger.Debug(fmt.Sprintf("%s: %s", constant.RESOURCE_FILES_OPTIONAL, viper.GetStringSlice(constant.RESOURCE_FILES_OPTIONAL)))
+	logger.Debug(fmt.Sprintf("%s: %s", constant.RESOURCE_FILES_SKIP, viper.GetStringSlice(constant.RESOURCE_FILES_SKIP)))
+	logger.Debug(fmt.Sprintf("%s: %s", constant.PLATFORM_VERSIONS, viper.GetStringMapString(constant.PLATFORM_VERSIONS)))
+	logger.Debug("-----------------------------------------")
 }
 
 //This function will set the log level
@@ -148,11 +149,8 @@ func setLogLevel() {
 	layout.DefaultTimeLayout = "15:04:05"
 	//Setting new STDOUT layout to logger
 	logger.Appender().SetLayout(layout.Pattern("[%d] [%p] %m"))
+
 	//Set the log level. If the log level is not given, set the log level to default level
-
-	isDebugLogsEnabled := viper.GetBool(constant.IS_DEBUG_ENABLED)
-	isTraceLogsEnabled := viper.GetBool(constant.IS_TRACE_ENABLED)
-
 	if isDebugLogsEnabled {
 		logger.SetLevel(levels.DEBUG)
 		logger.Debug("Debug logs enabled")
@@ -176,9 +174,8 @@ func setDefaultValues() {
 	viper.SetDefault(constant.CHECK_MD5, util.CheckMd5)
 	viper.SetDefault(constant.UPDATE_REPOSITORY_ENABLED, util.UpdateRepository_Enabled)
 	viper.SetDefault(constant.UPDATE_REPOSITORY_LOCATION, util.UpdateRepository_Location)
-	viper.SetDefault(constant.RESOURCE_FILES + "." + constant.MANDATORY, util.ResourceFiles_Mandatory)
-	viper.SetDefault(constant.RESOURCE_FILES + "." + constant.OPTIONAL, util.ResourceFiles_Optional)
-	viper.SetDefault(constant.RESOURCE_FILES + "." + constant.SKIP, util.ResourceFiles_Skip)
+	viper.SetDefault(constant.RESOURCE_FILES_MANDATORY, util.ResourceFiles_Mandatory)
+	viper.SetDefault(constant.RESOURCE_FILES_OPTIONAL, util.ResourceFiles_Optional)
+	viper.SetDefault(constant.RESOURCE_FILES_SKIP, util.ResourceFiles_Skip)
 	viper.SetDefault(constant.PLATFORM_VERSIONS, util.PlatformVersions)
-
 }

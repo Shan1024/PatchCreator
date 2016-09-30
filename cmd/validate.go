@@ -62,19 +62,31 @@ func startValidation(updateFilePath, distributionLocation string) {
 	//Check update location
 	//Check 1
 	if !strings.HasSuffix(updateFilePath, ".zip") {
-		util.PrintErrorAndExit("Entered update location does not have a 'zip' extention.")
+		util.PrintErrorAndExit("Entered update does not have a 'zip' extention.")
+	} else {
+		util.PrintInfo("Entered update file has a zip extension")
 	}
 	//Check 2
 	exists, err := util.IsFileExists(updateFilePath)
 	util.HandleError(err, "")
 	if !exists {
 		util.PrintErrorAndExit("Update file '" + updateFilePath + "' does not exist.")
+	} else {
+		util.PrintInfo("Entered update file exists")
+	}
+
+	if !strings.HasSuffix(distributionLocation, ".zip") {
+		util.PrintErrorAndExit("Entered distribution does not have a 'zip' extention.")
+	} else {
+		util.PrintInfo("Entered distribution file has a zip extension")
 	}
 
 	exists, err = util.IsFileExists(distributionLocation)
 	util.HandleError(err, "Error occurred while checking '" + distributionLocation + "'")
 	if !exists {
 		util.PrintErrorAndExit("Distribution does not exist at ", distributionLocation)
+	} else {
+		util.PrintInfo("Entered distribution exists")
 	}
 
 	//Check 3
@@ -82,7 +94,7 @@ func startValidation(updateFilePath, distributionLocation string) {
 	util.HandleError(err, "")
 	match, err := regexp.MatchString(constant.FILENAME_REGEX, locationInfo.Name())
 	if !match {
-		util.PrintErrorAndExit("Update file name does not match '" + constant.FILENAME_REGEX + "' regular expression.")
+		util.PrintErrorAndExit("Update file name(" + locationInfo.Name() + ") does not match '" + constant.FILENAME_REGEX + "' regular expression.")
 	}
 	updateName := strings.TrimSuffix(locationInfo.Name(), ".zip")
 	viper.Set(constant.UPDATE_NAME, updateName)
@@ -222,24 +234,45 @@ func readUpdateZip(filename string) (map[string]bool, *util.UpdateDescriptor, er
 }
 
 func validateFile(file *zip.File, fileName, fullPath, updateName string) ([]byte, error) {
+	logger.Debug(fmt.Sprintf("Checking file: %s", fileName))
 	if file.Name != fullPath {
 		parent := strings.TrimSuffix(file.Name, file.FileInfo().Name())
 		return nil, errors.New("'" + fileName + "' found at '" + parent + "'. It should be in the '" + updateName + "' directory")
 	}
 	zippedFile, err := file.Open()
 	if err != nil {
+		logger.Debug(fmt.Sprintf("Error occurred while opening the zip file: %v", err))
 		return nil, err
 	}
 	data, err := ioutil.ReadAll(zippedFile)
-	zippedFile.Close()
 	if err != nil {
+		logger.Debug(fmt.Sprintf("Error occurred while reading the zip file: %v", err))
 		return nil, err
 	}
+	zippedFile.Close()
+
 	dataString := string(data)
+	//dataString = processData(dataString)
+	dataString = processString(dataString, "\n", true)
+
 	//check
-	isPatchWordFound := strings.Contains(dataString, "patch")
+	regex, err := regexp.Compile(constant.PATCH_REGEX)
+	allMatches := regex.FindAllStringSubmatch(dataString, -1)
+	logger.Debug(fmt.Sprintf("All matches: %v", allMatches))
+	isPatchWordFound := false
+	if len(allMatches) > 0 {
+		isPatchWordFound = true
+	}
 	if isPatchWordFound {
-		util.PrintWarning("'" + fileName + "' file contains the word 'patch'. Please review and change it to 'update' if possible.")
+		util.PrintWarning("'" + fileName + "' file contains the word 'patch' in following lines. Please review and change it to 'update' if possible.")
+		//boldColor:=color.New(color.Bold)
+		//boldColor.
+		//red := color.New(color.FgRed).PrintfFunc()
+
+		for i, line := range allMatches {
+			util.PrintInfo(fmt.Sprintf("Matching Line #%d - %v", i + 1, line[0]))
+		}
+		fmt.Println()
 	}
 	return data, nil
 }
@@ -264,3 +297,18 @@ func readDistributionZip(filename string) (map[string]bool, error) {
 	}
 	return fileMap, nil
 }
+
+//func processData(data string) string {
+//	data = strings.TrimSpace(data)
+//	data = strings.Replace(data, "\r", "\n", -1)
+//	contains := strings.Contains(data, "\n")
+//	if !contains {
+//		return data
+//	}
+//	allLines := ""
+//	lines := strings.Split(data, "\n")
+//	for _, line := range lines {
+//		allLines = allLines + strings.TrimRight(line, " ") + "\n"
+//	}
+//	return allLines
+//}

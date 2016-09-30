@@ -412,33 +412,35 @@ func PrintWhatsNext(args ...interface{}) {
 }
 
 func GetJiraSummary(id string) string {
-
+	logger.Debug(fmt.Sprintf("Getting Jira summary for: %s", id))
 	req, err := http.NewRequest("GET", constant.JIRA_API_URL + id, nil)
+	logger.Trace(fmt.Sprintf("Request: %v", req))
 	if err != nil {
-		fmt.Println("error occurred:", err)
+		logger.Debug(fmt.Sprintf("Error occurred while creating a new request: %v", err))
 		return ""
 	}
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		fmt.Println("error occurred:", err)
+		logger.Debug(fmt.Sprintf("Error occurred while requesting: %v", err))
 		return ""
 	}
 	defer res.Body.Close()
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		fmt.Println("error occurred:", err)
+		logger.Debug(fmt.Sprintf("Error occurred while getting response body: %v", err))
 		return ""
 	}
-	//fmt.Println(res)
 	responseBody := string(body)
-	//fmt.Println(responseBody)
+	logger.Trace(fmt.Sprintf("Response body: %v", responseBody))
 	regex, err := regexp.Compile(constant.JIRA_SUMMARY_REGEX)
+	if err != nil {
+		logger.Debug(fmt.Sprintf("Error occurred while compiling regex: %v", err))
+		return ""
+	}
 	result := regex.FindStringSubmatch(responseBody)
-	fmt.Println("+++++++++++++++++++++++++++++++++++++++++++++")
-
-	fmt.Println("results:", result)
+	logger.Debug(fmt.Sprintf("Match: %s", result))
 	if len(result) == 3 {
-		fmt.Println(strings.TrimSpace(result[2]))
+		logger.Debug(fmt.Sprintf("Jira Summary: %s", strings.TrimSpace(result[2])))
 		return strings.TrimSpace(result[2])
 	}
 	return ""

@@ -154,16 +154,19 @@ func processReadMe(directory string, updateDescriptor *util.UpdateDescriptor) {
 	_, err := os.Stat(readMePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			logger.Debug(directory + " not found")
+			logger.Debug(fmt.Sprintf("%s not found", readMePath))
+			setUpdateDescriptorDefaultValues(updateDescriptor)
 			return
 		}
 	}
 	data, err := ioutil.ReadFile(readMePath)
 	if err != nil {
 		logger.Debug(fmt.Sprintf("Error occurred and processing README: %v", err))
+		setUpdateDescriptorDefaultValues(updateDescriptor)
 		return
 	}
 
+	logger.Debug("README.txt found")
 	stringData := string(data)
 	regex, err := regexp.Compile(constant.PATCH_ID_REGEX)
 	if err == nil {
@@ -193,9 +196,9 @@ func processReadMe(directory string, updateDescriptor *util.UpdateDescriptor) {
 		result := regex.FindStringSubmatch(stringData)
 		logger.Trace(fmt.Sprintf("APPLIES_TO_REGEX result: %v", result))
 		if len(result) == 2 {
-			updateDescriptor.Applies_to = processAppliesTo(result[1])
+			updateDescriptor.Applies_to = processString(result[1], ", ", true)
 		} else if len(result) == 3 {
-			updateDescriptor.Applies_to = processAppliesTo(strings.TrimSpace(result[1] + result[2]))
+			updateDescriptor.Applies_to = processString(strings.TrimSpace(result[1] + result[2]), ", ", true)
 		} else {
 			logger.Debug("No matching results found for APPLIES_TO_REGEX:", result)
 		}
@@ -235,7 +238,7 @@ func processReadMe(directory string, updateDescriptor *util.UpdateDescriptor) {
 		result := regex.FindStringSubmatch(stringData)
 		logger.Trace(fmt.Sprintf("DESCRIPTION_REGEX result: %v", result))
 		if len(result) == 2 {
-			updateDescriptor.Description = processDescription(result[1])
+			updateDescriptor.Description = processString(result[1], "\n", false)
 		} else {
 
 		}
@@ -246,23 +249,41 @@ func processReadMe(directory string, updateDescriptor *util.UpdateDescriptor) {
 	logger.Debug("Processing README finished")
 }
 
-func processAppliesTo(data string) string {
-	data = strings.TrimSpace(data)
-	contains := strings.Contains(data, "\n")
-	if !contains {
-		return data
-	}
-	allProducts := ""
-	products := strings.Split(data, "\n")
+//func processAppliesTo(data string) string {
+//	data = strings.TrimSpace(data)
+//	data = strings.Replace(data, "\r", "\n", -1)
+//	contains := strings.Contains(data, "\n")
+//	if !contains {
+//		return data
+//	}
+//	allProducts := ""
+//	products := strings.Split(data, "\n")
+//
+//	for _, product := range products {
+//		allProducts = allProducts + strings.TrimSpace(product) + ", "
+//	}
+//	return strings.TrimSuffix(allProducts, ", ")
+//}
+//
+//func processDescription(data string) string {
+//	data = strings.TrimSpace(data)
+//	data = strings.Replace(data, "\r", "\n", -1)
+//	contains := strings.Contains(data, "\n")
+//	if !contains {
+//		return data
+//	}
+//	allLines := ""
+//	lines := strings.Split(data, "\n")
+//
+//	for _, line := range lines {
+//		allLines = allLines + strings.TrimRight(line, " ") + "\n"
+//	}
+//	return allLines
+//}
 
-	for _, product := range products {
-		allProducts = allProducts + strings.TrimSpace(product) + ", "
-	}
-	return strings.TrimSuffix(allProducts, ", ")
-}
-
-func processDescription(data string) string {
+func processString(data, delimiter string, trimAll bool) string {
 	data = strings.TrimSpace(data)
+	data = strings.Replace(data, "\r", "\n", -1)
 	contains := strings.Contains(data, "\n")
 	if !contains {
 		return data
@@ -271,7 +292,11 @@ func processDescription(data string) string {
 	lines := strings.Split(data, "\n")
 
 	for _, line := range lines {
-		allLines = allLines + strings.TrimRight(line, " ") + "\n"
+		if trimAll {
+			allLines = allLines + strings.TrimSpace(line) + delimiter
+		} else {
+			allLines = allLines + strings.TrimRight(line, " ") + delimiter
+		}
 	}
-	return allLines
+	return strings.TrimSuffix(allLines, delimiter)
 }

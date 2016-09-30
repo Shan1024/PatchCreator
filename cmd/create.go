@@ -111,7 +111,7 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 	//todo: look for best practice
 	util.HandleError(err, "Error occurred while reading the update directory")
 	if !exists {
-		util.PrintErrorAndExit(fmt.Sprintf("Update directory '%s' does not exist.", updateDirectoryPath))
+		util.PrintErrorAndExit(fmt.Sprintf("Update directory (%s) does not exist.", updateDirectoryPath))
 	}
 	updateRoot := strings.TrimSuffix(updateDirectoryPath, "/")
 	updateRoot = strings.TrimSuffix(updateRoot, "\\")
@@ -134,15 +134,15 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 	exists, err = util.IsFileExists(distributionPath)
 	util.HandleError(err, "Distribution path '" + distributionPath + "' does not exist")
 	if !exists {
-		util.PrintErrorAndExit("Distribution does not exist at ", updateDirectoryPath)
+		util.PrintErrorAndExit(fmt.Sprintf("Distribution does not exist at '%s'", distributionPath))
 	}
 	if !strings.HasSuffix(distributionPath, ".zip") {
-		util.PrintErrorAndExit("Entered update location does not have a 'zip' extention.")
+		util.PrintErrorAndExit(fmt.Sprintf("Entered update location(%s) does not have a 'zip' extention.", distributionPath))
 	}
 	//4) Read update-descriptor.yaml and set the update name which will be used when creating the update zip file.
 	//This is used to read the update-descriptor.yaml file
 	updateDescriptor, err := util.LoadUpdateDescriptor(constant.UPDATE_DESCRIPTOR_FILE, updateDirectoryPath)
-	util.HandleError(err, "Error occurred when reading '" + constant.UPDATE_DESCRIPTOR_FILE + "' file")
+	util.HandleError(err, fmt.Sprintf("Error occurred when reading '%s' file.", constant.UPDATE_DESCRIPTOR_FILE))
 
 	//Validate the file format
 	err = util.ValidateUpdateDescriptor(updateDescriptor)
@@ -169,7 +169,7 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 
 	rootNode := CreateNewNode()
 	if !strings.HasSuffix(distributionPath, ".zip") {
-		util.PrintErrorAndExit("Entered distribution path(%s) does not point to a zip file.", distributionPath)
+		util.PrintErrorAndExit(fmt.Sprintf("Entered distribution path(%s) does not point to a zip file.", distributionPath))
 	}
 
 	paths := strings.Split(distributionPath, constant.PATH_SEPARATOR)
@@ -279,18 +279,18 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 	//Remove the temp directories
 	util.CleanUpDirectory(constant.TEMP_DIR)
 
-	util.PrintInfo("'" + updateZipName + "' successfully created.")
+	util.PrintInfo(fmt.Sprintf("'%s' successfully created.", updateZipName))
 	if viper.GetBool(constant.AUTO_VALIDATE) {
 		util.PrintInfo(fmt.Sprintf("Validating '%s'\n", updateZipName))
 		startValidation(updateZipName, distributionPath)
 	} else {
-		util.PrintWhatsNext("Validate the update zip after any manual modification by running 'wum-uc validate " + updateName + ".zip " + distributionPath + "'")
+		util.PrintWhatsNext(fmt.Sprintf("Validate the update zip after any manual modification by running 'wum-uc validate %s.zip %s'", updateName, distributionPath))
 	}
 }
 
 func handleNoMatch(filename string, isDir bool, allFilesMap map[string]Data, rootNode *Node, updateDescriptor *util.UpdateDescriptor) error {
 	logger.Debug(fmt.Sprintf("[NO MATCH] %s", filename))
-	util.PrintInBold("'" + filename + "' not found in distribution.")
+	util.PrintInBold(fmt.Sprintf("'%s' not found in distribution.", filename))
 	for {
 		util.PrintInBold("Do you want to add it as a new file? [y/N]: ")
 		preference, err := util.GetUserInput()
@@ -301,7 +301,7 @@ func handleNoMatch(filename string, isDir bool, allFilesMap map[string]Data, roo
 			//If no error, return nil
 			return nil
 		} else if util.IsNo(preference) {
-			util.PrintWarning("Skipping copying", filename)
+			util.PrintWarning(fmt.Sprintf("Skipping copying: %s", filename))
 			return nil
 		} else {
 			util.PrintError("Invalid preference. Enter Y for Yes or N for No.")
@@ -783,7 +783,7 @@ func copyResourceFiles(resourceFilesMap map[string]bool) error {
 			if isMandatory {
 				return err
 			} else {
-				util.PrintWarning("'" + filename + "' not found.")
+				util.PrintWarning(fmt.Sprintf("'%s' not found.", filename))
 			}
 		}
 	}

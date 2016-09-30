@@ -80,6 +80,8 @@ const (
 	DESCRIPTION_REGEX = "(?s)DESCRIPTION(.*)"
 	JIRA_SUMMARY_REGEX = "summary\":(\"(.*?)\")"
 
+	PATCH_REGEX = "(?m).*patch.*"
+
 	JIRA_API_URL = "https://wso2.org/jira/rest/api/latest/issue/"
 )
 

@@ -67,7 +67,6 @@ func GetMD5(filepath string) (string, error) {
 	return hex.EncodeToString(hash.Sum(result)), nil
 }
 
-//todo: check for const
 //This function will set the update name which will be used when creating the update zip
 func GetUpdateName(updateDescriptor *UpdateDescriptor, updateNamePrefix string) string {
 	//Read the corresponding details
@@ -76,14 +75,6 @@ func GetUpdateName(updateDescriptor *UpdateDescriptor, updateNamePrefix string) 
 	updateName := updateNamePrefix + "-" + platformVersion + "-" + updateNumber
 	return updateName
 }
-
-////This checks whether the distribution directory/zip exists
-//func IsDistributionExists(distributionPath string) (bool, error) {
-//	if strings.HasSuffix(distributionPath, ".zip") {
-//		return IsFileExists(distributionPath)
-//	}
-//	return IsDirectoryExists(distributionPath)
-//}
 
 func CleanUpDirectory(path string) {
 	logger.Debug("Deleting temporary files:", path)
@@ -117,12 +108,12 @@ func HandleInterrupts(cleanupFunc func()) chan <- os.Signal {
 	return c
 }
 
-func DeleteDirectory(path string) error {
-	return os.RemoveAll(path)
-}
-
 func CreateDirectory(path string) error {
 	return os.MkdirAll(path, 0700)
+}
+
+func DeleteDirectory(path string) error {
+	return os.RemoveAll(path)
 }
 
 func IsYes(preference string) bool {
@@ -165,8 +156,8 @@ func IsUserPreferencesValid(preferences []string, availableChoices int) (bool, e
 	if err != nil {
 		return false, err
 	}
-	message := "Invalid preferences. Please select indices where " + strconv.Itoa(availableChoices) + ">= index >=1."
-	if first < 1 {
+	message := fmt.Sprintf("Invalid preferences. Please select indices where %s>= index >=1.", strconv.Itoa(availableChoices))
+	if first < 0 {
 		return false, errors.New(message)
 	}
 	last, err := strconv.Atoi(preferences[length - 1])
@@ -183,7 +174,7 @@ func IsUserPreferencesValid(preferences []string, availableChoices int) (bool, e
 func LoadUpdateDescriptor(filename, updateDirectoryPath string) (*UpdateDescriptor, error) {
 	//Construct the file path
 	updateDescriptorPath := filepath.Join(updateDirectoryPath, filename)
-	log.Debug("updateDescriptorPath:", updateDescriptorPath)
+	logger.Debug(fmt.Sprintf("updateDescriptorPath: %s", updateDescriptorPath))
 
 	//Read the file
 	updateDescriptor := UpdateDescriptor{}
@@ -208,7 +199,7 @@ func ValidateUpdateDescriptor(updateDescriptor *UpdateDescriptor) error {
 		return err
 	}
 	if !match {
-		return errors.New("'update_number' is not valid. It should match '" + constant.UPDATE_NUMBER_REGEX + "'")
+		return errors.New(fmt.Sprintf("'update_number' is not valid. It should match '%s'", constant.UPDATE_NUMBER_REGEX))
 	}
 	if len(updateDescriptor.Platform_version) == 0 {
 		return errors.New("'platform_version' field not found")
@@ -218,7 +209,7 @@ func ValidateUpdateDescriptor(updateDescriptor *UpdateDescriptor) error {
 		return err
 	}
 	if !match {
-		return errors.New("'platform_version' is not valid. It should match '" + constant.KERNEL_VERSION_REGEX + "'")
+		return errors.New(fmt.Sprintf("'platform_version' is not valid. It should match '%s'", constant.KERNEL_VERSION_REGEX))
 	}
 	if len(updateDescriptor.Platform_name) == 0 {
 		return errors.New("'platform_name' field not found")
@@ -259,6 +250,7 @@ func IsStringIsInSlice(a string, list []string) bool {
 
 // Copies file source to destination dest.
 func CopyFile(source string, dest string) (err error) {
+	logger.Debug(fmt.Sprintf("[CopyFile] Copying %s to %s.", source, dest))
 	sf, err := os.Open(source)
 	if err != nil {
 		return err
@@ -275,7 +267,6 @@ func CopyFile(source string, dest string) (err error) {
 		if err != nil {
 			return os.Chmod(dest, si.Mode())
 		}
-
 	}
 	return
 }
@@ -283,13 +274,14 @@ func CopyFile(source string, dest string) (err error) {
 //Recursively copies a directory tree, attempting to preserve permissions.
 //Source directory must exist, destination directory must *not* exist.
 func CopyDir(source string, dest string) (err error) {
+	logger.Debug(fmt.Sprintf("[CopyFile] Copying %s to %s.", source, dest))
 	// get properties of source dir
 	fi, err := os.Stat(source)
 	if err != nil {
 		return err
 	}
 	if !fi.IsDir() {
-		return &CustomError{What: "Source is not a directory"}
+		return errors.New("Source is not a directory")
 	}
 	//Create the destination folder if it does not exist
 	_, err = os.Open(dest)
@@ -297,7 +289,7 @@ func CopyDir(source string, dest string) (err error) {
 		// create dest dir
 		err = os.MkdirAll(dest, fi.Mode())
 		if err != nil {
-			return &CustomError{What: err.Error()}
+			return err
 		}
 	}
 	entries, err := ioutil.ReadDir(source)
@@ -318,22 +310,6 @@ func CopyDir(source string, dest string) (err error) {
 		}
 	}
 	return
-}
-
-func HandleError(err error, customMessage ...interface{}) {
-	if err != nil {
-		PrintErrorAndExit(append(customMessage, "[" + err.Error() + "]")...)
-	}
-}
-
-//A struct for returning custom error messages
-type CustomError struct {
-	What string
-}
-
-//Returns the error message defined in What as a string
-func (e *CustomError) Error() string {
-	return e.What
 }
 
 //Check whether the given location points to a directory
@@ -370,6 +346,12 @@ func IsFileExists(location string) (bool, error) {
 	}
 }
 
+func HandleError(err error, customMessage ...interface{}) {
+	if err != nil {
+		PrintErrorAndExit(append(customMessage, fmt.Sprintf("[%s]", err.Error()))...)
+	}
+}
+
 //This is used to print failure messages
 func PrintError(args ...interface{}) {
 	color.Set(color.FgRed, color.Bold)
@@ -393,9 +375,7 @@ func PrintWarning(args ...interface{}) {
 
 //This is used to print info messages
 func PrintInfo(args ...interface{}) {
-	//color.Set(color.Bold)
 	fmt.Println(append([]interface{}{"[INFO]"}, args...)...)
-	//color.Unset()
 }
 
 func PrintInBold(args ...interface{}) {
@@ -412,30 +392,31 @@ func PrintWhatsNext(args ...interface{}) {
 }
 
 func GetJiraSummary(id string) string {
+	defaultResponse := "[ADD_JIRA_SUMMARY_HERE]"
 	logger.Debug(fmt.Sprintf("Getting Jira summary for: %s", id))
 	req, err := http.NewRequest("GET", constant.JIRA_API_URL + id, nil)
 	logger.Trace(fmt.Sprintf("Request: %v", req))
 	if err != nil {
 		logger.Debug(fmt.Sprintf("Error occurred while creating a new request: %v", err))
-		return ""
+		return defaultResponse
 	}
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		logger.Debug(fmt.Sprintf("Error occurred while requesting: %v", err))
-		return ""
+		return defaultResponse
 	}
 	defer res.Body.Close()
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		logger.Debug(fmt.Sprintf("Error occurred while getting response body: %v", err))
-		return ""
+		return defaultResponse
 	}
 	responseBody := string(body)
 	logger.Trace(fmt.Sprintf("Response body: %v", responseBody))
 	regex, err := regexp.Compile(constant.JIRA_SUMMARY_REGEX)
 	if err != nil {
 		logger.Debug(fmt.Sprintf("Error occurred while compiling regex: %v", err))
-		return ""
+		return defaultResponse
 	}
 	result := regex.FindStringSubmatch(responseBody)
 	logger.Debug(fmt.Sprintf("Match: %s", result))
@@ -443,5 +424,25 @@ func GetJiraSummary(id string) string {
 		logger.Debug(fmt.Sprintf("Jira Summary: %s", strings.TrimSpace(result[2])))
 		return strings.TrimSpace(result[2])
 	}
-	return ""
+	return defaultResponse
+}
+
+func ProcessString(data, delimiter string, trimAll bool) string {
+	data = strings.TrimSpace(data)
+	data = strings.Replace(data, "\r", "\n", -1)
+	data = strings.Replace(data, "\t", "    ", -1)
+	contains := strings.Contains(data, "\n")
+	if !contains {
+		return data
+	}
+	allLines := ""
+	lines := strings.Split(data, "\n")
+	for _, line := range lines {
+		if trimAll {
+			allLines = allLines + strings.TrimSpace(line) + delimiter
+		} else {
+			allLines = allLines + strings.TrimRight(line, " ") + delimiter
+		}
+	}
+	return strings.TrimSuffix(allLines, delimiter)
 }

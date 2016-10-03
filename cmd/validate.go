@@ -60,42 +60,39 @@ func startValidation(updateFilePath, distributionLocation string) {
 	distributionFileMap := make(map[string]bool)
 
 	//Check update location
-	//Check 1
+	//Check
 	if !strings.HasSuffix(updateFilePath, ".zip") {
 		util.PrintErrorAndExit("Entered update does not have a 'zip' extention.")
-	} else {
-		util.PrintInfo("Entered update file has a zip extension")
 	}
-	//Check 2
+
+	//Check
 	exists, err := util.IsFileExists(updateFilePath)
 	util.HandleError(err, "")
 	if !exists {
 		util.PrintErrorAndExit("Update file '" + updateFilePath + "' does not exist.")
-	} else {
-		util.PrintInfo("Entered update file exists")
 	}
 
 	if !strings.HasSuffix(distributionLocation, ".zip") {
 		util.PrintErrorAndExit("Entered distribution does not have a 'zip' extention.")
-	} else {
-		util.PrintInfo("Entered distribution file has a zip extension")
 	}
+	viper.Set(constant.PRODUCT_NAME, strings.TrimSuffix(distributionLocation, ".zip"))
+	distributionFileMap, err = readDistributionZip(distributionLocation)
 
+	//check
 	exists, err = util.IsFileExists(distributionLocation)
 	util.HandleError(err, "Error occurred while checking '" + distributionLocation + "'")
 	if !exists {
 		util.PrintErrorAndExit("Distribution does not exist at ", distributionLocation)
-	} else {
-		util.PrintInfo("Entered distribution exists")
 	}
 
-	//Check 3
+	//Check
 	locationInfo, err := os.Stat(updateFilePath)
 	util.HandleError(err, "")
 	match, err := regexp.MatchString(constant.FILENAME_REGEX, locationInfo.Name())
 	if !match {
 		util.PrintErrorAndExit("Update file name(" + locationInfo.Name() + ") does not match '" + constant.FILENAME_REGEX + "' regular expression.")
 	}
+
 	updateName := strings.TrimSuffix(locationInfo.Name(), ".zip")
 	viper.Set(constant.UPDATE_NAME, updateName)
 
@@ -103,15 +100,6 @@ func startValidation(updateFilePath, distributionLocation string) {
 	util.HandleError(err)
 	logger.Debug(updateFileMap)
 
-	//Check dist location
-	if strings.HasSuffix(distributionLocation, ".zip") {
-		locationInfo, err := os.Stat(distributionLocation)
-		util.HandleError(err, "")
-		viper.Set(constant.PRODUCT_NAME, strings.TrimSuffix(locationInfo.Name(), ".zip"))
-		distributionFileMap, err = readDistributionZip(distributionLocation)
-	} else {
-
-	}
 	err = compare(updateFileMap, distributionFileMap, updateDescriptor)
 	util.HandleError(err)
 	util.PrintInfo("'" + updateName + "' validation successfully finished.")
@@ -130,6 +118,7 @@ func compare(updateFileMap, distributionFileMap map[string]bool, updateDescripto
 			logger.Debug(fmt.Sprintf("fileName: %s", fileName))
 			_, foundInResources := resourceFiles[fileName]
 			logger.Debug(fmt.Sprintf("found in resources: %s", foundInResources))
+			//check
 			if !isInAddedFiles && !foundInResources {
 				return errors.New("File not found in the distribution: '" + filePath + "'. If this is a new file, add an entry to the 'added_files' sections in the '" + constant.UPDATE_DESCRIPTOR_FILE + "' file")
 			} else {
@@ -163,7 +152,7 @@ func readUpdateZip(filename string) (map[string]bool, *util.UpdateDescriptor, er
 			logger.Debug("dir:", file.FileInfo().Name())
 			if file.FileInfo().Name() != updateName {
 				logger.Debug("Checking:", file.FileInfo().Name())
-				//Check 4
+				//Check
 				prefix := filepath.Join(updateName, constant.CARBON_HOME)
 				hasPrefix := strings.HasPrefix(file.Name, prefix)
 				if !hasPrefix {
@@ -218,7 +207,7 @@ func readUpdateZip(filename string) (map[string]bool, *util.UpdateDescriptor, er
 				_, foundInResources := resourceFiles[file.FileInfo().Name()]
 				logger.Debug(fmt.Sprintf("foundInResources: %s", foundInResources))
 				if !hasPrefix && !foundInResources {
-					return nil, nil, errors.New("Unknown file found: '" + file.Name + "'")
+					return nil, nil, errors.New(fmt.Sprintf("Unknown file found: '%s'.", file.Name))
 				}
 				relativePath := strings.TrimPrefix(file.Name, prefix + string(os.PathSeparator))
 				fileMap[relativePath] = false
@@ -234,10 +223,12 @@ func readUpdateZip(filename string) (map[string]bool, *util.UpdateDescriptor, er
 }
 
 func validateFile(file *zip.File, fileName, fullPath, updateName string) ([]byte, error) {
-	logger.Debug(fmt.Sprintf("Checking file: %s", fileName))
+	logger.Debug(fmt.Sprintf("Validating '%s' at '%s' started.", fileName, fullPath))
+	parent := strings.TrimSuffix(file.Name, file.FileInfo().Name())
 	if file.Name != fullPath {
-		parent := strings.TrimSuffix(file.Name, file.FileInfo().Name())
-		return nil, errors.New("'" + fileName + "' found at '" + parent + "'. It should be in the '" + updateName + "' directory")
+		return nil, errors.New(fmt.Sprintf("'%s' found at '%s'. It should be in the '%s' directory.", fileName, parent, updateName))
+	} else {
+		logger.Debug(fmt.Sprintf("'%s' found at '%s'.", fileName, parent))
 	}
 	zippedFile, err := file.Open()
 	if err != nil {
@@ -252,8 +243,7 @@ func validateFile(file *zip.File, fileName, fullPath, updateName string) ([]byte
 	zippedFile.Close()
 
 	dataString := string(data)
-	//dataString = processData(dataString)
-	dataString = processString(dataString, "\n", true)
+	dataString = util.ProcessString(dataString, "\n", true)
 
 	//check
 	regex, err := regexp.Compile(constant.PATCH_REGEX)
@@ -265,15 +255,12 @@ func validateFile(file *zip.File, fileName, fullPath, updateName string) ([]byte
 	}
 	if isPatchWordFound {
 		util.PrintWarning("'" + fileName + "' file contains the word 'patch' in following lines. Please review and change it to 'update' if possible.")
-		//boldColor:=color.New(color.Bold)
-		//boldColor.
-		//red := color.New(color.FgRed).PrintfFunc()
-
 		for i, line := range allMatches {
 			util.PrintInfo(fmt.Sprintf("Matching Line #%d - %v", i + 1, line[0]))
 		}
 		fmt.Println()
 	}
+	logger.Debug(fmt.Sprintf("Validating '%s' finished.", fileName))
 	return data, nil
 }
 
@@ -297,18 +284,3 @@ func readDistributionZip(filename string) (map[string]bool, error) {
 	}
 	return fileMap, nil
 }
-
-//func processData(data string) string {
-//	data = strings.TrimSpace(data)
-//	data = strings.Replace(data, "\r", "\n", -1)
-//	contains := strings.Contains(data, "\n")
-//	if !contains {
-//		return data
-//	}
-//	allLines := ""
-//	lines := strings.Split(data, "\n")
-//	for _, line := range lines {
-//		allLines = allLines + strings.TrimRight(line, " ") + "\n"
-//	}
-//	return allLines
-//}

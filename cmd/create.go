@@ -41,11 +41,6 @@ type Node struct {
 	md5Hash          string
 }
 
-func (node *Node) PrintNode() {
-	fmt.Println(node.name, "(", node.isDir, "):", node.relativeLocation)
-	fmt.Println(node.childNodes)
-}
-
 func CreateNewNode() Node {
 	return Node{
 		childNodes: make(map[string]*Node),
@@ -108,7 +103,6 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 
 	//1) Check whether the given update directory exists
 	exists, err := util.IsDirectoryExists(updateDirectoryPath)
-	//todo: look for best practice
 	util.HandleError(err, "Error occurred while reading the update directory")
 	if !exists {
 		util.PrintErrorAndExit(fmt.Sprintf("Update directory (%s) does not exist.", updateDirectoryPath))
@@ -128,7 +122,7 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 		util.PrintWhatsNext(fmt.Sprintf("Run 'wum-uc init %s' to generate the '%s' template in the update location.", updateDirectoryPath, constant.UPDATE_DESCRIPTOR_FILE))
 		os.Exit(1)
 	}
-	logger.Debug("Descriptor Exists. Location %s", updateDescriptorPath)
+	logger.Debug(fmt.Sprintf("Descriptor Exists. Location %s", updateDescriptorPath))
 
 	//3) Check whether the given distribution exists
 	exists, err = util.IsFileExists(distributionPath)
@@ -177,6 +171,7 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 	viper.Set(constant.PRODUCT_NAME, distributionName)
 
 	logger.Debug("Reading zip")
+	util.PrintInfo(fmt.Sprintf("Reading %s. Please wait...", distributionName))
 	rootNode, err = readZip(distributionPath)
 	util.HandleError(err)
 	logger.Debug("Reading zip finished")
@@ -188,7 +183,6 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 	logger.Debug("-------------------------------------")
 
 	//todo: save the selected location to generate the final summary map
-
 	//7) Find matches and copy files to the temp
 	logger.Debug("\nChecking Directories:")
 	matches := make(map[string]*Node)
@@ -211,7 +205,6 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 			}
 			err := handleSingleMatch(directoryName, match, true, allFilesMap, &rootNode, updateDescriptor)
 			util.HandleError(err)
-
 		default:
 			logger.Debug("\nMultiple matches found\n")
 			err := handleMultipleMatches(directoryName, true, matches, allFilesMap, &rootNode, updateDescriptor)
@@ -259,17 +252,15 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 
 	updateZipName := updateName + ".zip"
 
+	logger.Debug(fmt.Sprintf("Update repository is enabled: %v", viper.GetBool(constant.UPDATE_REPOSITORY_ENABLED)))
 	//9) Create the update zip file
 	if viper.GetBool(constant.UPDATE_REPOSITORY_ENABLED) {
-		logger.Debug("Update repository is enabled")
 		updateRepository := viper.GetString(constant.UPDATE_REPOSITORY_LOCATION)
 		util.HandleError(err)
 		logger.Debug("Update repository location is set to:", updateRepository)
 		err = util.CreateDirectory(updateRepository)
 		util.HandleError(err)
 		updateZipName = path.Join(updateRepository, updateZipName)
-	} else {
-		logger.Debug("Update repository is disabled")
 	}
 
 	logger.Debug(fmt.Sprintf("updateZipName: %s", updateZipName))
@@ -290,10 +281,13 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 
 func handleNoMatch(filename string, isDir bool, allFilesMap map[string]Data, rootNode *Node, updateDescriptor *util.UpdateDescriptor) error {
 	logger.Debug(fmt.Sprintf("[NO MATCH] %s", filename))
-	util.PrintInBold(fmt.Sprintf("'%s' not found in distribution.", filename))
+	util.PrintInBold(fmt.Sprintf("'%s' not found in distribution. ", filename))
 	for {
 		util.PrintInBold("Do you want to add it as a new file? [y/N]: ")
 		preference, err := util.GetUserInput()
+		if len(preference) == 0 {
+			preference = "n"
+		}
 		util.HandleError(err, "Error occurred while getting input from the user.")
 		if util.IsYes(preference) {
 			err = handleNewFile(filename, isDir, rootNode, allFilesMap, updateDescriptor)
@@ -355,6 +349,9 @@ func handleNewFile(filename string, isDir bool, rootNode *Node, allFilesMap map[
 			for {
 				util.PrintInBold("Copy anyway? [y/n/R]: ")
 				preference, err := util.GetUserInput()
+				if len(preference) == 0 {
+					preference = "r"
+				}
 				util.HandleError(err, "Error occurred while getting input from the user.")
 				if util.IsYes(preference) {
 					updateRoot := viper.GetString(constant.UPDATE_ROOT)
@@ -426,9 +423,10 @@ func handleMultipleMatches(filename string, isDir bool, matches map[string]*Node
 	locationTable, indexMap := generateLocationTable(filename, matches)
 	locationTable.Render()
 	logger.Debug(fmt.Sprintf("indexMap: %s", indexMap))
+	skipCopying := false
 	var selectedIndices []string
 	for {
-		util.PrintInBold("Enter preference(s)[Multiple selections separated by commas]: ")
+		util.PrintInBold("Enter preference(s)[Multiple selections separated by commas, 0 to skip copying]: ")
 		preferences, err := util.GetUserInput()
 		util.HandleError(err)
 		logger.Debug(fmt.Sprintf("preferences: %s", preferences))
@@ -443,15 +441,23 @@ func handleMultipleMatches(filename string, isDir bool, matches map[string]*Node
 		length := len(indexMap)
 		isValid, err := util.IsUserPreferencesValid(selectedIndices, length)
 		if err != nil {
-			util.PrintError("Invalid preferences. Please select indices where 1 <= index <= " + strconv.Itoa(length))
+			util.PrintError("Invalid preferences. Please select indices where 0 <= index <= " + strconv.Itoa(length))
 			continue
 		}
 		if !isValid {
-			util.PrintError("Invalid preferences. Please select indices where 1 <= index <= " + strconv.Itoa(length))
+			util.PrintError("Invalid preferences. Please select indices where 0 <= index <= " + strconv.Itoa(length))
 		} else {
 			logger.Debug("Entered preferences are valid.")
+			if selectedIndices[0] == "0" {
+				skipCopying = true
+			}
 			break
 		}
+	}
+	if skipCopying {
+		logger.Debug(fmt.Sprintf("Skipping copying '%s'", filename))
+		util.PrintWarning(fmt.Sprintf("0 entered. Skipping copying '%s'.", filename))
+		return nil
 	}
 	updateRoot := viper.GetString(constant.UPDATE_ROOT)
 	if isDir {
@@ -471,9 +477,8 @@ func handleMultipleMatches(filename string, isDir bool, matches map[string]*Node
 					if md5Matches {
 						logger.Debug("MD5 matches. Ignoring file.")
 						continue
-					} else {
-						logger.Debug("MD5 does not match. Copying the file.")
 					}
+					logger.Debug("MD5 does not match. Copying the file.")
 				}
 				logger.Debug(fmt.Sprintf("[Copy] %s ; From: %s ; To: %s", filename, updateRoot, pathInDistribution))
 				err := copyFile(match, updateRoot, pathInDistribution, rootNode, updateDescriptor)
@@ -503,7 +508,6 @@ func getAllMatchingFiles(filepath string, allFilesMap map[string]Data) []string 
 }
 
 func readDirectory(root string, ignoredFiles map[string]bool) (map[string]Data, map[string]bool, map[string]bool, error) {
-
 	allFilesMap := make(map[string]Data)
 	rootLevelDirectoriesMap := make(map[string]bool)
 	rootLevelFilesMap := make(map[string]bool)
@@ -524,53 +528,30 @@ func readDirectory(root string, ignoredFiles map[string]bool) (map[string]Data, 
 				return nil
 			}
 		}
-
 		relativePath := strings.TrimPrefix(absolutePath, root + "/")
 		info := Data{
 			name: fileInfo.Name(),
 			relativePath: relativePath,
 		}
-
 		if fileInfo.IsDir() {
-
 			logger.Debug(absolutePath + " : " + fileInfo.Name())
-			//locationMap.Add(fileInfo.Name(), parentDirectory, fileInfo.IsDir(), "")
-
 			info.isDir = true
-
 			if path.Join(root, fileInfo.Name()) == absolutePath {
 				rootLevelDirectoriesMap[fileInfo.Name()] = true
 			}
 		} else {
-
 			if path.Join(root, fileInfo.Name()) == absolutePath {
 				rootLevelFilesMap[fileInfo.Name()] = false
 			}
-
-			logger.Debug("[MD5] Calculating MD5")
+			logger.Trace("[MD5] Calculating MD5")
 			//If it is a file, calculate md5 sum
 			md5Sum, err := util.GetMD5(absolutePath)
 			if err != nil {
 				return err
 			}
-			logger.Debug(absolutePath + " : " + fileInfo.Name() + ": " + md5Sum)
-
+			logger.Trace(fmt.Sprintf("%s : %s = %s", absolutePath, fileInfo.Name(), md5Sum))
 			info.md5 = md5Sum
 			info.isDir = false
-			//locationMap.Add(fileInfo.Name(), parentDirectory, fileInfo.IsDir(), md5)
-			//
-			//fullPath := path.Join(root, constant.PLUGINS_DIRECTORY, fileInfo.Name())
-			//logger.Trace("[COMPARE] " + fullPath + " ; " + absolutePath)
-			//if (fullPath == absolutePath) && util.HasJarExtension(absolutePath) {
-			//	logger.Debug("[PLUGIN] FilePath:", absolutePath)
-			//	newFileName := strings.Replace(fileInfo.Name(), "_", "-", 1)
-			//	logger.Debug("[PLUGIN] New Name:", newFileName)
-			//	if index := strings.Index(newFileName, "_"); index != -1 {
-			//		return errors.New(fileInfo.Name() + " is in " + constant.PLUGINS_DIRECTORY + ". But it has multiple _ in its name. Only one _ is expected." )
-			//	}
-			//	locationMap.Add(newFileName, parentDirectory, fileInfo.IsDir(), md5)
-			//}
-
 		}
 		allFilesMap[relativePath] = info
 		return nil
@@ -783,7 +764,7 @@ func copyResourceFiles(resourceFilesMap map[string]bool) error {
 			if isMandatory {
 				return err
 			} else {
-				util.PrintWarning(fmt.Sprintf("'%s' not found.", filename))
+				util.PrintInfo(fmt.Sprintf("Optional resource file '%s' not found.", filename))
 			}
 		}
 	}
@@ -792,13 +773,11 @@ func copyResourceFiles(resourceFilesMap map[string]bool) error {
 
 //This will generate the location table and the index map which will be used to get user preference
 func generateLocationTable(filename string, locationsInDistribution map[string]*Node) (*tablewriter.Table, map[string]string) {
-
 	locationTable := tablewriter.NewWriter(os.Stdout)
 	locationTable.SetAlignment(tablewriter.ALIGN_LEFT)
 	locationTable.SetHeader([]string{"Index", "Matching Location"})
 
 	allPaths := make([]string, 0)
-
 	for distributionFilepath, _ := range locationsInDistribution {
 		allPaths = append(allPaths, distributionFilepath)
 	}
@@ -818,12 +797,6 @@ func generateLocationTable(filename string, locationsInDistribution map[string]*
 
 ////This function will copy the file/directory from update to temp location
 func copyFile(filename string, locationInUpdate, relativeLocationInTemp string, rootNode *Node, updateDescriptor *util.UpdateDescriptor) error {
-	//todo list
-	//check type
-	//if file, check path matches /plugin path
-	//else dir, check files in the directory for matches
-
-	//get the relative path in the distribution and join to the temp directory to get the destination directory
 	logger.Debug(fmt.Sprintf("[FINAL][COPY ROOT] Name: %s ; IsDir: false ; From: %s ; To: %s", filename, locationInUpdate, relativeLocationInTemp))
 	updateName := viper.GetString(constant.UPDATE_NAME)
 	source := path.Join(locationInUpdate, filename)

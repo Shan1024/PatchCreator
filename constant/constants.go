@@ -76,7 +76,7 @@ const (
 
 	PATCH_ID_REGEX = "WSO2-CARBON-PATCH-(\\d+\\.\\d+\\.\\d+)-(\\d{4})"
 	APPLIES_TO_REGEX = "(?s)Applies To.*?:(.*)Associated JIRA|Applies To.*?:(.*)DESCRIPTION"
-	ASSOCIATED_JIRAS_REGEX = "https:\\/\\/wso2\\.org\\/jira\\/browse\\/(\\S*)"
+	ASSOCIATED_JIRAS_REGEX = "https:\\/\\/wso2\\.org\\/jira\\/browse\\/([A-Z]*?-\\d+)"
 	DESCRIPTION_REGEX = "(?s)DESCRIPTION(.*)"
 	JIRA_SUMMARY_REGEX = "summary\":(\"(.*?)\")"
 

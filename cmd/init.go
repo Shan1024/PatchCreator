@@ -92,10 +92,15 @@ func initCurrentDirectory() {
 }
 
 func initDirectory(destination string) {
-	logger.Debug("Initializing started.")
-	err := util.CreateDirectory(destination)
-	util.HandleError(err)
 
+	logger.Debug("Initializing started.")
+	exists, err := util.IsDirectoryExists(destination)
+	logger.Debug(fmt.Sprintf("'%s' directory exists: %v", destination, exists))
+	if !exists {
+		util.PrintInfo(fmt.Sprintf("'%s' directory does not exist. Creating '%s' directory.", destination, destination))
+		err := util.CreateDirectory(destination)
+		util.HandleError(err)
+	}
 	updateDescriptorFile := filepath.Join(destination, constant.UPDATE_DESCRIPTOR_FILE)
 	logger.Debug(fmt.Sprintf("updateDescriptorFile: %v", updateDescriptorFile))
 	updateDescriptor := util.UpdateDescriptor{}
@@ -129,9 +134,9 @@ func initDirectory(destination string) {
 	if err != nil {
 		util.HandleError(err)
 	}
-	util.PrintInfo(fmt.Sprintf("'%s' has been successfully created.", constant.UPDATE_DESCRIPTOR_FILE))
+	util.PrintInfo(fmt.Sprintf("'%s' has been successfully created at '%s'.", constant.UPDATE_DESCRIPTOR_FILE, destination))
 
-	util.PrintWhatsNext("run 'wum-uc init --sample' to view sample file.")
+	util.PrintWhatsNext(fmt.Sprintf("run 'wum-uc init --sample' to view a sample '%s' file.", constant.UPDATE_DESCRIPTOR_FILE))
 }
 
 func setUpdateDescriptorDefaultValues(updateDescriptor *util.UpdateDescriptor) {
@@ -196,9 +201,9 @@ func processReadMe(directory string, updateDescriptor *util.UpdateDescriptor) {
 		result := regex.FindStringSubmatch(stringData)
 		logger.Trace(fmt.Sprintf("APPLIES_TO_REGEX result: %v", result))
 		if len(result) == 2 {
-			updateDescriptor.Applies_to = processString(result[1], ", ", true)
+			updateDescriptor.Applies_to = util.ProcessString(result[1], ", ", true)
 		} else if len(result) == 3 {
-			updateDescriptor.Applies_to = processString(strings.TrimSpace(result[1] + result[2]), ", ", true)
+			updateDescriptor.Applies_to = util.ProcessString(strings.TrimSpace(result[1] + result[2]), ", ", true)
 		} else {
 			logger.Debug("No matching results found for APPLIES_TO_REGEX:", result)
 		}
@@ -238,7 +243,7 @@ func processReadMe(directory string, updateDescriptor *util.UpdateDescriptor) {
 		result := regex.FindStringSubmatch(stringData)
 		logger.Trace(fmt.Sprintf("DESCRIPTION_REGEX result: %v", result))
 		if len(result) == 2 {
-			updateDescriptor.Description = processString(result[1], "\n", false)
+			updateDescriptor.Description = util.ProcessString(result[1], "\n", false)
 		} else {
 
 		}
@@ -247,56 +252,4 @@ func processReadMe(directory string, updateDescriptor *util.UpdateDescriptor) {
 		logger.Debug(fmt.Sprintf("Error occurred while processing DESCRIPTION_REGEX: %v", err))
 	}
 	logger.Debug("Processing README finished")
-}
-
-//func processAppliesTo(data string) string {
-//	data = strings.TrimSpace(data)
-//	data = strings.Replace(data, "\r", "\n", -1)
-//	contains := strings.Contains(data, "\n")
-//	if !contains {
-//		return data
-//	}
-//	allProducts := ""
-//	products := strings.Split(data, "\n")
-//
-//	for _, product := range products {
-//		allProducts = allProducts + strings.TrimSpace(product) + ", "
-//	}
-//	return strings.TrimSuffix(allProducts, ", ")
-//}
-//
-//func processDescription(data string) string {
-//	data = strings.TrimSpace(data)
-//	data = strings.Replace(data, "\r", "\n", -1)
-//	contains := strings.Contains(data, "\n")
-//	if !contains {
-//		return data
-//	}
-//	allLines := ""
-//	lines := strings.Split(data, "\n")
-//
-//	for _, line := range lines {
-//		allLines = allLines + strings.TrimRight(line, " ") + "\n"
-//	}
-//	return allLines
-//}
-
-func processString(data, delimiter string, trimAll bool) string {
-	data = strings.TrimSpace(data)
-	data = strings.Replace(data, "\r", "\n", -1)
-	contains := strings.Contains(data, "\n")
-	if !contains {
-		return data
-	}
-	allLines := ""
-	lines := strings.Split(data, "\n")
-
-	for _, line := range lines {
-		if trimAll {
-			allLines = allLines + strings.TrimSpace(line) + delimiter
-		} else {
-			allLines = allLines + strings.TrimRight(line, " ") + delimiter
-		}
-	}
-	return strings.TrimSuffix(allLines, delimiter)
 }

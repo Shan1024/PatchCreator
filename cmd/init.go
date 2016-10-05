@@ -25,7 +25,9 @@ var (
 	initCmdLongDesc = dedent.Dedent(`
 		This command will generate the 'update-descriptor.yaml' file. If the
 		user does not specify a location, it will generate the template in
-		the current working directory.`)
+		the current working directory and fill the data using any availabe
+		README.txt file. If READMT.txt is not found, it will fill values
+		using default values in the config.yaml.`)
 
 	initCmdExample = dedent.Dedent(`update_number: 0001
 platform_version: 4.4.0
@@ -62,7 +64,7 @@ func init() {
 	initCmd.Flags().BoolP("sample", "s", util.PrintSampleSelected, "Show sample file")
 	viper.BindPFlag(constant.SAMPLE, initCmd.Flags().Lookup("sample"))
 
-	initCmd.Flags().BoolP("process", "p", viper.GetBool(constant.PROCESS_README), "Process README.txt file")
+	initCmd.Flags().BoolP("process", "p", util.ProcessReadMe, "Disable processing README.txt file")
 	viper.BindPFlag(constant.PROCESS_README, initCmd.Flags().Lookup("process"))
 }
 
@@ -96,16 +98,41 @@ func initDirectory(destination string) {
 	logger.Debug("Initializing started.")
 	exists, err := util.IsDirectoryExists(destination)
 	logger.Debug(fmt.Sprintf("'%s' directory exists: %v", destination, exists))
+
+	skip := false
+
 	if !exists {
-		util.PrintInfo(fmt.Sprintf("'%s' directory does not exist. Creating '%s' directory.", destination, destination))
-		err := util.CreateDirectory(destination)
-		util.HandleError(err)
+		for {
+			util.PrintInBold(fmt.Sprintf("'%s'does not exists. Do you want to create '%s' directory?[Y/n]: ", destination, destination))
+			preference, err := util.GetUserInput()
+			if len(preference) == 0 {
+				preference = "y"
+			}
+			util.HandleError(err, "Error occurred while getting input from the user.")
+			if util.IsYes(preference) {
+				util.PrintInfo(fmt.Sprintf("'%s' directory does not exist. Creating '%s' directory.", destination, destination))
+				err := util.CreateDirectory(destination)
+				util.HandleError(err)
+				logger.Debug(fmt.Sprintf("'%s' directory created.", destination))
+				break;
+			} else if util.IsNo(preference) {
+				skip = true
+				break;
+			} else {
+				util.PrintError("Invalid preference. Enter Y for Yes or N for No.")
+			}
+		}
 	}
+
+	if skip {
+		util.PrintErrorAndExit("Directory creation skipped. Please enter a valid directory.")
+	}
+
 	updateDescriptorFile := filepath.Join(destination, constant.UPDATE_DESCRIPTOR_FILE)
 	logger.Debug(fmt.Sprintf("updateDescriptorFile: %v", updateDescriptorFile))
 	updateDescriptor := util.UpdateDescriptor{}
 
-	if viper.GetBool(constant.PROCESS_README) {
+	if !viper.GetBool(constant.PROCESS_README) {
 		logger.Debug(constant.PROCESS_README + " enabled")
 		processReadMe(destination, &updateDescriptor)
 	} else {
@@ -134,22 +161,29 @@ func initDirectory(destination string) {
 	if err != nil {
 		util.HandleError(err)
 	}
-	util.PrintInfo(fmt.Sprintf("'%s' has been successfully created at '%s'.", constant.UPDATE_DESCRIPTOR_FILE, destination))
+	absDestination, err := filepath.Abs(destination)
+	if err != nil {
+		absDestination = destination
+	}
+	util.PrintInfo(fmt.Sprintf("'%s' has been successfully created at '%s'.", constant.UPDATE_DESCRIPTOR_FILE, absDestination))
 
 	util.PrintWhatsNext(fmt.Sprintf("run 'wum-uc init --sample' to view a sample '%s' file.", constant.UPDATE_DESCRIPTOR_FILE))
 }
 
 func setUpdateDescriptorDefaultValues(updateDescriptor *util.UpdateDescriptor) {
 	logger.Debug("Setting default values:")
-	logger.Debug(fmt.Sprintf("platform_name: %s", util.PlatformName_Default))
+	updateDescriptor.Update_number = constant.UPDATE_NO_DEFAULT
+	updateDescriptor.Applies_to = constant.APPLIES_TO_DEFAULT
+	updateDescriptor.Description = constant.DESCRIPTION_DEFAULT
 	updateDescriptor.Platform_name = util.PlatformName_Default
-	logger.Debug(fmt.Sprintf("platform_version: %s", util.PlatformVersion_Default))
 	updateDescriptor.Platform_version = util.PlatformVersion_Default
 	bugFixes := map[string]string{
 		util.BugFixes_Default: util.BugFixes_Default,
 	}
-	logger.Debug(fmt.Sprintf("bug_fixes: %v", bugFixes))
 	updateDescriptor.Bug_fixes = bugFixes
+	logger.Debug(fmt.Sprintf("platform_name: %s", util.PlatformName_Default))
+	logger.Debug(fmt.Sprintf("platform_version: %s", util.PlatformVersion_Default))
+	logger.Debug(fmt.Sprintf("bug_fixes: %v", bugFixes))
 }
 
 func processReadMe(directory string, updateDescriptor *util.UpdateDescriptor) {
@@ -188,12 +222,16 @@ func processReadMe(directory string, updateDescriptor *util.UpdateDescriptor) {
 				updateDescriptor.Platform_name = platformName
 			} else {
 				logger.Debug("No matching platform name found for:", result[1])
+				updateDescriptor.Platform_name = constant.PLATFORM_NAME_DEFAULT
 			}
 		} else {
 			logger.Debug("PATCH_ID_REGEX results incorrect:", result)
 		}
 	} else {
 		logger.Debug(fmt.Sprintf("Error occurred while processing PATCH_ID_REGEX: %v", err))
+		updateDescriptor.Update_number = constant.UPDATE_NO_DEFAULT
+		updateDescriptor.Platform_name = constant.PLATFORM_NAME_DEFAULT
+		updateDescriptor.Platform_version = constant.PLATFORM_VERSION_DEFAULT
 	}
 
 	regex, err = regexp.Compile(constant.APPLIES_TO_REGEX)
@@ -209,6 +247,7 @@ func processReadMe(directory string, updateDescriptor *util.UpdateDescriptor) {
 		}
 	} else {
 		logger.Debug(fmt.Sprintf("Error occurred while processing APPLIES_TO_REGEX: %v", err))
+		updateDescriptor.Applies_to = constant.APPLIES_TO_DEFAULT
 	}
 
 	regex, err = regexp.Compile(constant.ASSOCIATED_JIRAS_REGEX)
@@ -250,6 +289,7 @@ func processReadMe(directory string, updateDescriptor *util.UpdateDescriptor) {
 		logger.Debug(fmt.Sprintf("No matching results found for DESCRIPTION_REGEX: %v", result))
 	} else {
 		logger.Debug(fmt.Sprintf("Error occurred while processing DESCRIPTION_REGEX: %v", err))
+		updateDescriptor.Description = constant.DESCRIPTION_DEFAULT
 	}
 	logger.Debug("Processing README finished")
 }

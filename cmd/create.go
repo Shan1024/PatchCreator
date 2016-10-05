@@ -52,9 +52,8 @@ var (
 	createCmdShortDesc = "Create a new update"
 	createCmdLongDesc = dedent.Dedent(`
 		This command will create a new update zip file from the files in the
-		given directory. To generate the folder structure, it requires the
-		product distribution also. This distribution can either be the zip
-		file or the extracted directory.`)
+		given directory. To generate the directory structure, it requires the
+		product distribution zip file.`)
 )
 
 //createCmd represents the create command
@@ -71,7 +70,7 @@ func init() {
 	createCmd.Flags().BoolVarP(&isDebugLogsEnabled, "debug", "d", util.EnableDebugLogs, "Enable debug logs")
 	createCmd.Flags().BoolVarP(&isTraceLogsEnabled, "trace", "t", util.EnableTraceLogs, "Enable trace logs")
 
-	createCmd.Flags().BoolP("validate", "v", viper.GetBool(constant.AUTO_VALIDATE), "Enable/Disable validating the content of update zip")
+	createCmd.Flags().BoolP("validate", "v", util.AutoValidate, "Disable validating the content of update zip")
 	viper.BindPFlag(constant.AUTO_VALIDATE, createCmd.Flags().Lookup("validate"))
 
 	createCmd.Flags().BoolP("repository", "r", viper.GetBool(constant.UPDATE_REPOSITORY_ENABLED), "Enable/Disable repository")
@@ -80,7 +79,7 @@ func init() {
 	createCmd.Flags().StringP("location", "l", viper.GetString(constant.UPDATE_REPOSITORY_LOCATION), "Override repository location")
 	viper.BindPFlag(constant.UPDATE_REPOSITORY_LOCATION, createCmd.Flags().Lookup("location"))
 
-	createCmd.Flags().BoolP("md5", "m", viper.GetBool(constant.CHECK_MD5), "Enable/Disable checking MD5 sum")
+	createCmd.Flags().BoolP("md5", "m", util.CheckMd5, "Disable checking MD5 sum")
 	viper.BindPFlag(constant.CHECK_MD5, createCmd.Flags().Lookup("md5"))
 }
 
@@ -154,9 +153,9 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 	allFilesMap, rootLevelDirectoriesMap, rootLevelFilesMap, err := readDirectory(updateDirectoryPath, ignoredFiles)
 	util.HandleError(err, "")
 
-	logger.Debug(fmt.Sprintf("allFilesMap: %s\n", allFilesMap))
-	logger.Debug(fmt.Sprintf("directoryList: %s\n", rootLevelDirectoriesMap))
-	logger.Debug(fmt.Sprintf("fileList: %s\n", rootLevelFilesMap))
+	logger.Trace(fmt.Sprintf("allFilesMap: %s\n", allFilesMap))
+	logger.Trace(fmt.Sprintf("directoryList: %s\n", rootLevelDirectoriesMap))
+	logger.Trace(fmt.Sprintf("fileList: %s\n", rootLevelFilesMap))
 
 	//err = readDirectoryStructure(updateDirectoryPath, &updateLocationInfo, ignoredFiles, true)
 	//logger.Debug("updateLocationInfo:", updateLocationInfo)
@@ -251,15 +250,20 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 	util.HandleError(err)
 
 	updateZipName := updateName + ".zip"
-
 	logger.Debug(fmt.Sprintf("Update repository is enabled: %v", viper.GetBool(constant.UPDATE_REPOSITORY_ENABLED)))
 	//9) Create the update zip file
 	if viper.GetBool(constant.UPDATE_REPOSITORY_ENABLED) {
 		updateRepository := viper.GetString(constant.UPDATE_REPOSITORY_LOCATION)
+		if updateRepository[:2] == "~/" {
+			updateRepository = filepath.Join(util.HomeDirectory, updateRepository[2:])
+		}
+		logger.Debug(fmt.Sprintf("Update repository location is set to: %s", updateRepository))
+		exists, err := util.IsDirectoryExists(updateRepository)
 		util.HandleError(err)
-		logger.Debug("Update repository location is set to:", updateRepository)
-		err = util.CreateDirectory(updateRepository)
-		util.HandleError(err)
+		if !exists {
+			err = util.CreateDirectory(updateRepository)
+			util.HandleError(err)
+		}
 		updateZipName = path.Join(updateRepository, updateZipName)
 	}
 
@@ -271,11 +275,11 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 	util.CleanUpDirectory(constant.TEMP_DIR)
 
 	util.PrintInfo(fmt.Sprintf("'%s' successfully created.", updateZipName))
-	if viper.GetBool(constant.AUTO_VALIDATE) {
+	if !viper.GetBool(constant.AUTO_VALIDATE) {
 		util.PrintInfo(fmt.Sprintf("Validating '%s'\n", updateZipName))
 		startValidation(updateZipName, distributionPath)
 	} else {
-		util.PrintWhatsNext(fmt.Sprintf("Validate the update zip after any manual modification by running 'wum-uc validate %s.zip %s'", updateName, distributionPath))
+		util.PrintWhatsNext(fmt.Sprintf("Validate the update zip after any manual modification by running 'wum-uc validate %s.zip %s'", updateZipName, distributionPath))
 	}
 }
 
@@ -396,7 +400,7 @@ func handleSingleMatch(filename string, matchingNode *Node, isDir bool, allFiles
 		for _, match := range allMatchingFiles {
 
 			logger.Debug(fmt.Sprintf("match: %s", match))
-			if viper.GetBool(constant.CHECK_MD5) {
+			if !viper.GetBool(constant.CHECK_MD5) {
 				data := allFilesMap[match]
 				md5Matches := CompareMD5(rootNode, path.Join(matchingNode.relativeLocation, match), data.md5)
 				if md5Matches {
@@ -419,6 +423,9 @@ func handleSingleMatch(filename string, matchingNode *Node, isDir bool, allFiles
 }
 
 func handleMultipleMatches(filename string, isDir bool, matches map[string]*Node, allFilesMap map[string]Data, rootNode *Node, updateDescriptor *util.UpdateDescriptor) error {
+
+	util.PrintInfo(fmt.Sprintf("Multiple matches found for '%s' in the distribution.", filename))
+
 	logger.Debug(fmt.Sprintf("[MULTIPLE MATCHES] %s", filename))
 	locationTable, indexMap := generateLocationTable(filename, matches)
 	locationTable.Render()
@@ -471,7 +478,7 @@ func handleMultipleMatches(filename string, isDir bool, matches map[string]*Node
 			for _, match := range allMatchingFiles {
 
 				logger.Debug(fmt.Sprintf("match: %s", match))
-				if viper.GetBool(constant.CHECK_MD5) {
+				if !viper.GetBool(constant.CHECK_MD5) {
 					data := allFilesMap[match]
 					md5Matches := CompareMD5(rootNode, path.Join(pathInDistribution, match), data.md5)
 					if md5Matches {
@@ -534,7 +541,7 @@ func readDirectory(root string, ignoredFiles map[string]bool) (map[string]Data, 
 			relativePath: relativePath,
 		}
 		if fileInfo.IsDir() {
-			logger.Debug(absolutePath + " : " + fileInfo.Name())
+			logger.Trace(fmt.Sprintf("Directory: %s , %s", absolutePath, fileInfo.Name()))
 			info.isDir = true
 			if path.Join(root, fileInfo.Name()) == absolutePath {
 				rootLevelDirectoriesMap[fileInfo.Name()] = true
@@ -802,25 +809,13 @@ func copyFile(filename string, locationInUpdate, relativeLocationInTemp string, 
 	source := path.Join(locationInUpdate, filename)
 	carbonHome := path.Join(constant.TEMP_DIR, updateName, constant.CARBON_HOME)
 	destination := path.Join(carbonHome, relativeLocationInTemp)
-	isABundle := IsABundle(filename, relativeLocationInTemp)
 
-	var fullPath string
-	if isABundle {
-		newName := ConstructBundleName(filename)
-		fullPath = path.Join(destination, newName)
-		err := util.CreateDirectory(util.GetParentDirectory(fullPath))
-		util.HandleError(err)
-		logger.Debug(fmt.Sprintf("[FINAL][COPY][TEMP] Name: %s; From: %s; To: %s", filename, source, fullPath))
-		err = util.CopyFile(source, fullPath)
-		util.HandleError(err, "temp1")
-	} else {
-		fullPath = path.Join(destination, filename)
-		err := util.CreateDirectory(util.GetParentDirectory(fullPath))
-		util.HandleError(err)
-		logger.Debug(fmt.Sprintf("[FINAL][COPY][TEMP] Name: %s; From: %s; To: %s", filename, source, fullPath))
-		err = util.CopyFile(source, fullPath)
-		util.HandleError(err, "temp2")
-	}
+	fullPath := path.Join(destination, filename)
+	err := util.CreateDirectory(util.GetParentDirectory(fullPath))
+	util.HandleError(err)
+	logger.Debug(fmt.Sprintf("[FINAL][COPY][TEMP] Name: %s; From: %s; To: %s", filename, source, fullPath))
+	err = util.CopyFile(source, fullPath)
+	util.HandleError(err, "temp2")
 
 	relativePath := strings.TrimPrefix(fullPath, carbonHome + constant.PATH_SEPARATOR)
 	logger.Debug(fmt.Sprintf("relativePath: %s", relativePath))
@@ -832,19 +827,4 @@ func copyFile(filename string, locationInUpdate, relativeLocationInTemp string, 
 		updateDescriptor.File_changes.Added_files = append(updateDescriptor.File_changes.Added_files, relativePath)
 	}
 	return nil
-}
-
-////This function detects whether a jar should be a bundle or not according to its path
-func IsABundle(filename, location string) bool {
-	//todo
-	if location == constant.PLUGINS_DIRECTORY {
-		return true
-	}
-	return false
-}
-//
-////This constructs the bundle name of a normal jar
-func ConstructBundleName(filename string) string {
-	//todo
-	return filename
 }

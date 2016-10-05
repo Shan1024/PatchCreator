@@ -9,8 +9,10 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"os/signal"
+	"os/user"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -20,13 +22,14 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/ian-kent/go-log/log"
+	"github.com/pkg/errors"
 	"github.com/wso2/wum-uc/constant"
 	"gopkg.in/yaml.v2"
-	"github.com/pkg/errors"
-	"net/http"
 )
 
 var logger = log.Logger()
+var Usr, _ = user.Current()
+var HomeDirectory = Usr.HomeDir
 
 //struct which is used to read update-descriptor.yaml
 type UpdateDescriptor struct {
@@ -224,18 +227,6 @@ func ValidateUpdateDescriptor(updateDescriptor *UpdateDescriptor) error {
 		return errors.New("'description' field not found")
 	}
 	return nil
-}
-
-func PrintUpdateDescriptor(updateDescriptor *UpdateDescriptor) {
-	fmt.Println("----------------------------------------------------------------")
-	fmt.Printf("update_number: %s\n", updateDescriptor.Update_number)
-	fmt.Printf("platform_version: %s\n", updateDescriptor.Platform_version)
-	fmt.Printf("platform_name: %s\n", updateDescriptor.Platform_name)
-	fmt.Printf("applies_to: %s\n", updateDescriptor.Applies_to)
-	fmt.Printf("bug_fixes: %s\n", updateDescriptor.Bug_fixes)
-	fmt.Printf("file_changes: %s\n", updateDescriptor.File_changes)
-	fmt.Printf("description: %s\n", updateDescriptor.Description)
-	fmt.Println("----------------------------------------------------------------")
 }
 
 //Check whether the given string is in the given slice

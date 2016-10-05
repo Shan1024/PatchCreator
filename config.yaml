@@ -1,13 +1,10 @@
-process_readme: true
-auto_validate: true
 default_values:
   platform_name: wilkes
   platform_version: 4.4.0
   bug_fixes: N/A
-check_md5: false
 update_repository:
   enabled: true
-  location: $HOME/Documents/Updates
+  location: ~/Documents/Updates
 resource_files:
   mandatory:
   - update-descriptor.yaml

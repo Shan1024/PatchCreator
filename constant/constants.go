@@ -4,6 +4,7 @@ package constant
 
 import (
 	"os"
+
 	"github.com/ian-kent/go-log/levels"
 )
 
@@ -45,9 +46,6 @@ const (
 	RE_ENTER = "re-enter"
 	R = "r"
 
-	//IS_DEBUG_ENABLED = "IS_DEBUG_ENABLED"
-	//IS_TRACE_ENABLED = "IS_TRACE_ENABLED"
-
 	SAMPLE = "SAMPLE"
 	PROCESS_README = "PROCESS_README"
 	AUTO_VALIDATE = "AUTO_VALIDATE"
@@ -83,6 +81,10 @@ const (
 	PATCH_REGEX = "(?m).*patch.*"
 
 	JIRA_API_URL = "https://wso2.org/jira/rest/api/latest/issue/"
+
+	UPDATE_NO_DEFAULT = "ADD_UPDATE_NUMBER_HERE"
+	PLATFORM_NAME_DEFAULT = "ADD_PLATFORM_NAME_HERE"
+	PLATFORM_VERSION_DEFAULT = "ADD_PLATFORM_VERSION_HERE"
+	APPLIES_TO_DEFAULT = "ADD_APPLIES_TO_HERE"
+	DESCRIPTION_DEFAULT = "ADD_DESCRIPTION_HERE\n"
 )
-
-

@@ -24,8 +24,8 @@ var (
 	validateCmdUse = "validate <update_loc> <dist_loc>"
 	validateCmdShortDesc = "Validate update zip"
 	validateCmdLongDesc = dedent.Dedent(`
-		This command will validate the given update zip. Directory
-		structure will be matched against the given distribution.`)
+		This command will validate the given update zip. Files
+		will be matched against the given distribution.`)
 )
 
 // validateCmd represents the validate command
@@ -75,7 +75,10 @@ func startValidation(updateFilePath, distributionLocation string) {
 	if !strings.HasSuffix(distributionLocation, ".zip") {
 		util.PrintErrorAndExit("Entered distribution does not have a 'zip' extention.")
 	}
-	viper.Set(constant.PRODUCT_NAME, strings.TrimSuffix(distributionLocation, ".zip"))
+
+	lastIndex := strings.LastIndex(distributionLocation, "/")
+	viper.Set(constant.PRODUCT_NAME, strings.TrimSuffix(distributionLocation[lastIndex + 1:], ".zip"))
+
 	distributionFileMap, err = readDistributionZip(distributionLocation)
 
 	//check
@@ -111,7 +114,9 @@ func compare(updateFileMap, distributionFileMap map[string]bool, updateDescripto
 		logger.Debug(fmt.Sprintf("Searching: %s", filePath))
 		_, found := distributionFileMap[filePath]
 		if !found {
+			logger.Debug("Added files: ", updateDescriptor.File_changes.Added_files)
 			isInAddedFiles := util.IsStringIsInSlice(filePath, updateDescriptor.File_changes.Added_files)
+			logger.Debug(fmt.Sprintf("isInAddedFiles: %s", isInAddedFiles))
 			resourceFiles := getResourceFiles()
 			logger.Debug(fmt.Sprintf("resourceFiles: %s", resourceFiles))
 			fileName := strings.TrimPrefix(filePath, updateName + constant.PATH_SEPARATOR)
@@ -274,6 +279,7 @@ func readDistributionZip(filename string) (map[string]bool, error) {
 	defer zipReader.Close()
 
 	productName := viper.GetString(constant.PRODUCT_NAME)
+	logger.Debug(fmt.Sprintf("productName: %s", productName))
 	// Iterate through each file/dir found in
 	for _, file := range zipReader.Reader.File {
 		logger.Trace(file.Name)

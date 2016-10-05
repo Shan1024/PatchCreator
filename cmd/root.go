@@ -3,6 +3,7 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/ian-kent/go-log/layout"
@@ -12,7 +13,6 @@ import (
 	"github.com/spf13/viper"
 	"github.com/wso2/wum-uc/constant"
 	"github.com/wso2/wum-uc/util"
-	"fmt"
 )
 
 var (
@@ -74,8 +74,8 @@ var (
 	//Create the logger
 	logger = log.Logger()
 
-	isDebugLogsEnabled=false
-	isTraceLogsEnabled=false
+	isDebugLogsEnabled = false
+	isTraceLogsEnabled = false
 )
 
 var cfgFile string
@@ -164,14 +164,14 @@ func setLogLevel() {
 }
 
 func setDefaultValues() {
-	viper.SetDefault(constant.PROCESS_README, util.ProcessReadMe)
-	viper.SetDefault(constant.AUTO_VALIDATE, util.AutoValidate)
+	//viper.SetDefault(constant.PROCESS_README, util.ProcessReadMe)
+	//viper.SetDefault(constant.AUTO_VALIDATE, util.AutoValidate)
 	viper.SetDefault(constant.DEFAULT_VALUES, map[string]string{
 		constant.PLATFORM_NAME: util.PlatformName_Default,
 		constant.PLATFORM_VERSION: util.PlatformVersion_Default,
 		constant.BUG_FIXES: util.BugFixes_Default,
 	})
-	viper.SetDefault(constant.CHECK_MD5, util.CheckMd5)
+	//viper.SetDefault(constant.CHECK_MD5, util.CheckMd5)
 	viper.SetDefault(constant.UPDATE_REPOSITORY_ENABLED, util.UpdateRepository_Enabled)
 	viper.SetDefault(constant.UPDATE_REPOSITORY_LOCATION, util.UpdateRepository_Location)
 	viper.SetDefault(constant.RESOURCE_FILES_MANDATORY, util.ResourceFiles_Mandatory)

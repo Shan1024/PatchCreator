@@ -1,5 +1,4 @@
 // Copyright (c) 2016, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
-
 package cmd
 
 import (
@@ -18,59 +17,7 @@ import (
 var (
 	Version string
 	BuildDate string
-)
 
-type Info struct {
-	isDir bool
-	md5   string
-}
-
-//key - filePath, value - Info
-type LocationInfo struct {
-	filepathInfoMap map[string]Info
-}
-
-func (l *LocationInfo) Add(location string, isDir bool, md5 string) {
-	info := Info{
-		isDir:isDir,
-		md5:md5,
-	}
-	l.filepathInfoMap[location] = info
-}
-
-//key - filename, value - Locations
-type FileLocationInfo struct {
-	nameLocationInfoMap map[string]LocationInfo
-}
-
-func (f *FileLocationInfo) Add(filename string, location string, isDir bool, md5 string) {
-	locationMap, found := f.nameLocationInfoMap[filename]
-	if found {
-		locationMap.Add(location, isDir, md5)
-	} else {
-		newLocation := LocationInfo{
-			filepathInfoMap: make(map[string]Info),
-		}
-		newLocation.Add(location, isDir, md5)
-		f.nameLocationInfoMap[filename] = newLocation
-	}
-}
-
-//locationsInUpdate is a map to store the isDir
-type LocationData struct {
-	locationsInUpdate       map[string]bool
-	locationsInDistribution map[string]bool
-}
-//key - filename , value - FileLocation
-type Diff struct {
-	files map[string]LocationData
-}
-
-func (d *Diff) Add(filename string, locationData LocationData) {
-	d.files[filename] = locationData
-}
-
-var (
 	//Create the logger
 	logger = log.Logger()
 
@@ -90,9 +37,6 @@ examples and usage of using your application. For example:
 Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
-	//	Run: func(cmd *cobra.Command, args []string) { },
 }
 
 // Execute adds all child commands to the root command sets flags appropriately.
@@ -130,12 +74,7 @@ func initConfig() {
 	}
 
 	logger.Debug("Config Values: ---------------------------")
-	logger.Debug(fmt.Sprintf("%s: %s", constant.PROCESS_README, viper.GetString(constant.PROCESS_README)))
-	logger.Debug(fmt.Sprintf("%s: %s", constant.AUTO_VALIDATE, viper.GetString(constant.AUTO_VALIDATE)))
-	logger.Debug(fmt.Sprintf("%s: %s", constant.DEFAULT_VALUES, viper.GetStringMapString(constant.DEFAULT_VALUES)))
-	logger.Debug(fmt.Sprintf("%s: %s", constant.CHECK_MD5, viper.GetString(constant.CHECK_MD5)))
-	logger.Debug(fmt.Sprintf("%s: %s", constant.UPDATE_REPOSITORY_ENABLED, viper.GetString(constant.UPDATE_REPOSITORY_ENABLED)))
-	logger.Debug(fmt.Sprintf("%s: %s", constant.UPDATE_REPOSITORY_LOCATION, viper.GetString(constant.UPDATE_REPOSITORY_LOCATION)))
+	logger.Debug(fmt.Sprintf("%s: %s", constant.CHECK_MD5_DISABLED, viper.GetString(constant.CHECK_MD5_DISABLED)))
 	logger.Debug(fmt.Sprintf("%s: %s", constant.RESOURCE_FILES_MANDATORY, viper.GetStringSlice(constant.RESOURCE_FILES_MANDATORY)))
 	logger.Debug(fmt.Sprintf("%s: %s", constant.RESOURCE_FILES_OPTIONAL, viper.GetStringSlice(constant.RESOURCE_FILES_OPTIONAL)))
 	logger.Debug(fmt.Sprintf("%s: %s", constant.RESOURCE_FILES_SKIP, viper.GetStringSlice(constant.RESOURCE_FILES_SKIP)))
@@ -163,17 +102,8 @@ func setLogLevel() {
 	logger.Debug("[LOG LEVEL]", logger.Level())
 }
 
+//This function will set the default values of the configurations
 func setDefaultValues() {
-	//viper.SetDefault(constant.PROCESS_README, util.ProcessReadMe)
-	//viper.SetDefault(constant.AUTO_VALIDATE, util.AutoValidate)
-	viper.SetDefault(constant.DEFAULT_VALUES, map[string]string{
-		constant.PLATFORM_NAME: util.PlatformName_Default,
-		constant.PLATFORM_VERSION: util.PlatformVersion_Default,
-		constant.BUG_FIXES: util.BugFixes_Default,
-	})
-	//viper.SetDefault(constant.CHECK_MD5, util.CheckMd5)
-	viper.SetDefault(constant.UPDATE_REPOSITORY_ENABLED, util.UpdateRepository_Enabled)
-	viper.SetDefault(constant.UPDATE_REPOSITORY_LOCATION, util.UpdateRepository_Location)
 	viper.SetDefault(constant.RESOURCE_FILES_MANDATORY, util.ResourceFiles_Mandatory)
 	viper.SetDefault(constant.RESOURCE_FILES_OPTIONAL, util.ResourceFiles_Optional)
 	viper.SetDefault(constant.RESOURCE_FILES_SKIP, util.ResourceFiles_Skip)

@@ -1,5 +1,4 @@
 // Copyright (c) 2016, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
-
 package cmd
 
 import (
@@ -61,11 +60,8 @@ func init() {
 	initCmd.Flags().BoolVarP(&isDebugLogsEnabled, "debug", "d", util.EnableDebugLogs, "Enable debug logs")
 	initCmd.Flags().BoolVarP(&isTraceLogsEnabled, "trace", "t", util.EnableTraceLogs, "Enable trace logs")
 
-	initCmd.Flags().BoolP("sample", "s", util.PrintSampleSelected, "Show sample file")
+	initCmd.Flags().BoolP("sample", "s", false, "Show sample file")
 	viper.BindPFlag(constant.SAMPLE, initCmd.Flags().Lookup("sample"))
-
-	initCmd.Flags().BoolP("process", "p", util.ProcessReadMe, "Disable processing README.txt file")
-	viper.BindPFlag(constant.PROCESS_README, initCmd.Flags().Lookup("process"))
 }
 
 func initializeInitCommand(cmd *cobra.Command, args []string) {
@@ -73,7 +69,7 @@ func initializeInitCommand(cmd *cobra.Command, args []string) {
 	switch len(args) {
 	case 0:
 		if viper.GetBool(constant.SAMPLE) {
-			logger.Debug("-s flag found. Printing sample.")
+			logger.Debug("-s flag found. Printing sample...")
 			fmt.Println(initCmdExample)
 		} else {
 			logger.Debug("-s flag not found. Initializing current working directory.")
@@ -84,7 +80,7 @@ func initializeInitCommand(cmd *cobra.Command, args []string) {
 		initDirectory(args[0])
 	default:
 		logger.Debug("Invalid number of argumants:", args)
-		util.PrintErrorAndExit("Invalid number of argumants. Run 'wum-uc init --help' to view help.")
+		util.HandleErrorAndExit(nil, "Invalid number of argumants. Run 'wum-uc init --help' to view help.")
 	}
 }
 
@@ -94,54 +90,49 @@ func initCurrentDirectory() {
 }
 
 func initDirectory(destination string) {
-
 	logger.Debug("Initializing started.")
 	exists, err := util.IsDirectoryExists(destination)
 	logger.Debug(fmt.Sprintf("'%s' directory exists: %v", destination, exists))
 
 	skip := false
-
 	if !exists {
+		userInputLoop:
 		for {
 			util.PrintInBold(fmt.Sprintf("'%s'does not exists. Do you want to create '%s' directory?[Y/n]: ", destination, destination))
 			preference, err := util.GetUserInput()
 			if len(preference) == 0 {
 				preference = "y"
 			}
-			util.HandleError(err, "Error occurred while getting input from the user.")
-			if util.IsYes(preference) {
+			util.HandleErrorAndExit(err, "Error occurred while getting input from the user.")
+
+			userPreference := util.ProcessUserPreference(preference)
+			switch(userPreference){
+			case constant.YES:
 				util.PrintInfo(fmt.Sprintf("'%s' directory does not exist. Creating '%s' directory.", destination, destination))
 				err := util.CreateDirectory(destination)
-				util.HandleError(err)
+				util.HandleErrorAndExit(err)
 				logger.Debug(fmt.Sprintf("'%s' directory created.", destination))
-				break;
-			} else if util.IsNo(preference) {
+				break userInputLoop
+			case constant.NO:
 				skip = true
-				break;
-			} else {
+				break userInputLoop
+			default:
 				util.PrintError("Invalid preference. Enter Y for Yes or N for No.")
 			}
 		}
 	}
-
 	if skip {
-		util.PrintErrorAndExit("Directory creation skipped. Please enter a valid directory.")
+		util.HandleErrorAndExit(nil, "Directory creation skipped. Please enter a valid directory.")
 	}
 
 	updateDescriptorFile := filepath.Join(destination, constant.UPDATE_DESCRIPTOR_FILE)
 	logger.Debug(fmt.Sprintf("updateDescriptorFile: %v", updateDescriptorFile))
-	updateDescriptor := util.UpdateDescriptor{}
 
-	if !viper.GetBool(constant.PROCESS_README) {
-		logger.Debug(constant.PROCESS_README + " enabled")
-		processReadMe(destination, &updateDescriptor)
-	} else {
-		logger.Debug(constant.PROCESS_README + " disabled")
-		setUpdateDescriptorDefaultValues(&updateDescriptor)
-	}
+	updateDescriptor := util.UpdateDescriptor{}
+	processReadMe(destination, &updateDescriptor)
 
 	data, err := yaml.Marshal(&updateDescriptor)
-	util.HandleError(err)
+	util.HandleErrorAndExit(err)
 
 	dataString := string(data)
 	//remove " enclosing the update number
@@ -153,13 +144,13 @@ func initDirectory(destination string) {
 		os.O_WRONLY | os.O_TRUNC | os.O_CREATE,
 		0600,
 	)
-	util.HandleError(err)
+	util.HandleErrorAndExit(err)
 	defer file.Close()
 
 	// Write bytes to file
 	_, err = file.Write([]byte(dataString))
 	if err != nil {
-		util.HandleError(err)
+		util.HandleErrorAndExit(err)
 	}
 	absDestination, err := filepath.Abs(destination)
 	if err != nil {
@@ -173,16 +164,14 @@ func initDirectory(destination string) {
 func setUpdateDescriptorDefaultValues(updateDescriptor *util.UpdateDescriptor) {
 	logger.Debug("Setting default values:")
 	updateDescriptor.Update_number = constant.UPDATE_NO_DEFAULT
+	updateDescriptor.Platform_name = constant.PLATFORM_NAME_DEFAULT
+	updateDescriptor.Platform_version = constant.PLATFORM_VERSION_DEFAULT
 	updateDescriptor.Applies_to = constant.APPLIES_TO_DEFAULT
 	updateDescriptor.Description = constant.DESCRIPTION_DEFAULT
-	updateDescriptor.Platform_name = util.PlatformName_Default
-	updateDescriptor.Platform_version = util.PlatformVersion_Default
 	bugFixes := map[string]string{
-		util.BugFixes_Default: util.BugFixes_Default,
+		constant.JIRA_KEY_DEFAULT: constant.JIRA_SUMMARY_DEFAULT,
 	}
 	updateDescriptor.Bug_fixes = bugFixes
-	logger.Debug(fmt.Sprintf("platform_name: %s", util.PlatformName_Default))
-	logger.Debug(fmt.Sprintf("platform_version: %s", util.PlatformVersion_Default))
 	logger.Debug(fmt.Sprintf("bug_fixes: %v", bugFixes))
 }
 
@@ -257,7 +246,7 @@ func processReadMe(directory string, updateDescriptor *util.UpdateDescriptor) {
 		updateDescriptor.Bug_fixes = make(map[string]string)
 		if len(allResult) == 0 {
 			logger.Debug("No matching results found for ASSOCIATED_JIRAS_REGEX. Setting default values.")
-			updateDescriptor.Bug_fixes[util.BugFixes_Default] = util.BugFixes_Default
+			updateDescriptor.Bug_fixes[constant.JIRA_KEY_DEFAULT] = constant.JIRA_SUMMARY_DEFAULT
 		} else {
 			logger.Debug("Matching results found for ASSOCIATED_JIRAS_REGEX")
 			for i, match := range allResult {
@@ -274,7 +263,7 @@ func processReadMe(directory string, updateDescriptor *util.UpdateDescriptor) {
 		logger.Debug(fmt.Sprintf("Error occurred while processing ASSOCIATED_JIRAS_REGEX: %v", err))
 		logger.Debug("Setting defailt values to bug_fixes")
 		updateDescriptor.Bug_fixes = make(map[string]string)
-		updateDescriptor.Bug_fixes[util.BugFixes_Default] = util.BugFixes_Default
+		updateDescriptor.Bug_fixes[constant.JIRA_KEY_DEFAULT] = constant.JIRA_SUMMARY_DEFAULT
 	}
 
 	regex, err = regexp.Compile(constant.DESCRIPTION_REGEX)

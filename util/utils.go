@@ -11,13 +11,10 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"os/signal"
-	"os/user"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/fatih/color"
@@ -28,8 +25,6 @@ import (
 )
 
 var logger = log.Logger()
-var Usr, _ = user.Current()
-var HomeDirectory = Usr.HomeDir
 
 //struct which is used to read update-descriptor.yaml
 type UpdateDescriptor struct {
@@ -44,14 +39,6 @@ type UpdateDescriptor struct {
 				 Removed_files  []string
 				 Modified_files []string
 			 }
-}
-
-func GetParentDirectory(filepath string) string {
-	parentDirectory := "./"
-	if lastIndex := strings.LastIndex(filepath, string(os.PathSeparator)); lastIndex > -1 {
-		parentDirectory = filepath[:lastIndex]
-	}
-	return parentDirectory
 }
 
 //This will return the md5 hash of the file in the given filepath
@@ -70,77 +57,51 @@ func GetMD5(filepath string) (string, error) {
 	return hex.EncodeToString(hash.Sum(result)), nil
 }
 
-//This function will set the update name which will be used when creating the update zip
-func GetUpdateName(updateDescriptor *UpdateDescriptor, updateNamePrefix string) string {
-	//Read the corresponding details
-	platformVersion := updateDescriptor.Platform_version
-	updateNumber := updateDescriptor.Update_number
-	updateName := updateNamePrefix + "-" + platformVersion + "-" + updateNumber
-	return updateName
-}
-
+//This function is used to delete the temporary directories
 func CleanUpDirectory(path string) {
-	logger.Debug("Deleting temporary files:", path)
+	logger.Debug(fmt.Sprintf("Deleting temporary files: %s", path))
 	err := DeleteDirectory(path)
 	if err != nil {
-		logger.Debug("Error occurred while deleting " + path + " directory: ", err)
+		logger.Debug(fmt.Sprintf("Error occurred while deleting %s directory: %v", path, err))
 		time.Sleep(time.Second * 1)
 		err = DeleteDirectory(path)
 		if err != nil {
-			logger.Debug("Retry failed: ", err)
-			fmt.Println("Deleting '" + path + "' failed. Please delete this directory manually.")
+			logger.Debug(fmt.Sprintf("Retry failed: %v", err))
+			PrintInfo(fmt.Sprintf("Deleting '%s' failed. Please delete this directory manually.",
+				path))
 		} else {
-			logger.Debug(path + " successfully deleted on retry")
+			logger.Debug(fmt.Sprintf("'%s' successfully deleted on retry", path))
 			logger.Debug("Temporary files successfully deleted")
 		}
 	} else {
-		logger.Debug(path + " successfully deleted")
+		logger.Debug(fmt.Sprintf("'%s' successfully deleted", path))
 		logger.Debug("Temporary files successfully deleted")
 	}
 }
+//
+//func HandleInterrupts(cleanupFunc func()) chan <- os.Signal {
+//	c := make(chan os.Signal, 1)
+//	signal.Notify(c, os.Interrupt)
+//	signal.Notify(c, syscall.SIGTERM)
+//	go func() {
+//		<-c
+//		cleanupFunc()
+//		os.Exit(1)
+//	}()
+//	return c
+//}
 
-func HandleInterrupts(cleanupFunc func()) chan <- os.Signal {
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-	signal.Notify(c, syscall.SIGTERM)
-	go func() {
-		<-c
-		cleanupFunc()
-		os.Exit(1)
-	}()
-	return c
-}
-
+//This function will create all directories in the given path if they do not exist
 func CreateDirectory(path string) error {
 	return os.MkdirAll(path, 0700)
 }
 
+//THis function will delete all directories in the given path
 func DeleteDirectory(path string) error {
 	return os.RemoveAll(path)
 }
 
-func IsYes(preference string) bool {
-	if strings.ToLower(preference) == constant.YES || (len(preference) == 1 && strings.ToLower(preference) == constant.Y ) {
-		return true
-	}
-	return false
-}
-
-func IsNo(preference string) bool {
-	if strings.ToLower(preference) == constant.NO || (len(preference) == 1 && strings.ToLower(preference) == constant.N ) {
-		return true
-	}
-	return false
-}
-
-func IsReenter(preference string) bool {
-	if strings.ToLower(preference) == constant.REENTER || strings.ToLower(preference) == constant.RE_ENTER ||
-		(len(preference) == 1 && strings.ToLower(preference) == constant.R  ) {
-		return true
-	}
-	return false
-}
-
+//This function will get user input
 func GetUserInput() (string, error) {
 	reader := bufio.NewReader(os.Stdin)
 	preference, err := reader.ReadString('\n')
@@ -150,6 +111,20 @@ func GetUserInput() (string, error) {
 	return strings.TrimSpace(preference), nil
 }
 
+//This function will process user input and identify the type of preference
+func ProcessUserPreference(preference string) int {
+	if strings.ToLower(preference) == "yes" || (len(preference) == 1 && strings.ToLower(preference) == "y" ) {
+		return constant.YES
+	} else if strings.ToLower(preference) == "no" || (len(preference) == 1 && strings.ToLower(preference) == "n" ) {
+		return constant.NO
+	} else if strings.ToLower(preference) == "reenter" || strings.ToLower(preference) == "re-enter" ||
+		(len(preference) == 1 && strings.ToLower(preference) == "r"  ) {
+		return constant.REENTER
+	}
+	return constant.OTHER
+}
+
+//This function will validate user input in cases of user can enter comma separated values
 func IsUserPreferencesValid(preferences []string, availableChoices int) (bool, error) {
 	length := len(preferences)
 	if length == 0 {
@@ -159,7 +134,8 @@ func IsUserPreferencesValid(preferences []string, availableChoices int) (bool, e
 	if err != nil {
 		return false, err
 	}
-	message := fmt.Sprintf("Invalid preferences. Please select indices where %s>= index >=1.", strconv.Itoa(availableChoices))
+	message := fmt.Sprintf("Invalid preferences. Please select indices where %s>= index >=1.",
+		strconv.Itoa(availableChoices))
 	if first < 0 {
 		return false, errors.New(message)
 	}
@@ -193,6 +169,7 @@ func LoadUpdateDescriptor(filename, updateDirectoryPath string) (*UpdateDescript
 	return &updateDescriptor, nil
 }
 
+//This function will validate the update-descriptor.yaml
 func ValidateUpdateDescriptor(updateDescriptor *UpdateDescriptor) error {
 	if len(updateDescriptor.Update_number) == 0 {
 		return errors.New("'update_number' field not found")
@@ -337,44 +314,42 @@ func IsFileExists(location string) (bool, error) {
 	}
 }
 
-func HandleError(err error, customMessage ...interface{}) {
+//This function is used to handle errors (print proper error message and exit)
+func HandleErrorAndExit(err error, customMessage ...interface{}) {
 	if err != nil {
-		PrintErrorAndExit(append(customMessage, fmt.Sprintf("[%s]", err.Error()))...)
+		//call the PrintError method and exit
+		PrintError(append(customMessage, fmt.Sprintf("[%s]", err.Error()))...)
+		os.Exit(1)
 	}
 }
 
-//This is used to print failure messages
+//This function is used to print error messages
 func PrintError(args ...interface{}) {
 	color.Set(color.FgRed, color.Bold)
 	fmt.Println(append(append([]interface{}{"\n[ERROR]"}, args...), "\n")...)
 	color.Unset()
 }
 
-//This is used to print failure messages and exit
-func PrintErrorAndExit(args ...interface{}) {
-	//call the printFailure method and exit
-	PrintError(args...)
-	os.Exit(1)
-}
-
-//This is used to print warning messages
+//This function is used to print warning messages
 func PrintWarning(args ...interface{}) {
 	color.Set(color.Bold)
 	fmt.Println(append([]interface{}{"[WARNING]"}, args...)...)
 	color.Unset()
 }
 
-//This is used to print info messages
+//This function is used to print info messages
 func PrintInfo(args ...interface{}) {
 	fmt.Println(append([]interface{}{"[INFO]"}, args...)...)
 }
 
+//This function is used to print text in bold
 func PrintInBold(args ...interface{}) {
 	color.Set(color.Bold)
 	fmt.Print(args...)
 	color.Unset()
 }
 
+//todo: remove
 func PrintWhatsNext(args ...interface{}) {
 	color.Set(color.Bold)
 	fmt.Println("\nWhat's next?")
@@ -382,6 +357,8 @@ func PrintWhatsNext(args ...interface{}) {
 	fmt.Println(append([]interface{}{"\t"}, args...)...)
 }
 
+//This function will get the Jira summary associated with the given jira id. If an error occur, we just simply ignore
+// the error and return the default response.
 func GetJiraSummary(id string) string {
 	defaultResponse := "[ADD_JIRA_SUMMARY_HERE]"
 	logger.Debug(fmt.Sprintf("Getting Jira summary for: %s", id))
@@ -411,6 +388,8 @@ func GetJiraSummary(id string) string {
 	}
 	result := regex.FindStringSubmatch(responseBody)
 	logger.Debug(fmt.Sprintf("Match: %s", result))
+	//In the given regex, there are 2 capturing groups. With the full content matching, it returns 3 results. So we
+	// check for 3 results here
 	if len(result) == 3 {
 		logger.Debug(fmt.Sprintf("Jira Summary: %s", strings.TrimSpace(result[2])))
 		return strings.TrimSpace(result[2])
@@ -418,6 +397,14 @@ func GetJiraSummary(id string) string {
 	return defaultResponse
 }
 
+//This function will do the following operations on the provided string.
+// 1) Replace \r with \n - Some older files have MAC OS 9 line endings (\r) and this will cause issues when processing
+//    these strings using regular expressions.
+// 2) Replace \t with four spaces. This is done to prevent ugly encoding in description section in the
+//    update-description.yaml file.
+// 3) Will remove preceding and trailering spaces if trimAll is true, otherwise it will only remove trailering spaces.
+//    This is done to preserve proper formatting in the description section of the update-description.yaml.
+//Delimeter is provided from outside so that this function can be used to clean and concat various types of strings.
 func ProcessString(data, delimiter string, trimAll bool) string {
 	data = strings.TrimSpace(data)
 	data = strings.Replace(data, "\r", "\n", -1)

@@ -44,8 +44,8 @@ func init() {
 }
 
 func initializeValidateCommand(cmd *cobra.Command, args []string) {
-	if len(args) < 2 || len(args) > 2 {
-		util.PrintErrorAndExit("Invalid number of argumants. Run 'wum-uc validate --help' to view help.")
+	if len(args) != 2 {
+		util.HandleErrorAndExit(nil, "Invalid number of argumants. Run 'wum-uc validate --help' to view help.")
 	}
 	startValidation(args[0], args[1])
 }
@@ -62,18 +62,18 @@ func startValidation(updateFilePath, distributionLocation string) {
 	//Check update location
 	//Check
 	if !strings.HasSuffix(updateFilePath, ".zip") {
-		util.PrintErrorAndExit("Entered update does not have a 'zip' extention.")
+		util.HandleErrorAndExit(nil, "Entered update does not have a 'zip' extention.")
 	}
 
 	//Check
 	exists, err := util.IsFileExists(updateFilePath)
-	util.HandleError(err, "")
+	util.HandleErrorAndExit(err, "")
 	if !exists {
-		util.PrintErrorAndExit("Update file '" + updateFilePath + "' does not exist.")
+		util.HandleErrorAndExit(nil, fmt.Sprintf("Update file '%s' does not exist.", updateFilePath))
 	}
 
 	if !strings.HasSuffix(distributionLocation, ".zip") {
-		util.PrintErrorAndExit("Entered distribution does not have a 'zip' extention.")
+		util.HandleErrorAndExit(nil, "Entered distribution does not have a 'zip' extention.")
 	}
 
 	lastIndex := strings.LastIndex(distributionLocation, "/")
@@ -83,28 +83,28 @@ func startValidation(updateFilePath, distributionLocation string) {
 
 	//check
 	exists, err = util.IsFileExists(distributionLocation)
-	util.HandleError(err, "Error occurred while checking '" + distributionLocation + "'")
+	util.HandleErrorAndExit(err, "Error occurred while checking '" + distributionLocation + "'")
 	if !exists {
-		util.PrintErrorAndExit("Distribution does not exist at ", distributionLocation)
+		util.HandleErrorAndExit(nil, "Distribution does not exist at ", distributionLocation)
 	}
 
 	//Check
 	locationInfo, err := os.Stat(updateFilePath)
-	util.HandleError(err, "")
+	util.HandleErrorAndExit(err, "")
 	match, err := regexp.MatchString(constant.FILENAME_REGEX, locationInfo.Name())
 	if !match {
-		util.PrintErrorAndExit("Update file name(" + locationInfo.Name() + ") does not match '" + constant.FILENAME_REGEX + "' regular expression.")
+		util.HandleErrorAndExit(nil, fmt.Sprintf("Update file name(%s) does not match '%s' regular expression.", locationInfo.Name(), constant.FILENAME_REGEX))
 	}
 
 	updateName := strings.TrimSuffix(locationInfo.Name(), ".zip")
 	viper.Set(constant.UPDATE_NAME, updateName)
 
 	updateFileMap, updateDescriptor, err := readUpdateZip(updateFilePath)
-	util.HandleError(err)
+	util.HandleErrorAndExit(err)
 	logger.Debug(updateFileMap)
 
 	err = compare(updateFileMap, distributionFileMap, updateDescriptor)
-	util.HandleError(err)
+	util.HandleErrorAndExit(err)
 	util.PrintInfo("'" + updateName + "' validation successfully finished.")
 }
 
@@ -116,13 +116,13 @@ func compare(updateFileMap, distributionFileMap map[string]bool, updateDescripto
 		if !found {
 			logger.Debug("Added files: ", updateDescriptor.File_changes.Added_files)
 			isInAddedFiles := util.IsStringIsInSlice(filePath, updateDescriptor.File_changes.Added_files)
-			logger.Debug(fmt.Sprintf("isInAddedFiles: %s", isInAddedFiles))
+			logger.Debug(fmt.Sprintf("isInAddedFiles: %v", isInAddedFiles))
 			resourceFiles := getResourceFiles()
-			logger.Debug(fmt.Sprintf("resourceFiles: %s", resourceFiles))
+			logger.Debug(fmt.Sprintf("resourceFiles: %v", resourceFiles))
 			fileName := strings.TrimPrefix(filePath, updateName + constant.PATH_SEPARATOR)
 			logger.Debug(fmt.Sprintf("fileName: %s", fileName))
 			_, foundInResources := resourceFiles[fileName]
-			logger.Debug(fmt.Sprintf("found in resources: %s", foundInResources))
+			logger.Debug(fmt.Sprintf("found in resources: %v", foundInResources))
 			//check
 			if !isInAddedFiles && !foundInResources {
 				return errors.New("File not found in the distribution: '" + filePath + "'. If this is a new file, add an entry to the 'added_files' sections in the '" + constant.UPDATE_DESCRIPTOR_FILE + "' file")
@@ -134,6 +134,7 @@ func compare(updateFileMap, distributionFileMap map[string]bool, updateDescripto
 	return nil
 }
 
+//This function will read the update zip at the the given location
 func readUpdateZip(filename string) (map[string]bool, *util.UpdateDescriptor, error) {
 	fileMap := make(map[string]bool)
 	updateDescriptor := util.UpdateDescriptor{}
@@ -206,11 +207,11 @@ func readUpdateZip(filename string) (map[string]bool, *util.UpdateDescriptor, er
 				}
 			default:
 				resourceFiles := getResourceFiles()
-				logger.Debug(fmt.Sprintf("resourceFiles: %s", resourceFiles))
+				logger.Debug(fmt.Sprintf("resourceFiles: %v", resourceFiles))
 				prefix := filepath.Join(updateName, constant.CARBON_HOME)
 				hasPrefix := strings.HasPrefix(file.Name, prefix)
 				_, foundInResources := resourceFiles[file.FileInfo().Name()]
-				logger.Debug(fmt.Sprintf("foundInResources: %s", foundInResources))
+				logger.Debug(fmt.Sprintf("foundInResources: %v", foundInResources))
 				if !hasPrefix && !foundInResources {
 					return nil, nil, errors.New(fmt.Sprintf("Unknown file found: '%s'.", file.Name))
 				}
@@ -227,6 +228,7 @@ func readUpdateZip(filename string) (map[string]bool, *util.UpdateDescriptor, er
 	return fileMap, &updateDescriptor, nil
 }
 
+//This function will validate the provided file. If the word 'patch' is found, a warning smessage is printed.
 func validateFile(file *zip.File, fileName, fullPath, updateName string) ([]byte, error) {
 	logger.Debug(fmt.Sprintf("Validating '%s' at '%s' started.", fileName, fullPath))
 	parent := strings.TrimSuffix(file.Name, file.FileInfo().Name())
@@ -269,6 +271,7 @@ func validateFile(file *zip.File, fileName, fullPath, updateName string) ([]byte
 	return data, nil
 }
 
+//This function reads the product distribution at the given location
 func readDistributionZip(filename string) (map[string]bool, error) {
 	fileMap := make(map[string]bool)
 	// Create a reader out of the zip archive

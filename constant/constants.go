@@ -25,7 +25,7 @@ const (
 	TEMP_DIR = "temp"
 	//This is used to store carbon.home string
 	CARBON_HOME = "carbon.home"
-	//Prefix of the update file and the root folder of the update zip
+	//Prefix of the update file and the root directory of the update zip
 	UPDATE_NAME_PREFIX = "WSO2-CARBON-UPDATE"
 
 	//Constants to store configs in viper
@@ -42,7 +42,6 @@ const (
 	YES = 1
 	NO = 2
 	REENTER = 3
-
 
 	SAMPLE = "SAMPLE"
 	CHECK_MD5_DISABLED = "CHECK_MD5_DISABLED"

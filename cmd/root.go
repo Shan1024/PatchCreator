@@ -1,4 +1,5 @@
 // Copyright (c) 2016, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
+
 package cmd
 
 import (
@@ -30,13 +31,10 @@ var cfgFile string
 // RootCmd represents the base command when called without any subcommands
 var RootCmd = &cobra.Command{
 	Use: "wum-uc",
-	Short: "A brief description of your application",
-	Long: `A longer description that spans multiple lines and likely contains
-examples and usage of using your application. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Short: "This tool is used to create and validate updates",
+	Long: `This tool is used to create WUM compatible updates. This tool
+	can also validate any given update. This tool will simplify the update
+	creation process.`,
 }
 
 // Execute adds all child commands to the root command sets flags appropriately.
@@ -73,6 +71,7 @@ func initConfig() {
 		logger.Debug("Config file not found.")
 	}
 
+	logger.Debug(fmt.Sprintf("PATH_SEPARATOR: %s", constant.PATH_SEPARATOR))
 	logger.Debug("Config Values: ---------------------------")
 	logger.Debug(fmt.Sprintf("%s: %s", constant.CHECK_MD5_DISABLED, viper.GetString(constant.CHECK_MD5_DISABLED)))
 	logger.Debug(fmt.Sprintf("%s: %s", constant.RESOURCE_FILES_MANDATORY, viper.GetStringSlice(constant.RESOURCE_FILES_MANDATORY)))

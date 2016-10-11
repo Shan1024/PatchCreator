@@ -1,4 +1,6 @@
 // Copyright (c) 2016, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
+
+
 package cmd
 
 import (
@@ -10,6 +12,8 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/fatih/color"
+	"github.com/pkg/errors"
 	"github.com/renstrom/dedent"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -54,6 +58,7 @@ var initCmd = &cobra.Command{
 	Run: initializeInitCommand,
 }
 
+//This function will be called first and this will add flags to the command.
 func init() {
 	RootCmd.AddCommand(initCmd)
 
@@ -64,6 +69,7 @@ func init() {
 	viper.BindPFlag(constant.SAMPLE, initCmd.Flags().Lookup("sample"))
 }
 
+//This function will be called when the create command is called.
 func initializeInitCommand(cmd *cobra.Command, args []string) {
 	logger.Debug("[Init] called")
 	switch len(args) {
@@ -80,15 +86,17 @@ func initializeInitCommand(cmd *cobra.Command, args []string) {
 		initDirectory(args[0])
 	default:
 		logger.Debug("Invalid number of argumants:", args)
-		util.HandleErrorAndExit(nil, "Invalid number of argumants. Run 'wum-uc init --help' to view help.")
+		util.HandleErrorAndExit(errors.New("Invalid number of argumants. Run 'wum-uc init --help' to view help."))
 	}
 }
 
+//This function will be called if no arguments are provided by the user.
 func initCurrentDirectory() {
 	currentDirectory := "./"
 	initDirectory(currentDirectory)
 }
 
+//This function will start the init process.
 func initDirectory(destination string) {
 	logger.Debug("Initializing started.")
 	exists, err := util.IsDirectoryExists(destination)
@@ -122,7 +130,7 @@ func initDirectory(destination string) {
 		}
 	}
 	if skip {
-		util.HandleErrorAndExit(nil, "Directory creation skipped. Please enter a valid directory.")
+		util.HandleErrorAndExit(errors.New("Directory creation skipped. Please enter a valid directory."))
 	}
 
 	updateDescriptorFile := filepath.Join(destination, constant.UPDATE_DESCRIPTOR_FILE)
@@ -158,9 +166,14 @@ func initDirectory(destination string) {
 	}
 	util.PrintInfo(fmt.Sprintf("'%s' has been successfully created at '%s'.", constant.UPDATE_DESCRIPTOR_FILE, absDestination))
 
-	util.PrintWhatsNext(fmt.Sprintf("run 'wum-uc init --sample' to view a sample '%s' file.", constant.UPDATE_DESCRIPTOR_FILE))
+	//Print whats next
+	color.Set(color.Bold)
+	fmt.Println("\nWhat's next?")
+	color.Unset()
+	fmt.Println(fmt.Sprintf("\trun 'wum-uc init --sample' to view a sample '%s' file.", constant.UPDATE_DESCRIPTOR_FILE))
 }
 
+//This function will set default valued to the update-descriptor.yaml.
 func setUpdateDescriptorDefaultValues(updateDescriptor *util.UpdateDescriptor) {
 	logger.Debug("Setting default values:")
 	updateDescriptor.Update_number = constant.UPDATE_NO_DEFAULT
@@ -175,6 +188,8 @@ func setUpdateDescriptorDefaultValues(updateDescriptor *util.UpdateDescriptor) {
 	logger.Debug(fmt.Sprintf("bug_fixes: %v", bugFixes))
 }
 
+//This function will process the readme file and extract details to populate update-descriptor.yaml. If some data cannot
+// be extracted, it will add default value and continue.
 func processReadMe(directory string, updateDescriptor *util.UpdateDescriptor) {
 	logger.Debug("Processing README started")
 	readMePath := path.Join(directory, constant.README_FILE)

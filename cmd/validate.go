@@ -15,8 +15,8 @@ import (
 	"github.com/renstrom/dedent"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"github.com/wso2/wum-uc/util"
 	"github.com/wso2/wum-uc/constant"
+	"github.com/wso2/wum-uc/util"
 	"gopkg.in/yaml.v2"
 )
 
@@ -36,6 +36,7 @@ var validateCmd = &cobra.Command{
 	Run: initializeValidateCommand,
 }
 
+//This function will be called first and this will add flags to the command.
 func init() {
 	RootCmd.AddCommand(validateCmd)
 
@@ -43,71 +44,83 @@ func init() {
 	validateCmd.Flags().BoolVarP(&isTraceLogsEnabled, "trace", "t", util.EnableTraceLogs, "Enable trace logs")
 }
 
+//This function will be called when the validate command is called.
 func initializeValidateCommand(cmd *cobra.Command, args []string) {
 	if len(args) != 2 {
-		util.HandleErrorAndExit(nil, "Invalid number of argumants. Run 'wum-uc validate --help' to view help.")
+		util.HandleErrorAndExit(errors.New("Invalid number of argumants. Run 'wum-uc validate --help' to view help."))
 	}
 	startValidation(args[0], args[1])
 }
 
-//Entry point of  the validate command
+//This function will start the validation process.
 func startValidation(updateFilePath, distributionLocation string) {
 
+	//Set the log level
 	setLogLevel()
 	logger.Debug("validate command called")
 
 	updateFileMap := make(map[string]bool)
 	distributionFileMap := make(map[string]bool)
 
-	//Check update location
-	//Check
+	//Check whether the update has the zip extension
 	if !strings.HasSuffix(updateFilePath, ".zip") {
-		util.HandleErrorAndExit(nil, "Entered update does not have a 'zip' extention.")
+		util.HandleErrorAndExit(errors.New(fmt.Sprintf("Update must be a zip file. Entered file '%s' does not have a zip extension.", updateFilePath)))
 	}
 
-	//Check
+	//Check whether the update file exists
 	exists, err := util.IsFileExists(updateFilePath)
 	util.HandleErrorAndExit(err, "")
 	if !exists {
-		util.HandleErrorAndExit(nil, fmt.Sprintf("Update file '%s' does not exist.", updateFilePath))
+		util.HandleErrorAndExit(errors.New(fmt.Sprintf("Entered update file does not exist at '%s'.", updateFilePath)))
 	}
 
+	//Check whether the distribution has the zip extension
 	if !strings.HasSuffix(distributionLocation, ".zip") {
-		util.HandleErrorAndExit(nil, "Entered distribution does not have a 'zip' extention.")
+		util.HandleErrorAndExit(errors.New(fmt.Sprintf("Distribution must be a zip file. Entered file '%s' does not have a zip extension.", distributionLocation)))
 	}
 
-	lastIndex := strings.LastIndex(distributionLocation, "/")
-	viper.Set(constant.PRODUCT_NAME, strings.TrimSuffix(distributionLocation[lastIndex + 1:], ".zip"))
+	//Set the product name in viper configs
+	lastIndex := strings.LastIndex(distributionLocation, constant.PATH_SEPARATOR)
+	productName := strings.TrimSuffix(distributionLocation[lastIndex + 1:], ".zip")
+	logger.Debug(fmt.Sprintf("Setting ProductName: %s", productName))
+	viper.Set(constant.PRODUCT_NAME, productName)
 
-	distributionFileMap, err = readDistributionZip(distributionLocation)
-
-	//check
+	//Check whether the distribution file exists
 	exists, err = util.IsFileExists(distributionLocation)
-	util.HandleErrorAndExit(err, "Error occurred while checking '" + distributionLocation + "'")
+	util.HandleErrorAndExit(err, fmt.Sprintf("Error occurred while checking '%s'", distributionLocation))
 	if !exists {
-		util.HandleErrorAndExit(nil, "Distribution does not exist at ", distributionLocation)
+		util.HandleErrorAndExit(errors.New(fmt.Sprintf("Entered distribution file does not exist at '%s'.", distributionLocation)))
 	}
 
-	//Check
+	//Check update filename
 	locationInfo, err := os.Stat(updateFilePath)
-	util.HandleErrorAndExit(err, "")
+	util.HandleErrorAndExit(err, "Error occurred while getting the information of update file")
 	match, err := regexp.MatchString(constant.FILENAME_REGEX, locationInfo.Name())
 	if !match {
-		util.HandleErrorAndExit(nil, fmt.Sprintf("Update file name(%s) does not match '%s' regular expression.", locationInfo.Name(), constant.FILENAME_REGEX))
+		util.HandleErrorAndExit(errors.New(fmt.Sprintf("Update filename '%s' does not match '%s' regular expression.", locationInfo.Name(), constant.FILENAME_REGEX)))
 	}
 
+	//Set the update name in viper configs
 	updateName := strings.TrimSuffix(locationInfo.Name(), ".zip")
 	viper.Set(constant.UPDATE_NAME, updateName)
 
+	//Read the update zip file
 	updateFileMap, updateDescriptor, err := readUpdateZip(updateFilePath)
 	util.HandleErrorAndExit(err)
-	logger.Debug(updateFileMap)
+	logger.Trace(fmt.Sprintf("updateFileMap: %v\n", updateFileMap))
 
+	//Read the distribution zip file
+	distributionFileMap, err = readDistributionZip(distributionLocation)
+	util.HandleErrorAndExit(err)
+	logger.Trace(fmt.Sprintf("distributionFileMap: %v\n", distributionFileMap))
+
+	//Compare the update with the distribution
 	err = compare(updateFileMap, distributionFileMap, updateDescriptor)
 	util.HandleErrorAndExit(err)
 	util.PrintInfo("'" + updateName + "' validation successfully finished.")
 }
 
+//This function compares the files in the update and the distribution.
 func compare(updateFileMap, distributionFileMap map[string]bool, updateDescriptor *util.UpdateDescriptor) error {
 	updateName := viper.GetString(constant.UPDATE_NAME)
 	for filePath := range updateFileMap {
@@ -119,7 +132,7 @@ func compare(updateFileMap, distributionFileMap map[string]bool, updateDescripto
 			logger.Debug(fmt.Sprintf("isInAddedFiles: %v", isInAddedFiles))
 			resourceFiles := getResourceFiles()
 			logger.Debug(fmt.Sprintf("resourceFiles: %v", resourceFiles))
-			fileName := strings.TrimPrefix(filePath, updateName + constant.PATH_SEPARATOR)
+			fileName := strings.TrimPrefix(filePath, updateName + "/")
 			logger.Debug(fmt.Sprintf("fileName: %s", fileName))
 			_, foundInResources := resourceFiles[fileName]
 			logger.Debug(fmt.Sprintf("found in resources: %v", foundInResources))
@@ -134,7 +147,7 @@ func compare(updateFileMap, distributionFileMap map[string]bool, updateDescripto
 	return nil
 }
 
-//This function will read the update zip at the the given location
+//This function will read the update zip at the the given location.
 func readUpdateZip(filename string) (map[string]bool, *util.UpdateDescriptor, error) {
 	fileMap := make(map[string]bool)
 	updateDescriptor := util.UpdateDescriptor{}
@@ -153,11 +166,13 @@ func readUpdateZip(filename string) (map[string]bool, *util.UpdateDescriptor, er
 	logger.Debug("updateName:", updateName)
 	// Iterate through each file/dir found in
 	for _, file := range zipReader.Reader.File {
+		name := getFileName(file.FileInfo().Name())
 		if file.FileInfo().IsDir() {
-			logger.Debug("dir:", file.Name)
-			logger.Debug("dir:", file.FileInfo().Name())
-			if file.FileInfo().Name() != updateName {
-				logger.Debug("Checking:", file.FileInfo().Name())
+			logger.Debug(fmt.Sprintf("filepath: %s", file.Name))
+
+			logger.Debug(fmt.Sprintf("filename: %s", name))
+			if name != updateName {
+				logger.Debug("Checking:", name)
 				//Check
 				prefix := filepath.Join(updateName, constant.CARBON_HOME)
 				hasPrefix := strings.HasPrefix(file.Name, prefix)
@@ -166,11 +181,11 @@ func readUpdateZip(filename string) (map[string]bool, *util.UpdateDescriptor, er
 				}
 			}
 		} else {
-			logger.Debug("file:", file.Name)
-			logger.Debug("file:", file.FileInfo().Name())
-			fullPath := filepath.Join(updateName, file.FileInfo().Name())
-			logger.Debug("fullPath:", fullPath)
-			switch file.FileInfo().Name() {
+			logger.Debug(fmt.Sprintf("file.Name: %s", file.Name))
+			logger.Debug(fmt.Sprintf("file.FileInfo().Name(): %s", name))
+			fullPath := filepath.Join(updateName, name)
+			logger.Debug(fmt.Sprintf("fullPath: %s", fullPath))
+			switch  name{
 			case constant.UPDATE_DESCRIPTOR_FILE:
 				data, err := validateFile(file, constant.UPDATE_DESCRIPTOR_FILE, fullPath, updateName)
 				if err != nil {
@@ -209,13 +224,15 @@ func readUpdateZip(filename string) (map[string]bool, *util.UpdateDescriptor, er
 				resourceFiles := getResourceFiles()
 				logger.Debug(fmt.Sprintf("resourceFiles: %v", resourceFiles))
 				prefix := filepath.Join(updateName, constant.CARBON_HOME)
+				logger.Debug(fmt.Sprintf("Checking prefix %s in %s", prefix, file.Name))
 				hasPrefix := strings.HasPrefix(file.Name, prefix)
-				_, foundInResources := resourceFiles[file.FileInfo().Name()]
+				_, foundInResources := resourceFiles[ name]
 				logger.Debug(fmt.Sprintf("foundInResources: %v", foundInResources))
 				if !hasPrefix && !foundInResources {
 					return nil, nil, errors.New(fmt.Sprintf("Unknown file found: '%s'.", file.Name))
 				}
-				relativePath := strings.TrimPrefix(file.Name, prefix + string(os.PathSeparator))
+				logger.Debug(fmt.Sprintf("Trimming: %s using %s", file.Name, prefix + constant.PATH_SEPARATOR))
+				relativePath := strings.TrimPrefix(file.Name, prefix + constant.PATH_SEPARATOR)
 				fileMap[relativePath] = false
 			}
 		}
@@ -228,10 +245,10 @@ func readUpdateZip(filename string) (map[string]bool, *util.UpdateDescriptor, er
 	return fileMap, &updateDescriptor, nil
 }
 
-//This function will validate the provided file. If the word 'patch' is found, a warning smessage is printed.
+//This function will validate the provided file. If the word 'patch' is found, a warning message is printed.
 func validateFile(file *zip.File, fileName, fullPath, updateName string) ([]byte, error) {
 	logger.Debug(fmt.Sprintf("Validating '%s' at '%s' started.", fileName, fullPath))
-	parent := strings.TrimSuffix(file.Name, file.FileInfo().Name())
+	parent := strings.TrimSuffix(file.Name, getFileName(file.FileInfo().Name()))
 	if file.Name != fullPath {
 		return nil, errors.New(fmt.Sprintf("'%s' found at '%s'. It should be in the '%s' directory.", fileName, parent, updateName))
 	} else {
@@ -271,7 +288,7 @@ func validateFile(file *zip.File, fileName, fullPath, updateName string) ([]byte
 	return data, nil
 }
 
-//This function reads the product distribution at the given location
+//This function reads the product distribution at the given location.
 func readDistributionZip(filename string) (map[string]bool, error) {
 	fileMap := make(map[string]bool)
 	// Create a reader out of the zip archive
@@ -286,10 +303,20 @@ func readDistributionZip(filename string) (map[string]bool, error) {
 	// Iterate through each file/dir found in
 	for _, file := range zipReader.Reader.File {
 		logger.Trace(file.Name)
-		relativePath := strings.TrimPrefix(file.Name, productName + string(os.PathSeparator))
+		relativePath := strings.TrimPrefix(file.Name, productName + "/")
 		if !file.FileInfo().IsDir() {
 			fileMap[relativePath] = false
 		}
 	}
 	return fileMap, nil
+}
+
+//When reading zip files in windows, file.FileInfo().Name() does not return the filename correctly
+// (where file *zip.File) To fix this issue, this function was added.
+func getFileName(filename string) string {
+	filename = filepath.ToSlash(filename)
+	if lastIndex := strings.LastIndex(filename, "/"); lastIndex > -1 {
+		filename = filename[lastIndex + 1:]
+	}
+	return filename
 }

@@ -11,10 +11,12 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/fatih/color"
@@ -78,25 +80,27 @@ func CleanUpDirectory(path string) {
 		logger.Debug("Temporary files successfully deleted")
 	}
 }
-//
-//func HandleInterrupts(cleanupFunc func()) chan <- os.Signal {
-//	c := make(chan os.Signal, 1)
-//	signal.Notify(c, os.Interrupt)
-//	signal.Notify(c, syscall.SIGTERM)
-//	go func() {
-//		<-c
-//		cleanupFunc()
-//		os.Exit(1)
-//	}()
-//	return c
-//}
+
+//This function handles keyboard interrupts
+func HandleInterrupts(cleanupFunc func()) chan <- os.Signal {
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	signal.Notify(c, syscall.SIGTERM)
+	go func() {
+		<-c
+		PrintInfo("Keyboard interrupt received.")
+		cleanupFunc()
+		os.Exit(1)
+	}()
+	return c
+}
 
 //This function will create all directories in the given path if they do not exist
 func CreateDirectory(path string) error {
 	return os.MkdirAll(path, 0700)
 }
 
-//THis function will delete all directories in the given path
+//This function will delete all directories in the given path
 func DeleteDirectory(path string) error {
 	return os.RemoveAll(path)
 }
@@ -125,7 +129,7 @@ func ProcessUserPreference(preference string) int {
 }
 
 //This function will validate user input in cases of user can enter comma separated values
-func IsUserPreferencesValid(preferences []string, availableChoices int) (bool, error) {
+func IsUserPreferencesValid(preferences []string, noOfAvailableChoices int) (bool, error) {
 	length := len(preferences)
 	if length == 0 {
 		return false, errors.New("No preferences entered.")
@@ -135,7 +139,7 @@ func IsUserPreferencesValid(preferences []string, availableChoices int) (bool, e
 		return false, err
 	}
 	message := fmt.Sprintf("Invalid preferences. Please select indices where %s>= index >=1.",
-		strconv.Itoa(availableChoices))
+		strconv.Itoa(noOfAvailableChoices))
 	if first < 0 {
 		return false, errors.New(message)
 	}
@@ -143,7 +147,7 @@ func IsUserPreferencesValid(preferences []string, availableChoices int) (bool, e
 	if err != nil {
 		return false, err
 	}
-	if last > availableChoices {
+	if last > noOfAvailableChoices {
 		return false, errors.New(message)
 	}
 	return true, nil
@@ -166,42 +170,43 @@ func LoadUpdateDescriptor(filename, updateDirectoryPath string) (*UpdateDescript
 	if err != nil {
 		return nil, err
 	}
+	logger.Debug(fmt.Sprintf("updateDescriptor: %v", updateDescriptor))
 	return &updateDescriptor, nil
 }
 
 //This function will validate the update-descriptor.yaml
 func ValidateUpdateDescriptor(updateDescriptor *UpdateDescriptor) error {
 	if len(updateDescriptor.Update_number) == 0 {
-		return errors.New("'update_number' field not found")
+		return errors.New("'update_number' field not found.")
 	}
-	match, err := regexp.MatchString(constant.UPDATE_NUMBER_REGEX, updateDescriptor.Update_number)
+	matches, err := regexp.MatchString(constant.UPDATE_NUMBER_REGEX, updateDescriptor.Update_number)
 	if err != nil {
 		return err
 	}
-	if !match {
-		return errors.New(fmt.Sprintf("'update_number' is not valid. It should match '%s'", constant.UPDATE_NUMBER_REGEX))
+	if !matches {
+		return errors.New(fmt.Sprintf("'update_number' is not valid. It should match '%s'.", constant.UPDATE_NUMBER_REGEX))
 	}
 	if len(updateDescriptor.Platform_version) == 0 {
-		return errors.New("'platform_version' field not found")
+		return errors.New("'platform_version' field not found.")
 	}
-	match, err = regexp.MatchString(constant.KERNEL_VERSION_REGEX, updateDescriptor.Platform_version)
+	matches, err = regexp.MatchString(constant.KERNEL_VERSION_REGEX, updateDescriptor.Platform_version)
 	if err != nil {
 		return err
 	}
-	if !match {
-		return errors.New(fmt.Sprintf("'platform_version' is not valid. It should match '%s'", constant.KERNEL_VERSION_REGEX))
+	if !matches {
+		return errors.New(fmt.Sprintf("'platform_version' is not valid. It should match '%s'.", constant.KERNEL_VERSION_REGEX))
 	}
 	if len(updateDescriptor.Platform_name) == 0 {
-		return errors.New("'platform_name' field not found")
+		return errors.New("'platform_name' field not found.")
 	}
 	if len(updateDescriptor.Applies_to) == 0 {
-		return errors.New("'applies_to' field not found")
+		return errors.New("'applies_to' field not found.")
 	}
 	if len(updateDescriptor.Bug_fixes) == 0 {
-		return errors.New("'bug_fixes' field not found. Add '\"N/A\": \"N/A\"' if there are no bug fixes")
+		return errors.New("'bug_fixes' field not found. Add 'N/A: N/A' if there are no bug fixes.")
 	}
 	if len(updateDescriptor.Description) == 0 {
-		return errors.New("'description' field not found")
+		return errors.New("'description' field not found.")
 	}
 	return nil
 }
@@ -216,7 +221,7 @@ func IsStringIsInSlice(a string, list []string) bool {
 	return false
 }
 
-// Copies file source to destination dest.
+//Copies file source to destination
 func CopyFile(source string, dest string) (err error) {
 	logger.Debug(fmt.Sprintf("[CopyFile] Copying %s to %s.", source, dest))
 	sf, err := os.Open(source)
@@ -239,8 +244,7 @@ func CopyFile(source string, dest string) (err error) {
 	return
 }
 
-//Recursively copies a directory tree, attempting to preserve permissions.
-//Source directory must exist, destination directory must *not* exist.
+//Recursively copies a directory tree, attempting to preserve permissions
 func CopyDir(source string, dest string) (err error) {
 	logger.Debug(fmt.Sprintf("[CopyFile] Copying %s to %s.", source, dest))
 	// get properties of source dir
@@ -251,7 +255,7 @@ func CopyDir(source string, dest string) (err error) {
 	if !fi.IsDir() {
 		return errors.New("Source is not a directory")
 	}
-	//Create the destination folder if it does not exist
+	//Create the destination directory if it does not exist
 	_, err = os.Open(dest)
 	if os.IsNotExist(err) {
 		// create dest dir
@@ -280,24 +284,29 @@ func CopyDir(source string, dest string) (err error) {
 	return
 }
 
-//Check whether the given location points to a directory
+//Check whether the given location contains a directory
 func IsDirectoryExists(location string) (bool, error) {
+	logger.Debug(fmt.Sprintf("Checking %s", location))
 	locationInfo, err := os.Stat(location)
 	if err != nil {
 		if os.IsNotExist(err) {
+			logger.Debug("Does not exist")
 			return false, nil
 		} else {
+			logger.Debug("Other error")
 			return false, err
 		}
 	}
 	if locationInfo.IsDir() {
+		logger.Debug("Is a directory")
 		return true, nil
 	} else {
+		logger.Debug("Is not a directory")
 		return false, nil
 	}
 }
 
-//Check whether the given location points to a file
+//Check whether the given location contains a file
 func IsFileExists(location string) (bool, error) {
 	locationInfo, err := os.Stat(location)
 	if err != nil {
@@ -314,11 +323,15 @@ func IsFileExists(location string) (bool, error) {
 	}
 }
 
-//This function is used to handle errors (print proper error message and exit)
+//This function is used to handle errors (print proper error message and exit if an error exists)
 func HandleErrorAndExit(err error, customMessage ...interface{}) {
 	if err != nil {
 		//call the PrintError method and exit
-		PrintError(append(customMessage, fmt.Sprintf("[%s]", err.Error()))...)
+		if len(customMessage) == 0 {
+			PrintError(fmt.Sprintf("%s", err.Error()))
+		} else {
+			PrintError(append(customMessage, err.Error())...)
+		}
 		os.Exit(1)
 	}
 }
@@ -347,14 +360,6 @@ func PrintInBold(args ...interface{}) {
 	color.Set(color.Bold)
 	fmt.Print(args...)
 	color.Unset()
-}
-
-//todo: remove
-func PrintWhatsNext(args ...interface{}) {
-	color.Set(color.Bold)
-	fmt.Println("\nWhat's next?")
-	color.Unset()
-	fmt.Println(append([]interface{}{"\t"}, args...)...)
 }
 
 //This function will get the Jira summary associated with the given jira id. If an error occur, we just simply ignore
@@ -404,7 +409,7 @@ func GetJiraSummary(id string) string {
 //    update-description.yaml file.
 // 3) Will remove preceding and trailering spaces if trimAll is true, otherwise it will only remove trailering spaces.
 //    This is done to preserve proper formatting in the description section of the update-description.yaml.
-//Delimeter is provided from outside so that this function can be used to clean and concat various types of strings.
+//Delimiter is provided from outside so that this function can be used to clean and concat various types of strings.
 func ProcessString(data, delimiter string, trimAll bool) string {
 	data = strings.TrimSpace(data)
 	data = strings.Replace(data, "\r", "\n", -1)

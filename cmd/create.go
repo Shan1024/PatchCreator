@@ -59,7 +59,7 @@ var (
 	createCmdLongDesc = dedent.Dedent(`
 		This command will create a new update zip file from the files in the
 		given directory. To generate the directory structure, it requires the
-		product distribution zip file.`)
+		product distribution zip file path as input.`)
 )
 
 //createCmd represents the create command.

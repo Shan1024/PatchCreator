@@ -24,8 +24,9 @@ var (
 	validateCmdUse = "validate <update_loc> <dist_loc>"
 	validateCmdShortDesc = "Validate update zip"
 	validateCmdLongDesc = dedent.Dedent(`
-		This command will validate the given update zip. Files
-		will be matched against the given distribution.`)
+		This command will validate the given update zip. Files will be
+		matched against the given distribution. This will also validate
+		the structure of the update-descriptor.yaml file as well.`)
 )
 
 // validateCmd represents the validate command

@@ -26,11 +26,12 @@ var (
 	initCmdUse = "init"
 	initCmdShortDesc = "Generate '" + constant.UPDATE_DESCRIPTOR_FILE + "' file template"
 	initCmdLongDesc = dedent.Dedent(`
-		This command will generate the 'update-descriptor.yaml' file. If the
-		user does not specify a location, it will generate the template in
-		the current working directory and fill the data using any availabe
-		README.txt file. If READMT.txt is not found, it will fill values
-		using default values in the config.yaml.`)
+		This command will generate the 'update-descriptor.yaml' file. If
+		the user does not specify a directory, it will use the current
+		working directory. It will fill the data using any available
+		README.txt file in the old patch format. If README.txt is not
+		found, it will fill values using default values which you need
+		to edit manually.`)
 
 	initCmdExample = dedent.Dedent(`update_number: 0001
 platform_version: 4.4.0

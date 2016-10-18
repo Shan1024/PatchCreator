@@ -9,6 +9,7 @@ import (
 	"github.com/ian-kent/go-log/layout"
 	"github.com/ian-kent/go-log/levels"
 	"github.com/ian-kent/go-log/log"
+	"github.com/renstrom/dedent"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/wso2/wum-uc/constant"
@@ -32,9 +33,8 @@ var cfgFile string
 var RootCmd = &cobra.Command{
 	Use: "wum-uc",
 	Short: "This tool is used to create and validate updates",
-	Long: `This tool is used to create WUM compatible updates. This tool
-	can also validate any given update. This tool will simplify the update
-	creation process.`,
+	Long:  dedent.Dedent(`
+	This tool will simplify the WUM compatible update creation process.`),
 }
 
 // Execute adds all child commands to the root command sets flags appropriately.

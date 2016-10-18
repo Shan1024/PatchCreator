@@ -23,7 +23,7 @@ func init() {
 }
 
 func versionCommand(cmd *cobra.Command, args []string) {
-	fmt.Fprintf(os.Stdout, "wum version: %v\n", Version)
+	fmt.Fprintf(os.Stdout, "wum-uc version: %v\n", Version)
 	fmt.Fprintf(os.Stdout, "Release date: %v\n", BuildDate)
 	fmt.Fprintf(os.Stdout, "OS\\Arch: %v\\%v\n", runtime.GOOS, runtime.GOARCH)
 	fmt.Fprintf(os.Stdout, "Go version: %v\n\n", runtime.Version())

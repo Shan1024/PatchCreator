@@ -3,7 +3,7 @@
 target="wum-uc.go"
 version="0.1.0"
 
-platforms="darwin/386/macosx/i586 darwin/amd64/macosx/x64 linux/386/linux/i586 linux/amd64/linux/x64 windows/386/windows/i586 windows/amd64/windows/x64"
+platforms="darwin/amd64/macosx/x64 linux/386/linux/i586 linux/amd64/linux/x64 windows/386/windows/i586 windows/amd64/windows/x64"
 
 for platform in ${platforms}
 do

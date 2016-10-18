@@ -1,0 +1,9 @@
+resource_files:
+  mandatory:
+  - update-descriptor.yaml
+  - LICENSE.txt
+  optional:
+  - NOT_A_CONTRIBUTION.txt
+  - instructions.txt
+  skip:
+  - README.txt

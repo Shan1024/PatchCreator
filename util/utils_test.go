@@ -115,7 +115,7 @@ func TestProcessUserPreferenceScenario04(t *testing.T) {
 	}
 }
 
-func TestIsUserPreferencesValid01(t *testing.T) {
+func TestIsUserPreferencesValid(t *testing.T) {
 	preferences := []string{"3", "1", "2"}
 	isValid, err := IsUserPreferencesValid(preferences, len(preferences))
 	if err != nil {
@@ -150,5 +150,178 @@ func TestIsUserPreferencesValid01(t *testing.T) {
 	}
 	if isValid {
 		t.Errorf("Test failed, expected: %v, actual: %v", false, isValid)
+	}
+}
+
+func TestValidateUpdateDescriptor(t *testing.T) {
+	updateDescriptor := UpdateDescriptor{}
+	err := ValidateUpdateDescriptor(&updateDescriptor)
+	if err == nil {
+		t.Error("Test failed. Error expected")
+	}
+
+	updateDescriptor.Update_number = "0001"
+	err = ValidateUpdateDescriptor(&updateDescriptor)
+	if err == nil {
+		t.Error("Test failed. Error expected")
+	}
+
+	updateDescriptor.Platform_name = "wilkes"
+	err = ValidateUpdateDescriptor(&updateDescriptor)
+	if err == nil {
+		t.Error("Test failed. Error expected")
+	}
+
+	updateDescriptor.Platform_version = "4.4.0"
+	err = ValidateUpdateDescriptor(&updateDescriptor)
+	if err == nil {
+		t.Error("Test failed. Error expected")
+	}
+
+	updateDescriptor.Applies_to = "wso2esb-4.9.0"
+	err = ValidateUpdateDescriptor(&updateDescriptor)
+	if err == nil {
+		t.Error("Test failed. Error expected")
+	}
+
+	updateDescriptor.Bug_fixes = map[string]string{
+		"N/A":"N/A",
+	}
+	err = ValidateUpdateDescriptor(&updateDescriptor)
+	if err == nil {
+		t.Error("Test failed. Error expected")
+	}
+
+	updateDescriptor.Description = "sample description"
+	err = ValidateUpdateDescriptor(&updateDescriptor)
+	if err != nil {
+		t.Errorf("Test failed. Unexpected error %v", err)
+	}
+}
+
+func TestIsStringIsInSlice(t *testing.T) {
+	data := []string{"a", "b", "c"}
+	str := "a"
+	foundInSlice := IsStringIsInSlice(str, data)
+	if !foundInSlice {
+		t.Errorf("Test failed. String '%v' not found in slice %v", str, data)
+	}
+
+	str = "b"
+	foundInSlice = IsStringIsInSlice(str, data)
+	if !foundInSlice {
+		t.Errorf("Test failed. String '%v' not found in slice %v", str, data)
+	}
+
+	str = "c"
+	foundInSlice = IsStringIsInSlice(str, data)
+	if !foundInSlice {
+		t.Errorf("Test failed. String '%v' not found in slice %v", str, data)
+	}
+
+	str = "d"
+	foundInSlice = IsStringIsInSlice(str, data)
+	if foundInSlice {
+		t.Errorf("Test failed. String '%v' found in slice %v", str, data)
+	}
+}
+
+func TestProcessString01(t *testing.T) {
+	data := "esb, am"
+	delimiter := ","
+	result := ProcessString(data, delimiter, false)
+	expectedResult := "esb, am"
+	if result != expectedResult {
+		t.Errorf("Test failed, expected: '%v', actual: '%v'", expectedResult, result)
+	}
+
+	data = "esb\n am"
+	delimiter = ","
+	result = ProcessString(data, delimiter, false)
+	expectedResult = "esb, am"
+	if result != expectedResult {
+		t.Errorf("Test failed, expected: '%v', actual: '%v'", expectedResult, result)
+	}
+
+	data = "esb, es\n am"
+	delimiter = ","
+	result = ProcessString(data, delimiter, false)
+	expectedResult = "esb, es, am"
+	if result != expectedResult {
+		t.Errorf("Test failed, expected: '%v', actual: '%v'", expectedResult, result)
+	}
+
+	data = "esb\n am, es"
+	delimiter = ","
+	result = ProcessString(data, delimiter, false)
+	expectedResult = "esb, am, es"
+	if result != expectedResult {
+		t.Errorf("Test failed, expected: '%v', actual: '%v'", expectedResult, result)
+	}
+}
+
+func TestProcessString02(t *testing.T) {
+	data := "sample"
+	delimiter := "\n"
+	result := ProcessString(data, delimiter, false)
+	expectedResult := "sample"
+	if result != expectedResult {
+		t.Errorf("Test failed, expected: '%v', actual: '%v'", expectedResult, result)
+	}
+
+	data = "  sample  "
+	delimiter = "\n"
+	result = ProcessString(data, delimiter, false)
+	expectedResult = "sample"
+	if result != expectedResult {
+		t.Errorf("Test failed, expected: '%v', actual: '%v'", expectedResult, result)
+	}
+
+	data = "sample\nsample"
+	delimiter = "\n"
+	result = ProcessString(data, delimiter, false)
+	expectedResult = "sample\nsample"
+	if result != expectedResult {
+		t.Errorf("Test failed, expected: '%v', actual: '%v'", expectedResult, result)
+	}
+
+	data = "sample\rsample"
+	delimiter = "\n"
+	result = ProcessString(data, delimiter, false)
+	expectedResult = "sample\nsample"
+	if result != expectedResult {
+		t.Errorf("Test failed, expected: '%v', actual: '%v'", expectedResult, result)
+	}
+
+	data = "sample\n\tsample"
+	delimiter = "\n"
+	result = ProcessString(data, delimiter, false)
+	expectedResult = "sample\n    sample"
+	if result != expectedResult {
+		t.Errorf("Test failed, expected: '%v', actual: '%v'", expectedResult, result)
+	}
+
+	data = "sample\n\tsample"
+	delimiter = "\n"
+	result = ProcessString(data, delimiter, true)
+	expectedResult = "sample\nsample"
+	if result != expectedResult {
+		t.Errorf("Test failed, expected: '%v', actual: '%v'", expectedResult, result)
+	}
+
+	data = "    sample\n\tsample    "
+	delimiter = "\n"
+	result = ProcessString(data, delimiter, false)
+	expectedResult = "sample\n    sample"
+	if result != expectedResult {
+		t.Errorf("Test failed, expected: '%v', actual: '%v'", expectedResult, result)
+	}
+
+	data = "    sample\n\tsample    "
+	delimiter = "\n"
+	result = ProcessString(data, delimiter, true)
+	expectedResult = "sample\nsample"
+	if result != expectedResult {
+		t.Errorf("Test failed, expected: '%v', actual: '%v'", expectedResult, result)
 	}
 }

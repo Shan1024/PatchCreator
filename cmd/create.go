@@ -107,7 +107,6 @@ func createUpdate(updateDirectoryPath, distributionPath string) {
 		util.HandleErrorAndExit(errors.New(fmt.Sprintf("Directory does not exist at '%s'. Update location must be a directory.", updateDirectoryPath)))
 	}
 	updateRoot := strings.TrimSuffix(updateDirectoryPath, constant.PATH_SEPARATOR)
-	//updateRoot = strings.TrimSuffix(updateRoot, "\\")
 	logger.Debug(fmt.Sprintf("updateRoot: %s\n", updateRoot))
 	viper.Set(constant.UPDATE_ROOT, updateRoot)
 
@@ -633,16 +632,13 @@ func AddToRootNode(root *node, path []string, isDir bool, md5Hash string) *node 
 		root.childNodes[path[0]] = &newNode
 
 	} else {
-		Node, contains := root.childNodes[path[0]]
-		if contains {
-			logger.Trace("Already exists")
-			AddToRootNode(Node, path[1:], isDir, md5Hash)
-		} else {
-			logger.Trace("New node")
+		logger.Trace(fmt.Sprintf("End not reached. checking: %v", path[0]))
+		node, contains := root.childNodes[path[0]]
+		if !contains {
+			logger.Trace(fmt.Sprintf("Creating new node: %v", path[0]))
 			newNode := createNewNode()
 			newNode.name = path[0]
-			newNode.isDir = isDir
-			newNode.md5Hash = md5Hash
+			newNode.isDir = true
 			if len(root.relativeLocation) == 0 {
 				newNode.relativeLocation = path[0]
 			} else {
@@ -650,7 +646,9 @@ func AddToRootNode(root *node, path []string, isDir bool, md5Hash string) *node 
 			}
 			newNode.parent = root
 			root.childNodes[path[0]] = &newNode
+			node = &newNode
 		}
+		AddToRootNode(node, path[1:], isDir, md5Hash)
 	}
 	return root
 }

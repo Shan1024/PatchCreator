@@ -20,7 +20,7 @@ func TestGetUpdateName(t *testing.T) {
 	updateName := getUpdateName(&updateDescriptor, constant.UPDATE_NAME_PREFIX)
 	expected := constant.UPDATE_NAME_PREFIX + "-" + kernelVersion + "-" + updateNumber
 	if updateName != expected {
-		t.Errorf("Test failed, expected: %d, actual: %d", expected, updateName)
+		t.Errorf("Test failed, expected: %s, actual: %s", expected, updateName)
 	}
 }
 
@@ -37,7 +37,7 @@ func TestAddToRootNode(t *testing.T) {
 		t.Errorf("Test failed, node '%v' not found.", nodeName)
 	}
 	if nodeA.isDir == false {
-		t.Errorf("Test failed, expected: %d, actual: %d", false, nodeA.isDir)
+		t.Errorf("Test failed, expected: %v, actual: %v", false, nodeA.isDir)
 	}
 
 	nodeName = "b"
@@ -46,7 +46,7 @@ func TestAddToRootNode(t *testing.T) {
 		t.Errorf("Test failed, node '%v' not found.", nodeName)
 	}
 	if nodeB.isDir == false {
-		t.Errorf("Test failed, expected: %d, actual: %d", false, nodeB.isDir)
+		t.Errorf("Test failed, expected: %v, actual: %v", false, nodeB.isDir)
 	}
 
 	nodeName = "c.jar"
@@ -56,11 +56,11 @@ func TestAddToRootNode(t *testing.T) {
 	}
 
 	if nodeC.md5Hash != hash {
-		t.Errorf("Test failed, expected: %d, actual: %d", hash, nodeC.md5Hash)
+		t.Errorf("Test failed, expected: %v, actual: %v", hash, nodeC.md5Hash)
 	}
 
 	if nodeC.isDir != isDir {
-		t.Errorf("Test failed, expected: %d, actual: %d", hash, nodeC.md5Hash)
+		t.Errorf("Test failed, expected: %v, actual: %v", hash, nodeC.md5Hash)
 	}
 
 	//Add new file
@@ -73,7 +73,7 @@ func TestAddToRootNode(t *testing.T) {
 		t.Errorf("Test failed, node '%v' not found.", nodeName)
 	}
 	if nodeA.isDir == false {
-		t.Errorf("Test failed, expected: %d, actual: %d", false, nodeA.isDir)
+		t.Errorf("Test failed, expected: %v, actual: %v", false, nodeA.isDir)
 	}
 
 	nodeName = "b"
@@ -82,7 +82,7 @@ func TestAddToRootNode(t *testing.T) {
 		t.Errorf("Test failed, node '%v' not found.", nodeName)
 	}
 	if nodeB.isDir == false {
-		t.Errorf("Test failed, expected: %d, actual: %d", false, nodeB.isDir)
+		t.Errorf("Test failed, expected: %v, actual: %v", false, nodeB.isDir)
 	}
 
 	nodeName = "d.jar"
@@ -92,11 +92,11 @@ func TestAddToRootNode(t *testing.T) {
 	}
 
 	if nodeD.md5Hash != hash {
-		t.Errorf("Test failed, expected: %d, actual: %d", hash, nodeD.md5Hash)
+		t.Errorf("Test failed, expected: %v, actual: %v", hash, nodeD.md5Hash)
 	}
 
 	if nodeD.isDir != isDir {
-		t.Errorf("Test failed, expected: %d, actual: %d", hash, nodeD.md5Hash)
+		t.Errorf("Test failed, expected: %v, actual: %v", hash, nodeD.md5Hash)
 	}
 
 }
@@ -108,25 +108,25 @@ func TestPathExists(t *testing.T) {
 	exists := PathExists(&root, "a/b/c.jar", false)
 	expected := true
 	if expected != exists {
-		t.Errorf("Test failed, expected: %d, actual: %d", expected, exists)
+		t.Errorf("Test failed, expected: %v, actual: %v", expected, exists)
 	}
 
 	exists = PathExists(&root, "a/b", true)
 	expected = true
 	if expected != exists {
-		t.Errorf("Test failed, expected: %d, actual: %d", expected, exists)
+		t.Errorf("Test failed, expected: %v, actual: %v", expected, exists)
 	}
 
 	exists = PathExists(&root, "a", true)
 	expected = true
 	if expected != exists {
-		t.Errorf("Test failed, expected: %d, actual: %d", expected, exists)
+		t.Errorf("Test failed, expected: %v, actual: %v", expected, exists)
 	}
 
 	exists = PathExists(&root, "a/b/d.jar", false)
 	expected = false
 	if expected != exists {
-		t.Errorf("Test failed, expected: %d, actual: %d", expected, exists)
+		t.Errorf("Test failed, expected: %v, actual: %v", expected, exists)
 	}
 
 	AddToRootNode(&root, strings.Split("a/b/d.jar", "/"), false, "hash2")
@@ -134,13 +134,13 @@ func TestPathExists(t *testing.T) {
 	exists = PathExists(&root, "a/b/d.jar", false)
 	expected = true
 	if expected != exists {
-		t.Errorf("Test failed, expected: %d, actual: %d", expected, exists)
+		t.Errorf("Test failed, expected: %v, actual: %v", expected, exists)
 	}
 
 	exists = PathExists(&root, "a/d.jar", false)
 	expected = false
 	if expected != exists {
-		t.Errorf("Test failed, expected: %d, actual: %d", expected, exists)
+		t.Errorf("Test failed, expected: %v, actual: %v", expected, exists)
 	}
 
 	AddToRootNode(&root, strings.Split("a/d.jar", "/"), false, "hash3")
@@ -148,13 +148,13 @@ func TestPathExists(t *testing.T) {
 	exists = PathExists(&root, "a/d.jar", false)
 	expected = true
 	if expected != exists {
-		t.Errorf("Test failed, expected: %d, actual: %d", expected, exists)
+		t.Errorf("Test failed, expected: %v, actual: %v", expected, exists)
 	}
 
 	exists = PathExists(&root, "d.jar", false)
 	expected = false
 	if expected != exists {
-		t.Errorf("Test failed, expected: %d, actual: %d", expected, exists)
+		t.Errorf("Test failed, expected: %v, actual: %v", expected, exists)
 	}
 
 	AddToRootNode(&root, strings.Split("d.jar", "/"), false, "hash3")
@@ -162,6 +162,6 @@ func TestPathExists(t *testing.T) {
 	exists = PathExists(&root, "d.jar", false)
 	expected = true
 	if expected != exists {
-		t.Errorf("Test failed, expected: %d, actual: %d", expected, exists)
+		t.Errorf("Test failed, expected: %v, actual: %v", expected, exists)
 	}
 }

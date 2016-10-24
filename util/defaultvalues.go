@@ -2,11 +2,11 @@
 
 package util
 
-//Default values used in the application
+// Default values used in the application
 var (
 	EnableDebugLogs = false
 	EnableTraceLogs = false
-	//We only check md5 if -m flag is not found. If -m is set, it's value by default is true. That means we don't
+	// We only check md5 if -m flag is not found. If -m is set, it's value by default is true. That means we don't
 	// want to check md5 if this value is true. By default we want to check. So that's why we have set
 	// CheckMd5Disabled to false here.
 	CheckMd5Disabled = false

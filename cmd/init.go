@@ -1,6 +1,5 @@
 // Copyright (c) 2016, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
 
-
 package cmd
 
 import (
@@ -100,9 +99,11 @@ func initCurrentDirectory() {
 //This function will start the init process.
 func initDirectory(destination string) {
 	logger.Debug("Initializing started.")
+	// Check whether the provided directory exists
 	exists, err := util.IsDirectoryExists(destination)
 	logger.Debug(fmt.Sprintf("'%s' directory exists: %v", destination, exists))
 
+	// If the directory does not exists, prompt the user
 	skip := false
 	if !exists {
 		userInputLoop:
@@ -114,6 +115,7 @@ func initDirectory(destination string) {
 			}
 			util.HandleErrorAndExit(err, "Error occurred while getting input from the user.")
 
+			// Get the user preference
 			userPreference := util.ProcessUserPreference(preference)
 			switch(userPreference){
 			case constant.YES:
@@ -130,16 +132,18 @@ func initDirectory(destination string) {
 			}
 		}
 	}
+	// If the skip is selected, exit
 	if skip {
 		util.HandleErrorAndExit(errors.New("Directory creation skipped. Please enter a valid directory."))
 	}
 
-	updateDescriptorFile := filepath.Join(destination, constant.UPDATE_DESCRIPTOR_FILE)
-	logger.Debug(fmt.Sprintf("updateDescriptorFile: %v", updateDescriptorFile))
-
+	// Create a new update descriptor struct
 	updateDescriptor := util.UpdateDescriptor{}
+
+	// Process README.txt and parse values
 	processReadMe(destination, &updateDescriptor)
 
+	// Marshall the update descriptor struct
 	data, err := yaml.Marshal(&updateDescriptor)
 	util.HandleErrorAndExit(err)
 
@@ -148,6 +152,11 @@ func initDirectory(destination string) {
 	dataString = strings.Replace(dataString, "\"", "", -1)
 	logger.Debug(fmt.Sprintf("update-descriptor:\n%s", dataString))
 
+	// Construct the update descriptor file path
+	updateDescriptorFile := filepath.Join(destination, constant.UPDATE_DESCRIPTOR_FILE)
+	logger.Debug(fmt.Sprintf("updateDescriptorFile: %v", updateDescriptorFile))
+
+	// Save the update descriptor
 	file, err := os.OpenFile(
 		updateDescriptorFile,
 		os.O_WRONLY | os.O_TRUNC | os.O_CREATE,
@@ -161,6 +170,8 @@ func initDirectory(destination string) {
 	if err != nil {
 		util.HandleErrorAndExit(err)
 	}
+
+	// Get the absolute location
 	absDestination, err := filepath.Abs(destination)
 	if err != nil {
 		absDestination = destination
@@ -193,39 +204,51 @@ func setUpdateDescriptorDefaultValues(updateDescriptor *util.UpdateDescriptor) {
 // be extracted, it will add default value and continue.
 func processReadMe(directory string, updateDescriptor *util.UpdateDescriptor) {
 	logger.Debug("Processing README started")
+	// Construct the README.txt path
 	readMePath := path.Join(directory, constant.README_FILE)
 	logger.Debug(fmt.Sprintf("README Path: %v", readMePath))
+	// Check whether the README.txt file exists
 	_, err := os.Stat(readMePath)
 	if err != nil {
-		if os.IsNotExist(err) {
-			logger.Debug(fmt.Sprintf("%s not found", readMePath))
-			setUpdateDescriptorDefaultValues(updateDescriptor)
-			return
-		}
+		// If the file does not exist or any other error occur, return without printing warning messages
+		logger.Debug(fmt.Sprintf("%s not found", readMePath))
+		setUpdateDescriptorDefaultValues(updateDescriptor)
+		return
 	}
+	// Read the README.txt file
 	data, err := ioutil.ReadFile(readMePath)
 	if err != nil {
+		// If any error occurs, return without printing warning messages
 		logger.Debug(fmt.Sprintf("Error occurred and processing README: %v", err))
 		setUpdateDescriptorDefaultValues(updateDescriptor)
 		return
 	}
 
 	logger.Debug("README.txt found")
+
+	// Convert the byte array to a string
 	stringData := string(data)
+	// Compile the regex
 	regex, err := regexp.Compile(constant.PATCH_ID_REGEX)
 	if err == nil {
 		result := regex.FindStringSubmatch(stringData)
 		logger.Trace(fmt.Sprintf("PATCH_ID_REGEX result: %v", result))
-		if len(result) == 3 {
+		// Since the regex has 2 capturing groups, the result size will be 3 (because there is the full match)
+		// If not match found, the size will be 0. We check whether the result size is not 0 to make sure both
+		// capturing groups are identified.
+		if len(result) != 0 {
+			// Extract details
 			updateDescriptor.Update_number = result[2]
 			updateDescriptor.Platform_version = result[1]
 			platformsMap := viper.GetStringMapString(constant.PLATFORM_VERSIONS)
 			logger.Trace(fmt.Sprintf("Platform Map: %v", platformsMap))
+			// Get the platform details from the map
 			platformName, found := platformsMap[result[1]]
 			if found {
 				logger.Debug("PlatformName found in configs")
 				updateDescriptor.Platform_name = platformName
 			} else {
+				//If the platform name is not found, set default
 				logger.Debug("No matching platform name found for:", result[1])
 				updateDescriptor.Platform_name = constant.PLATFORM_NAME_DEFAULT
 			}
@@ -233,66 +256,79 @@ func processReadMe(directory string, updateDescriptor *util.UpdateDescriptor) {
 			logger.Debug("PATCH_ID_REGEX results incorrect:", result)
 		}
 	} else {
+		//If error occurred, set default values
 		logger.Debug(fmt.Sprintf("Error occurred while processing PATCH_ID_REGEX: %v", err))
 		updateDescriptor.Update_number = constant.UPDATE_NO_DEFAULT
 		updateDescriptor.Platform_name = constant.PLATFORM_NAME_DEFAULT
 		updateDescriptor.Platform_version = constant.PLATFORM_VERSION_DEFAULT
 	}
 
+	// Compile the regex
 	regex, err = regexp.Compile(constant.APPLIES_TO_REGEX)
 	if err == nil {
 		result := regex.FindStringSubmatch(stringData)
 		logger.Trace(fmt.Sprintf("APPLIES_TO_REGEX result: %v", result))
+		// In the README, Associated Jiras section might not appear. If it does appear, result size will be 2.
+		// If it does not appear, result size will be 3.
 		if len(result) == 2 {
+			// If the result size is 2, we know that 1st index contains the 1st capturing group.
 			updateDescriptor.Applies_to = util.ProcessString(result[1], ", ", true)
 		} else if len(result) == 3 {
+			// If the result size is 3, 1st or 2nd string might contain the match. So we concat them
+			// together and trim the spaces. If one field has an empty string, it will be trimmed.
 			updateDescriptor.Applies_to = util.ProcessString(strings.TrimSpace(result[1] + result[2]), ", ", true)
 		} else {
 			logger.Debug("No matching results found for APPLIES_TO_REGEX:", result)
 		}
 	} else {
+		//If error occurred, set default value
 		logger.Debug(fmt.Sprintf("Error occurred while processing APPLIES_TO_REGEX: %v", err))
 		updateDescriptor.Applies_to = constant.APPLIES_TO_DEFAULT
 	}
 
+	// Compile the regex
 	regex, err = regexp.Compile(constant.ASSOCIATED_JIRAS_REGEX)
 	if err == nil {
+		// Get all matches because there might be multiple Jiras.
 		allResult := regex.FindAllStringSubmatch(stringData, -1)
 		logger.Trace(fmt.Sprintf("APPLIES_TO_REGEX result: %v", allResult))
 		updateDescriptor.Bug_fixes = make(map[string]string)
+		// If no Jiras found, set default values
 		if len(allResult) == 0 {
 			logger.Debug("No matching results found for ASSOCIATED_JIRAS_REGEX. Setting default values.")
 			updateDescriptor.Bug_fixes[constant.JIRA_KEY_DEFAULT] = constant.JIRA_SUMMARY_DEFAULT
 		} else {
+			// If Jiras found, get summary for all Jiras
 			logger.Debug("Matching results found for ASSOCIATED_JIRAS_REGEX")
 			for i, match := range allResult {
+				// Regex has a one capturing group. So the jira ID will be in the 1st index.
 				logger.Debug(fmt.Sprintf("%d: %s", i, match[1]))
-				if len(match) == 2 {
-					logger.Debug(fmt.Sprintf("ASSOCIATED_JIRAS_REGEX results is correct: %v", match))
-					updateDescriptor.Bug_fixes[match[1]] = util.GetJiraSummary(match[1])
-				} else {
-					logger.Debug(fmt.Sprintf("ASSOCIATED_JIRAS_REGEX results incorrect: %v", match))
-				}
+				logger.Debug(fmt.Sprintf("ASSOCIATED_JIRAS_REGEX results is correct: %v", match))
+				updateDescriptor.Bug_fixes[match[1]] = util.GetJiraSummary(match[1])
 			}
 		}
 	} else {
+		//If error occurred, set default values
 		logger.Debug(fmt.Sprintf("Error occurred while processing ASSOCIATED_JIRAS_REGEX: %v", err))
 		logger.Debug("Setting defailt values to bug_fixes")
 		updateDescriptor.Bug_fixes = make(map[string]string)
 		updateDescriptor.Bug_fixes[constant.JIRA_KEY_DEFAULT] = constant.JIRA_SUMMARY_DEFAULT
 	}
 
+	// Compile the regex
 	regex, err = regexp.Compile(constant.DESCRIPTION_REGEX)
 	if err == nil {
+		// Get the match
 		result := regex.FindStringSubmatch(stringData)
 		logger.Trace(fmt.Sprintf("DESCRIPTION_REGEX result: %v", result))
-		if len(result) == 2 {
+		// If there is a match, process it and store it
+		if len(result) != 0 {
 			updateDescriptor.Description = util.ProcessString(result[1], "\n", false)
 		} else {
-
+			logger.Debug(fmt.Sprintf("No matching results found for DESCRIPTION_REGEX: %v", result))
 		}
-		logger.Debug(fmt.Sprintf("No matching results found for DESCRIPTION_REGEX: %v", result))
 	} else {
+		//If error occurred, set default values
 		logger.Debug(fmt.Sprintf("Error occurred while processing DESCRIPTION_REGEX: %v", err))
 		updateDescriptor.Description = constant.DESCRIPTION_DEFAULT
 	}

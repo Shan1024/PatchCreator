@@ -28,7 +28,7 @@ import (
 
 var logger = log.Logger()
 
-//struct which is used to read update-descriptor.yaml
+// struct which is used to read update-descriptor.yaml
 type UpdateDescriptor struct {
 	Update_number    string
 	Platform_version string
@@ -43,7 +43,7 @@ type UpdateDescriptor struct {
 			 }
 }
 
-//This will return the md5 hash of the file in the given filepath
+// This will return the md5 hash of the file in the given filepath
 func GetMD5(filepath string) (string, error) {
 	var result []byte
 	file, err := os.Open(filepath)
@@ -59,7 +59,7 @@ func GetMD5(filepath string) (string, error) {
 	return hex.EncodeToString(hash.Sum(result)), nil
 }
 
-//This function is used to delete the temporary directories
+// This function is used to delete the temporary directories
 func CleanUpDirectory(path string) {
 	logger.Debug(fmt.Sprintf("Deleting temporary files: %s", path))
 	err := DeleteDirectory(path)
@@ -81,7 +81,7 @@ func CleanUpDirectory(path string) {
 	}
 }
 
-//This function handles keyboard interrupts
+// This function handles keyboard interrupts
 func HandleInterrupts(cleanupFunc func()) chan <- os.Signal {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
@@ -95,17 +95,17 @@ func HandleInterrupts(cleanupFunc func()) chan <- os.Signal {
 	return c
 }
 
-//This function will create all directories in the given path if they do not exist
+// This function will create all directories in the given path if they do not exist
 func CreateDirectory(path string) error {
 	return os.MkdirAll(path, 0700)
 }
 
-//This function will delete all directories in the given path
+// This function will delete all directories in the given path
 func DeleteDirectory(path string) error {
 	return os.RemoveAll(path)
 }
 
-//This function will get user input
+// This function will get user input
 func GetUserInput() (string, error) {
 	reader := bufio.NewReader(os.Stdin)
 	preference, err := reader.ReadString('\n')
@@ -115,7 +115,7 @@ func GetUserInput() (string, error) {
 	return strings.TrimSpace(preference), nil
 }
 
-//This function will process user input and identify the type of preference
+// This function will process user input and identify the type of preference
 func ProcessUserPreference(preference string) int {
 	if strings.ToLower(preference) == "yes" || (len(preference) == 1 && strings.ToLower(preference) == "y" ) {
 		return constant.YES
@@ -128,7 +128,7 @@ func ProcessUserPreference(preference string) int {
 	return constant.OTHER
 }
 
-//This function will validate user input in cases of user can enter comma separated values
+// This function will validate user input in cases of user can enter comma separated values
 func IsUserPreferencesValid(preferences []string, noOfAvailableChoices int) (bool, error) {
 	length := len(preferences)
 	if length == 0 {
@@ -153,7 +153,7 @@ func IsUserPreferencesValid(preferences []string, noOfAvailableChoices int) (boo
 	return true, nil
 }
 
-//This function will read update-descriptor.yaml
+// This function will read update-descriptor.yaml
 func LoadUpdateDescriptor(filename, updateDirectoryPath string) (*UpdateDescriptor, error) {
 	//Construct the file path
 	updateDescriptorPath := filepath.Join(updateDirectoryPath, filename)
@@ -174,7 +174,7 @@ func LoadUpdateDescriptor(filename, updateDirectoryPath string) (*UpdateDescript
 	return &updateDescriptor, nil
 }
 
-//This function will validate the update-descriptor.yaml
+// This function will validate the update-descriptor.yaml
 func ValidateUpdateDescriptor(updateDescriptor *UpdateDescriptor) error {
 	if len(updateDescriptor.Update_number) == 0 {
 		return errors.New("'update_number' field not found.")
@@ -211,7 +211,7 @@ func ValidateUpdateDescriptor(updateDescriptor *UpdateDescriptor) error {
 	return nil
 }
 
-//Check whether the given string is in the given slice
+// Check whether the given string is in the given slice
 func IsStringIsInSlice(a string, list []string) bool {
 	for _, b := range list {
 		if b == a {
@@ -221,7 +221,7 @@ func IsStringIsInSlice(a string, list []string) bool {
 	return false
 }
 
-//Copies file source to destination
+// Copies file source to destination
 func CopyFile(source string, dest string) (err error) {
 	logger.Debug(fmt.Sprintf("[CopyFile] Copying %s to %s.", source, dest))
 	sf, err := os.Open(source)
@@ -244,7 +244,7 @@ func CopyFile(source string, dest string) (err error) {
 	return
 }
 
-//Recursively copies a directory tree, attempting to preserve permissions
+// Recursively copies a directory tree, attempting to preserve permissions
 func CopyDir(source string, dest string) (err error) {
 	logger.Debug(fmt.Sprintf("[CopyFile] Copying %s to %s.", source, dest))
 	// get properties of source dir
@@ -284,7 +284,7 @@ func CopyDir(source string, dest string) (err error) {
 	return
 }
 
-//Check whether the given location contains a directory
+// Check whether the given location contains a directory
 func IsDirectoryExists(location string) (bool, error) {
 	logger.Debug(fmt.Sprintf("Checking %s", location))
 	locationInfo, err := os.Stat(location)
@@ -306,7 +306,7 @@ func IsDirectoryExists(location string) (bool, error) {
 	}
 }
 
-//Check whether the given location contains a file
+// Check whether the given location contains a file
 func IsFileExists(location string) (bool, error) {
 	locationInfo, err := os.Stat(location)
 	if err != nil {
@@ -323,7 +323,7 @@ func IsFileExists(location string) (bool, error) {
 	}
 }
 
-//This function is used to handle errors (print proper error message and exit if an error exists)
+// This function is used to handle errors (print proper error message and exit if an error exists)
 func HandleErrorAndExit(err error, customMessage ...interface{}) {
 	if err != nil {
 		//call the PrintError method and exit
@@ -336,33 +336,33 @@ func HandleErrorAndExit(err error, customMessage ...interface{}) {
 	}
 }
 
-//This function is used to print error messages
+// This function is used to print error messages
 func PrintError(args ...interface{}) {
 	color.Set(color.FgRed, color.Bold)
 	fmt.Println(append(append([]interface{}{"\n[ERROR]"}, args...), "\n")...)
 	color.Unset()
 }
 
-//This function is used to print warning messages
+// This function is used to print warning messages
 func PrintWarning(args ...interface{}) {
 	color.Set(color.Bold)
 	fmt.Println(append([]interface{}{"[WARNING]"}, args...)...)
 	color.Unset()
 }
 
-//This function is used to print info messages
+// This function is used to print info messages
 func PrintInfo(args ...interface{}) {
 	fmt.Println(append([]interface{}{"[INFO]"}, args...)...)
 }
 
-//This function is used to print text in bold
+// This function is used to print text in bold
 func PrintInBold(args ...interface{}) {
 	color.Set(color.Bold)
 	fmt.Print(args...)
 	color.Unset()
 }
 
-//This function will get the Jira summary associated with the given jira id. If an error occur, we just simply ignore
+// This function will get the Jira summary associated with the given jira id. If an error occur, we just simply ignore
 // the error and return the default response.
 func GetJiraSummary(id string) string {
 	defaultResponse := "[ADD_JIRA_SUMMARY_HERE]"
@@ -393,7 +393,7 @@ func GetJiraSummary(id string) string {
 	}
 	result := regex.FindStringSubmatch(responseBody)
 	logger.Debug(fmt.Sprintf("Match: %s", result))
-	//In the given regex, there are 2 capturing groups. With the full content matching, it returns 3 results. So we
+	// In the given regex, there are 2 capturing groups. With the full content matching, it returns 3 results. So we
 	// check for 3 results here
 	if len(result) == 3 {
 		logger.Debug(fmt.Sprintf("Jira Summary: %s", strings.TrimSpace(result[2])))
@@ -402,14 +402,14 @@ func GetJiraSummary(id string) string {
 	return defaultResponse
 }
 
-//This function will do the following operations on the provided string.
+// This function will do the following operations on the provided string.
 // 1) Replace \r with \n - Some older files have MAC OS 9 line endings (\r) and this will cause issues when processing
 //    these strings using regular expressions.
 // 2) Replace \t with four spaces. This is done to prevent ugly encoding in description section in the
 //    update-description.yaml file.
 // 3) Will remove preceding and trailering spaces if trimAll is true, otherwise it will only remove trailering spaces.
 //    This is done to preserve proper formatting in the description section of the update-description.yaml.
-//Delimiter is provided from outside so that this function can be used to clean and concat various types of strings.
+// Delimiter is provided from outside so that this function can be used to clean and concat various types of strings.
 func ProcessString(data, delimiter string, trimAll bool) string {
 	data = strings.TrimSpace(data)
 	data = strings.Replace(data, "\r", "\n", -1)

@@ -4,10 +4,10 @@ package main
 
 import "github.com/wso2/wum-uc/cmd"
 
-//wum-uc version. Value is set during the build process.
+// wum-uc version. Value is set during the build process.
 var version string
 
-//Build date of the particular build. Value is set during the build process
+// Build date of the particular build. Value is set during the build process.
 var buildDate string
 
 func main() {

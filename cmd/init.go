@@ -293,10 +293,10 @@ func processReadMe(directory string, updateDescriptor *util.UpdateDescriptor) {
 		allResult := regex.FindAllStringSubmatch(stringData, -1)
 		logger.Trace(fmt.Sprintf("APPLIES_TO_REGEX result: %v", allResult))
 		updateDescriptor.Bug_fixes = make(map[string]string)
-		// If no Jiras found, set default values
+		// If no Jiras found, set 'N/A: N/A' as the value
 		if len(allResult) == 0 {
 			logger.Debug("No matching results found for ASSOCIATED_JIRAS_REGEX. Setting default values.")
-			updateDescriptor.Bug_fixes[constant.JIRA_KEY_DEFAULT] = constant.JIRA_SUMMARY_DEFAULT
+			updateDescriptor.Bug_fixes[constant.JIRA_NA] = constant.JIRA_NA
 		} else {
 			// If Jiras found, get summary for all Jiras
 			logger.Debug("Matching results found for ASSOCIATED_JIRAS_REGEX")

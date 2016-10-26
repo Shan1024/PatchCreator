@@ -25,10 +25,10 @@ do
     zipfile="wum-uc-${version}-${pos}-${parch}"
     zipdir="$(dirname ${target})/build/target/${zipfile}"
     mkdir -p ${zipdir}
-    # cp -r "$(dirname $target)/cmd" $zipdir
-#    cp -r "$(dirname ${target})/res" ${zipdir}
-#    cp -r "$(dirname ${target})/README.md" ${zipdir}
-#    cp -r "$(dirname ${target})/LICENSE.txt" ${zipdir}
+
+    cp -r "$(dirname ${target})/resources" ${zipdir}
+    cp -r "$(dirname ${target})/README.md" ${zipdir}
+    cp -r "$(dirname ${target})/LICENSE.txt" ${zipdir}
 
     # set destination path for binary
     destination="${zipdir}/bin/${output}"

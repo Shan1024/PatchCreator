@@ -24,6 +24,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/wso2/wum-uc/constant"
 	"gopkg.in/yaml.v2"
+	"encoding/json"
 )
 
 var logger = log.Logger()
@@ -41,6 +42,15 @@ type UpdateDescriptor struct {
 				 Removed_files  []string
 				 Modified_files []string
 			 }
+}
+
+// Structs to get the summary field from the jira response
+type Fields struct {
+	Summary string `json:"summary"`
+}
+
+type JiraResponse struct {
+	Fields Fields `json:"fields"`
 }
 
 // This will return the md5 hash of the file in the given filepath
@@ -365,7 +375,7 @@ func PrintInBold(args ...interface{}) {
 // This function will get the Jira summary associated with the given jira id. If an error occur, we just simply ignore
 // the error and return the default response.
 func GetJiraSummary(id string) string {
-	defaultResponse := "[ADD_JIRA_SUMMARY_HERE]"
+	defaultResponse := constant.JIRA_SUMMARY_DEFAULT
 	logger.Debug(fmt.Sprintf("Getting Jira summary for: %s", id))
 	req, err := http.NewRequest("GET", constant.JIRA_API_URL + id, nil)
 	logger.Trace(fmt.Sprintf("Request: %v", req))
@@ -385,21 +395,19 @@ func GetJiraSummary(id string) string {
 		return defaultResponse
 	}
 	responseBody := string(body)
-	logger.Trace(fmt.Sprintf("Response body: %v", responseBody))
-	//Todo: use json parser
-	regex, err := regexp.Compile(constant.JIRA_SUMMARY_REGEX)
+	logger.Debug(fmt.Sprintf("Response body: %v", responseBody))
+
+	jiraResponse := JiraResponse{}
+	err = json.Unmarshal(body, &jiraResponse)
 	if err != nil {
-		logger.Debug(fmt.Sprintf("Error occurred while compiling regex: %v", err))
+		logger.Debug(fmt.Sprintf("Error occurred while unmarshalling json. Error: %v", err))
 		return defaultResponse
 	}
-	result := regex.FindStringSubmatch(responseBody)
-	logger.Debug(fmt.Sprintf("Match: %s", result))
-	// In the given regex, there are 2 capturing groups. With the full content matching, it returns 3 results. So we
-	// check for 3 results here
-	if len(result) == 3 {
-		logger.Debug(fmt.Sprintf("Jira Summary: %s", strings.TrimSpace(result[2])))
-		return strings.TrimSpace(result[2])
+	logger.Debug(fmt.Sprintf("jiraResponse: %v", jiraResponse))
+	if len(jiraResponse.Fields.Summary) > 0 {
+		return jiraResponse.Fields.Summary
 	}
+	logger.Debug("Summary field not found in the jira response")
 	return defaultResponse
 }
 

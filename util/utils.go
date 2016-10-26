@@ -345,7 +345,7 @@ func PrintError(args ...interface{}) {
 
 // This function is used to print warning messages
 func PrintWarning(args ...interface{}) {
-	color.Set(color.Bold)
+	color.Set(color.FgRed, color.Bold)
 	fmt.Println(append([]interface{}{"[WARNING]"}, args...)...)
 	color.Unset()
 }
@@ -386,6 +386,7 @@ func GetJiraSummary(id string) string {
 	}
 	responseBody := string(body)
 	logger.Trace(fmt.Sprintf("Response body: %v", responseBody))
+	//Todo: use json parser
 	regex, err := regexp.Compile(constant.JIRA_SUMMARY_REGEX)
 	if err != nil {
 		logger.Debug(fmt.Sprintf("Error occurred while compiling regex: %v", err))

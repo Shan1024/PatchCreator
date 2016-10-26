@@ -477,7 +477,7 @@ func handleSingleMatch(filename string, matchingNode *node, isDir bool, allFiles
 				fileLocation := path.Join(matchingNode.relativeLocation, match)
 				md5Matches := CheckMD5(rootNode, strings.Split(fileLocation, "/"), data.md5)
 				if md5Matches {
-					util.PrintWarning(fmt.Sprintf("File '%v' not copied to '%v' because MD5 matches with the already existing file.", filename, fileLocation))
+					util.PrintInfo(fmt.Sprintf("File '%v' not copied because MD5 matches with the already existing file.", match))
 					logger.Debug("MD5 matches. Ignoring file.")
 					continue
 				} else {
@@ -498,7 +498,7 @@ func handleSingleMatch(filename string, matchingNode *node, isDir bool, allFiles
 			fileLocation := path.Join(matchingNode.relativeLocation, filename)
 			md5Matches := CheckMD5(rootNode, strings.Split(fileLocation, "/"), data.md5)
 			if md5Matches {
-				util.PrintWarning(fmt.Sprintf("File '%v' not copied to '%v' because MD5 matches with the already existing file.", filename, fileLocation))
+				util.PrintInfo(fmt.Sprintf("File '%v' not copied because MD5 matches with the already existing file.", filename))
 				logger.Debug("MD5 matches. Ignoring file.")
 				// If md5 does not match, return
 				return nil
@@ -535,7 +535,7 @@ func handleMultipleMatches(filename string, isDir bool, matches map[string]*node
 		// Remove the new line at the end
 		preferences = strings.TrimSpace(preferences)
 		// Split the indices
-		selectedIndices = strings.Split(preferences, ",");
+		selectedIndices = strings.Split(preferences, ",")
 		//Sort the locations
 		sort.Strings(selectedIndices)
 		logger.Debug(fmt.Sprintf("sorted: %s", preferences))
@@ -584,7 +584,7 @@ func handleMultipleMatches(filename string, isDir bool, matches map[string]*node
 					fileLocation := strings.Split(path.Join(pathInDistribution, match), "/")
 					md5Matches := CheckMD5(rootNode, fileLocation, data.md5)
 					if md5Matches {
-						util.PrintWarning(fmt.Sprintf("File '%v' not copied to '%v' because MD5 matches with the already existing file.", filename, fileLocation))
+						util.PrintInfo(fmt.Sprintf("File '%v' not copied because MD5 matches with the already existing file.", match))
 						logger.Debug("MD5 matches. Ignoring file.")
 						continue
 					}
@@ -607,7 +607,7 @@ func handleMultipleMatches(filename string, isDir bool, matches map[string]*node
 				md5Matches := CheckMD5(rootNode, fileLocation, data.md5)
 				if md5Matches {
 					// If md5 matches, print warning msg and continue with the next selected location
-					util.PrintWarning(fmt.Sprintf("File '%v' not copied to '%v' because MD5 matches with the already existing file.", filename, fileLocation))
+					util.PrintInfo(fmt.Sprintf("File '%v' not copied because MD5 matches with the already existing file.", filename))
 					logger.Debug("MD5 matches. Ignoring file.")
 					continue
 				}
@@ -996,7 +996,7 @@ func copyFile(filename string, locationInUpdate, relativeLocationInTemp string, 
 	fullPath = strings.Replace(fullPath, "/", constant.PATH_SEPARATOR, -1)
 
 	parentDirectory := path.Dir(fullPath)
-	fmt.Println("parentDirectory:", parentDirectory)
+	logger.Debug("parentDirectory:", parentDirectory)
 	err := util.CreateDirectory(parentDirectory)
 	util.HandleErrorAndExit(err, fmt.Sprintf("Error occurred while creating '%v' directory.", parentDirectory))
 	logger.Debug(fmt.Sprintf("[FINAL][COPY][TEMP] Name: %s; From: %s; To: %s", filename, source, fullPath))
